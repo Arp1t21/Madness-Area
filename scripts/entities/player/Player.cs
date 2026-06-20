@@ -1,0 +1,278 @@
+using Godot;
+using System;
+using System.Collections.Generic;
+public partial class Player : CharacterBody2D
+{
+	[Export] public PlayerData Config; 
+	[Export] public float DamageShakeIntensity = 5.0f;
+
+	private AnimatedSprite2D _animatedSprite;
+	private Node2D _abilityManager;
+	private Camera2D _camera;
+
+	public List<AttackController> WeaponSlots = new List<AttackController>();
+	private int _currentSlotIndex = 0;
+	public int CurrentSlotIndex => _currentSlotIndex;
+
+	// Текущие показатели
+	public float CurrentHealth;
+	public float CurrentMana;
+	public int CoinCount = 0;
+
+	private StatusEffectManager _statusManager;
+	private Vector2 _externalVelocity = Vector2.Zero;
+
+	public override void _Ready() {
+		_animatedSprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
+		_abilityManager = GetNode<Node2D>("AbilityManager");
+		_camera = GetNodeOrNull<Camera2D>("Camera2D") ?? GetNodeOrNull<Camera2D>("../Camera2D");
+
+		// Гарантируем видимость спрайта
+		_animatedSprite.Visible = true;
+		
+		// Если в конфиге есть анимации, применяем их
+		if (Config != null && Config.CharacterAnimations != null) {
+			_animatedSprite.SpriteFrames = Config.CharacterAnimations;
+			
+			// Проверяем наличие анимации перед запуском
+			if (_animatedSprite.SpriteFrames.HasAnimation("idle")) {
+				_animatedSprite.Play("idle");
+			} else {
+				GD.PushError("Player error: Animation 'idle' not found in SpriteFrames!");
+			}
+		} else {
+			GD.PushWarning("Player warning: No CharacterAnimations found in Config.");
+		}
+
+		_statusManager = new StatusEffectManager();
+		AddChild(_statusManager);
+
+		AddToGroup("Player");
+
+		if (Config != null) {
+			CurrentHealth = Config.MaxHealth;
+			CurrentMana = Config.MaxMana;
+		}
+
+		SpawnStartingWeapons();
+	}
+
+	public override void _PhysicsProcess(double delta) {
+		if (Config == null) return;
+
+		// Если в стане или оцепенении - не можем двигаться
+		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root)) {
+			Velocity = Vector2.Zero;
+			MoveAndSlide();
+			UpdateAnimation(Vector2.Zero);
+			return;
+		}
+
+		Vector2 direction = Input.GetVector("move_left", "move_right", "move_up", "move_down");
+
+		float speedMod = _statusManager.HasEffect(StatusEffectType.Slow) ? 0.5f : 1.0f;
+		float currentSpeed = Config.WalkSpeed * speedMod;
+
+		if (Input.IsActionPressed("shift")) {
+			currentSpeed *= Config.RunMultiplier; 
+		}
+		Velocity = direction * currentSpeed + _externalVelocity;
+		MoveAndSlide();
+
+		if (_externalVelocity.Length() > 0) {
+			_externalVelocity = _externalVelocity.Lerp(Vector2.Zero, 0.15f);
+			if (_externalVelocity.Length() < 1.0f) {
+				_externalVelocity = Vector2.Zero;
+			}
+		}
+
+		UpdateAnimation(direction);
+
+		HandleWeaponSwitching();
+
+		if (Input.IsActionJustPressed("reload")) {
+			if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
+				WeaponSlots[_currentSlotIndex].StartReload();
+			}
+		}
+
+		if (Input.IsActionPressed("attack") && !_statusManager.HasEffect(StatusEffectType.Disarm) && !_statusManager.HasEffect(StatusEffectType.Stun)) {
+			ExecuteAttack();
+		}
+
+		ProcessRegen(delta);
+	}
+
+	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0) {
+		if (CurrentHealth <= 0) return;
+
+		CurrentHealth -= amount;
+		GD.Print($"Игрок получил урон: {amount}. ХП: {CurrentHealth}");
+		
+		// 1. Тряска камеры
+		ApplyCameraShake(DamageShakeIntensity);
+
+		// 2. Отброс
+		if (knockForce > 0 && sourcePos != default) {
+			ApplyKnockback(sourcePos, knockForce);
+		}
+
+		if (CurrentHealth <= 0) {
+			Die();
+		}
+	}
+
+	private void ApplyCameraShake(float intensity) {
+		if (_camera == null) return;
+		
+		var tween = CreateTween();
+		for (int i = 0; i < 4; i++) {
+			Vector2 offset = new Vector2(GD.Randf() * 2 - 1, GD.Randf() * 2 - 1) * intensity;
+			tween.TweenProperty(_camera, "offset", offset, 0.05f);
+		}
+		tween.TweenProperty(_camera, "offset", Vector2.Zero, 0.05f);
+	}
+
+	public void ApplyRecoil(Vector2 attackDir, float force) {
+		_externalVelocity -= attackDir.Normalized() * force * 15.0f;
+	}
+
+	private void ApplyKnockback(Vector2 source, float force) {
+		Vector2 dir = (GlobalPosition - source).Normalized();
+		_externalVelocity = dir * force * 100.0f;
+	}
+
+	private void Die() {
+		GD.Print("Игрок погиб!");
+		// Создаем надпись смерти
+		var hud = GetTree().GetFirstNodeInGroup("HUD") as CanvasLayer;
+		if (hud != null) {
+			var label = new Label();
+			label.Text = "YOU DEAD";
+			label.HorizontalAlignment = HorizontalAlignment.Center;
+			label.VerticalAlignment = VerticalAlignment.Center;
+			label.AddThemeColorOverride("font_color", new Color(1, 0, 0));
+			
+			// Используем fff-forward для большой надписи
+			var font = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+			label.AddThemeFontOverride("font", font);
+			label.AddThemeFontSizeOverride("font_size", 30);
+			
+			label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
+			label.OffsetTop -= 2;
+			label.OffsetBottom -= 2;
+			hud.AddChild(label);
+		}
+		
+		// Замедляем время
+		Engine.TimeScale = 0.2f;
+	}
+
+	private void _on_area_2d_area_entered(Area2D area) {
+		if (area.IsInGroup("EnemyWeapon")) {
+			// Находим контроллер врага, чтобы взять урон
+			var controller = area.GetParent()?.GetParent() as AttackController;
+			if (controller != null && controller.CurrentWeapon != null) {
+				TakeDamage(controller.CurrentWeapon.Damage, controller.GlobalPosition, controller.CurrentWeapon.KnockbackForce);
+			}
+		}
+	}
+
+	private void ProcessRegen(double delta) {
+		if (Config == null) return;
+
+		if (CurrentHealth < Config.MaxHealth) {
+			CurrentHealth = Mathf.Min(Config.MaxHealth, CurrentHealth + Config.HealthRegen * (float)delta);
+		}
+
+		if (CurrentMana < Config.MaxMana) {
+			CurrentMana = Mathf.Min(Config.MaxMana, CurrentMana + Config.ManaRegen * (float)delta);
+		}
+	}
+
+	private void UpdateAnimation(Vector2 direction) {
+		bool isAttacking = false;
+		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
+			var currentWeapon = WeaponSlots[_currentSlotIndex];
+			if (currentWeapon != null && currentWeapon.IsAttacking) {
+				isAttacking = true;
+			}
+		}
+
+		if (direction != Vector2.Zero) {
+			if (Input.IsActionPressed("shift")) {
+				_animatedSprite.Play("run");
+			} else {
+				_animatedSprite.Play("walk");
+			}
+
+			// Разворачиваем персонажа по направлению движения, ТОЛЬКО если он сейчас не атакует
+			if (direction.X != 0 && !isAttacking) {
+				_animatedSprite.FlipH = direction.X < 0;
+			}
+		} else {
+			_animatedSprite.Play("idle");
+		}
+	}
+
+	private void SpawnStartingWeapons() {
+		// Создаем 3 пустых контроллера (слота)
+		var controllerPrefab = GD.Load<PackedScene>("res://scene/weapons/attack_controller.tscn");
+		WeaponSlots.Clear();
+		for (int i = 0; i < 3; i++) {
+			var controllerInstance = controllerPrefab.Instantiate() as AttackController;
+			_abilityManager.AddChild(controllerInstance);
+			WeaponSlots.Add(controllerInstance);
+			controllerInstance.Visible = false;
+		}
+
+		if (Config == null || Config.StartingWeapons == null) return;
+
+		// Заполняем слоты стартовым оружием
+		for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++) {
+			var weaponData = Config.StartingWeapons[i];
+			if (weaponData != null) {
+				WeaponSlots[i].CurrentWeapon = weaponData;
+				WeaponSlots[i].ApplyWeaponSettings();
+			}
+		}
+
+		SelectSlot(0);
+	}
+
+	private void HandleWeaponSwitching() {
+		if (Input.IsActionJustPressed("weapon_1")) SelectSlot(0);
+		if (Input.IsActionJustPressed("weapon_2")) SelectSlot(1);
+		if (Input.IsActionJustPressed("weapon_3")) SelectSlot(2);
+	}
+
+	public void SelectSlot(int slotIndex) {
+		if (slotIndex == _currentSlotIndex && WeaponSlots[slotIndex].Visible) return;
+
+		if (slotIndex >= 0 && slotIndex < WeaponSlots.Count) {
+			// Проверяем, есть ли оружие в этом слоте
+			if (WeaponSlots[slotIndex].CurrentWeapon == null) {
+				GD.Print($"Слот {slotIndex + 1} пуст.");
+				return;
+			}
+
+			// Деактивируем старое оружие (гасим анимации и хитбоксы)
+			if (WeaponSlots[_currentSlotIndex] != null) {
+				WeaponSlots[_currentSlotIndex].Deactivate();
+			}
+
+			_currentSlotIndex = slotIndex;
+
+			if (WeaponSlots[_currentSlotIndex] != null) {
+				WeaponSlots[_currentSlotIndex].Visible = true;
+				WeaponSlots[_currentSlotIndex].ApplyWeaponSettings();
+			}
+		}
+	}
+
+	private void ExecuteAttack() {
+		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
+			WeaponSlots[_currentSlotIndex].HandleManualAttack();
+		}
+	}
+}

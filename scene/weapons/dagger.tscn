@@ -1,0 +1,141 @@
+[gd_scene load_steps=7 format=3 uid="uid://cb8spuqdkgsts"]
+
+[ext_resource type="Texture2D" uid="uid://dsi08lljcmhcl" path="res://assets/weapons/weapon_knife.png" id="1_3pnee"]
+[ext_resource type="Script" uid="uid://urw8r61cl70q" path="res://scripts/entities/weapons/MeleeWeaponVisual.cs" id="1_script"]
+
+[sub_resource type="Animation" id="Animation_vdpih"]
+resource_name = "DaggerAnimation"
+length = 0.42
+step = 1.0
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("WeaponSprite:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.08, 0.23, 0.42),
+"transitions": PackedFloat32Array(1, 2.8284266, -3.2490087, 4.141064),
+"update": 0,
+"values": [0.0, -0.523598, 1.396263, 0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Area2D/CollisionShape2D:disabled")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.07, 0.25, 0.42),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 1,
+"values": [true, false, false, true]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Area2D/CollisionShape2D:rotation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.08, 0.19, 0.23),
+"transitions": PackedFloat32Array(1, 2.82, 1, 1),
+"update": 0,
+"values": [-0.5235987755982988, -1.0471975511965976, -0.2617993877991494, 0.8726646259971648]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Area2D/CollisionShape2D:position")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.08, 0.19143012, 0.23),
+"transitions": PackedFloat32Array(1, 2.82, 1, 1),
+"update": 0,
+"values": [Vector2(6.2, -3.7), Vector2(3.8, -6.5), Vector2(7.4, -1.4), Vector2(4.8, 5.6)]
+}
+
+[sub_resource type="Animation" id="Animation_1nikm"]
+length = 0.475
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("WeaponSprite:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Area2D/CollisionShape2D:disabled")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [true]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Area2D/CollisionShape2D:rotation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Area2D/CollisionShape2D:position")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [Vector2(4, -6)]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_jkano"]
+_data = {
+&"DaggerAnimation": SubResource("Animation_vdpih"),
+&"RESET": SubResource("Animation_1nikm")
+}
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_3xb4p"]
+size = Vector2(13.569546, 6.598076)
+
+[node name="Dagger" type="Node2D"]
+script = ExtResource("1_script")
+OrientationOffset = 0.0
+Mode = 2
+
+[node name="WeaponSprite" type="Sprite2D" parent="."]
+scale = Vector2(1.055, 1)
+texture = ExtResource("1_3pnee")
+offset = Vector2(0, -6.5)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_jkano")
+}
+
+[node name="Area2D" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+position = Vector2(4, -6)
+shape = SubResource("RectangleShape2D_3xb4p")
+disabled = true

@@ -1,0 +1,13 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3 uid="uid://bn6km80t4oi27"]
+
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_1h086"]
+[ext_resource type="PackedScene" uid="uid://cb8spuqdkgsts" path="res://scene/weapons/dagger.tscn" id="2_j4un7"]
+
+[resource]
+script = ExtResource("1_1h086")
+WeaponName = "Dagger"
+AttackCooldown = 0.35
+AttackRange = 50.0
+KnockbackForce = 5.0
+WeaponVisualPrefab = ExtResource("2_j4un7")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

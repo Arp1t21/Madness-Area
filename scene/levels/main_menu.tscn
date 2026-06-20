@@ -1,0 +1,89 @@
+[gd_scene load_steps=6 format=3 uid="uid://c6f3q3b5d8e7b"]
+
+[ext_resource type="Script" uid="uid://byashyy4vkn0f" path="res://scripts/entities/MainMenu.cs" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://bgqgihyk7du4r" path="res://assets/objects/wall_mid.png" id="2_wall"]
+[ext_resource type="Texture2D" uid="uid://68tubwygm5n5" path="res://assets/objects/wall_left.png" id="3_left"]
+[ext_resource type="Texture2D" uid="uid://od2actuj70qy" path="res://assets/objects/wall_hole_1.png" id="4_hole1"]
+[ext_resource type="Texture2D" uid="uid://dv3mnofpbnvw5" path="res://assets/objects/wall_hole_2.png" id="5_hole2"]
+
+[node name="MainMenu" type="CanvasLayer"]
+process_mode = 3
+script = ExtResource("1_script")
+
+[node name="Background" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Wall" type="TextureRect" parent="Background"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_wall")
+stretch_mode = 1
+
+[node name="LeftWall" type="TextureRect" parent="Background"]
+layout_mode = 1
+anchors_preset = 9
+anchor_bottom = 1.0
+offset_right = 16.0
+grow_vertical = 2
+texture = ExtResource("3_left")
+stretch_mode = 1
+
+[node name="Hole" type="TextureRect" parent="Background"]
+layout_mode = 0
+offset_left = 100.0
+offset_top = 50.0
+offset_right = 116.0
+offset_bottom = 66.0
+texture = ExtResource("4_hole1")
+
+[node name="Hole2" type="TextureRect" parent="Background"]
+layout_mode = 0
+offset_left = 250.0
+offset_top = 120.0
+offset_right = 266.0
+offset_bottom = 136.0
+texture = ExtResource("5_hole2")
+
+[node name="MenuRoot" type="Control" parent="."]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="MenuRoot"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -50.0
+offset_top = -40.0
+offset_right = 50.0
+offset_bottom = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="PlayButton" type="Button" parent="MenuRoot/VBoxContainer"]
+layout_mode = 2
+text = "Play"
+
+[node name="SettingsButton" type="Button" parent="MenuRoot/VBoxContainer"]
+layout_mode = 2
+text = "Settings"
+
+[node name="ExitButton" type="Button" parent="MenuRoot/VBoxContainer"]
+layout_mode = 2
+text = "Exit"

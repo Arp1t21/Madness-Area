@@ -1,0 +1,27 @@
+[gd_resource type="SpriteFrames" load_steps=4 format=3 uid="uid://bhi3fghrohhm1"]
+
+[ext_resource type="Texture2D" uid="uid://6lalhradu5ct" path="res://assets/objects/coin/coin_anim_f3.png" id="1_rvvxa"]
+[ext_resource type="Texture2D" uid="uid://dnvqer6ird6v1" path="res://assets/objects/coin/coin_anim_f0.png" id="2_rt14f"]
+[ext_resource type="Texture2D" uid="uid://yyb71mwueu70" path="res://assets/objects/coin/coin_anim_f2.png" id="3_7bexi"]
+
+[resource]
+animations = [{
+"frames": [],
+"loop": true,
+"name": &"collecting",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_rvvxa")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_rt14f")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_7bexi")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 3.0
+}]

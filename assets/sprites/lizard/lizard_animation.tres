@@ -1,0 +1,67 @@
+[gd_resource type="SpriteFrames" load_steps=10 format=3 uid="uid://b08un7o08xfil"]
+
+[ext_resource type="Texture2D" uid="uid://bq52dcj3gj0rv" path="res://assets/sprites/lizard/lizard_f_hit_anim_f0.png" id="1_u5e3k"]
+[ext_resource type="Texture2D" uid="uid://cbnnefh0wy7nn" path="res://assets/sprites/lizard/lizard_f_idle_anim_f0.png" id="2_kt5uk"]
+[ext_resource type="Texture2D" uid="uid://jww674ej2tyf" path="res://assets/sprites/lizard/lizard_f_idle_anim_f1.png" id="3_db2fq"]
+[ext_resource type="Texture2D" uid="uid://cly7epry8qkjp" path="res://assets/sprites/lizard/lizard_f_idle_anim_f2.png" id="4_pb781"]
+[ext_resource type="Texture2D" uid="uid://78kub752ckt7" path="res://assets/sprites/lizard/lizard_f_idle_anim_f3.png" id="5_bgf6c"]
+[ext_resource type="Texture2D" uid="uid://b7v5vwse28tws" path="res://assets/sprites/lizard/lizard_f_run_anim_f0.png" id="6_nrtjs"]
+[ext_resource type="Texture2D" uid="uid://2fx3e8qlqmbg" path="res://assets/sprites/lizard/lizard_f_run_anim_f1.png" id="7_kde0e"]
+[ext_resource type="Texture2D" uid="uid://df5jhtxqertnk" path="res://assets/sprites/lizard/lizard_f_run_anim_f2.png" id="8_vg7xf"]
+[ext_resource type="Texture2D" uid="uid://dquxdffkdg6u8" path="res://assets/sprites/lizard/lizard_f_run_anim_f3.png" id="9_6fw8t"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_u5e3k")
+}],
+"loop": false,
+"name": &"Hit",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_kt5uk")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_db2fq")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_pb781")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_bgf6c")
+}],
+"loop": true,
+"name": &"Idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_nrtjs")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_kde0e")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_vg7xf")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_6fw8t")
+}],
+"loop": true,
+"name": &"Run",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_nrtjs")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_6fw8t")
+}],
+"loop": true,
+"name": &"Walk",
+"speed": 5.0
+}]

@@ -1,0 +1,65 @@
+[gd_scene load_steps=12 format=3 uid="uid://crnym7rrrbkjf"]
+
+[ext_resource type="Script" uid="uid://db4lmq5ehqy5l" path="res://scripts/entities/enemy/Quagmire.cs" id="1_lngsv"]
+[ext_resource type="Texture2D" uid="uid://cj3i525c2j8i6" path="res://assets/sprites/big_zombie/big_zombie_idle_anim_f0.png" id="2_d0ukj"]
+[ext_resource type="Texture2D" uid="uid://b6rij0si5kwhi" path="res://assets/sprites/big_zombie/big_zombie_idle_anim_f1.png" id="3_4a0ei"]
+[ext_resource type="Texture2D" uid="uid://cp6b4pcojqx47" path="res://assets/sprites/big_zombie/big_zombie_idle_anim_f2.png" id="4_l4qcf"]
+[ext_resource type="Texture2D" uid="uid://cfui0udi8hkd" path="res://assets/sprites/big_zombie/big_zombie_idle_anim_f3.png" id="5_bxrfc"]
+[ext_resource type="Texture2D" uid="uid://bl1lohc8jl1bq" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f0.png" id="6_qq348"]
+[ext_resource type="Texture2D" uid="uid://bf6m7ak00tipp" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f1.png" id="7_qrrfk"]
+[ext_resource type="Texture2D" uid="uid://dm4j0k5mgaow1" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f2.png" id="8_cylgr"]
+[ext_resource type="Texture2D" uid="uid://vo8c5h1huyac" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f3.png" id="9_ms0uk"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_7hmbb"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_d0ukj")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_4a0ei")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_l4qcf")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_bxrfc")
+}],
+"loop": true,
+"name": &"Idle",
+"speed": 3.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_qq348")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_qrrfk")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_cylgr")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_ms0uk")
+}],
+"loop": true,
+"name": &"Run",
+"speed": 5.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_32qc2"]
+size = Vector2(18, 20)
+
+[node name="Quagmire" type="CharacterBody2D"]
+script = ExtResource("1_lngsv")
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(0, -18)
+sprite_frames = SubResource("SpriteFrames_7hmbb")
+animation = &"Idle"
+autoplay = "Idle"
+frame_progress = 0.506472
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0, -10)
+shape = SubResource("RectangleShape2D_32qc2")

@@ -1,0 +1,14 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3 uid="uid://cn8ow4frinymq"]
+
+[ext_resource type="PackedScene" uid="uid://d0iohlwxwrvii" path="res://scene/weapons/axe.tscn" id="1_ws4yc"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="2_3t5i8"]
+
+[resource]
+script = ExtResource("2_3t5i8")
+WeaponName = "Axe"
+Damage = 12
+AttackCooldown = 0.7
+AttackRange = 200.0
+KnockbackForce = 8.0
+WeaponVisualPrefab = ExtResource("1_ws4yc")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

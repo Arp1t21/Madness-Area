@@ -1,0 +1,90 @@
+[gd_scene load_steps=10 format=3 uid="uid://exaw5nwlsbvh"]
+
+[ext_resource type="Texture2D" uid="uid://co8fa5dpgt6qy" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun.png" id="1_5psoe"]
+[ext_resource type="Texture2D" uid="uid://cs0lalt2b77gh" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_reload_1.png" id="2_wquaf"]
+[ext_resource type="Texture2D" uid="uid://di6kbfyvdn7fu" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_reload_2.png" id="3_dvio8"]
+[ext_resource type="Texture2D" uid="uid://dnh41h2emtg0e" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_reload_3.png" id="4_fdsau"]
+[ext_resource type="Texture2D" uid="uid://brro2h136oab5" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_reload_5.png" id="6_5slyg"]
+[ext_resource type="Texture2D" uid="uid://b5rtpwt52smu" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_reload_6.png" id="7_jw3l2"]
+[ext_resource type="Texture2D" uid="uid://q5jp7hk6i3ve" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_shoot.png" id="8_dvio8"]
+[ext_resource type="Texture2D" uid="uid://cwihpy26h54y4" path="res://assets/Zombie Asset Pack/weapons/shotgun/shotgun_bullet.png" id="8_fdsau"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_upax4"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_5psoe")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_wquaf")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_dvio8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_fdsau")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_5slyg")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_jw3l2")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_5slyg")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_dvio8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_wquaf")
+}],
+"loop": true,
+"name": &"reload",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("8_dvio8")
+}],
+"loop": true,
+"name": &"shoot",
+"speed": 5.0
+}]
+
+[node name="Shotgun" type="Node2D"]
+
+[node name="Sprite2D" type="Sprite2D" parent="."]
+visible = false
+texture = ExtResource("1_5psoe")
+offset = Vector2(3, -1)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_upax4")
+animation = &"shoot"
+offset = Vector2(3, -1)
+
+[node name="Marker2D" type="Marker2D" parent="."]
+position = Vector2(9, -1)
+
+[node name="CPUParticles2DSleeve" type="CPUParticles2D" parent="."]
+position = Vector2(3, -1)
+emitting = false
+amount = 1
+texture = ExtResource("8_fdsau")
+lifetime = 1.4
+one_shot = true
+explosiveness = 1.0
+fract_delta = false
+direction = Vector2(0, -30)
+spread = 84.15
+gravity = Vector2(0, 750)
+initial_velocity_min = 60.0
+initial_velocity_max = 100.0
+scale_amount_min = 0.9
+scale_amount_max = 1.1

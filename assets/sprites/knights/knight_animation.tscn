@@ -1,0 +1,79 @@
+[gd_scene load_steps=11 format=3 uid="uid://n5iyqb155kqx"]
+
+[ext_resource type="Texture2D" uid="uid://j6f2v8fti8c6" path="res://assets/sprites/knights/knight_f_hit_anim_f0.png" id="1_jf0j2"]
+[ext_resource type="Texture2D" uid="uid://dbi0dsab85mre" path="res://assets/sprites/knights/knight_f_idle_anim_f0.png" id="2_w6rlh"]
+[ext_resource type="Texture2D" uid="uid://pv5vd88caknp" path="res://assets/sprites/knights/knight_f_idle_anim_f1.png" id="3_45u8k"]
+[ext_resource type="Texture2D" uid="uid://bgjdysowpa3gh" path="res://assets/sprites/knights/knight_f_idle_anim_f2.png" id="4_wiota"]
+[ext_resource type="Texture2D" uid="uid://byi55mfiahlkd" path="res://assets/sprites/knights/knight_f_idle_anim_f3.png" id="5_p0bji"]
+[ext_resource type="Texture2D" uid="uid://bderbv8ipexem" path="res://assets/sprites/knights/knight_f_run_anim_f0.png" id="6_gcotx"]
+[ext_resource type="Texture2D" uid="uid://cf5wfgcsb6v1k" path="res://assets/sprites/knights/knight_f_run_anim_f1.png" id="7_2ikqe"]
+[ext_resource type="Texture2D" uid="uid://dxjayt3bq0lgf" path="res://assets/sprites/knights/knight_f_run_anim_f2.png" id="8_g4eog"]
+[ext_resource type="Texture2D" uid="uid://cbewbqfdivvtw" path="res://assets/sprites/knights/knight_f_run_anim_f3.png" id="9_k37qr"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_q5vg3"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_jf0j2")
+}],
+"loop": true,
+"name": &"hit",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_w6rlh")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_45u8k")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_wiota")
+}, {
+"duration": 1.0,
+"texture": ExtResource("5_p0bji")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_gcotx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_2ikqe")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_g4eog")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_k37qr")
+}],
+"loop": true,
+"name": &"run",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("6_gcotx")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_g4eog")
+}, {
+"duration": 1.0,
+"texture": ExtResource("9_k37qr")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 4.0
+}]
+
+[node name="KnightAnimation" type="Node2D"]
+visible = false
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+visible = false
+sprite_frames = SubResource("SpriteFrames_q5vg3")
+animation = &"walk"
+frame_progress = 0.008018459

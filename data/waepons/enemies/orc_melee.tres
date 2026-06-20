@@ -1,0 +1,12 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3 uid="uid://cfo6n8hy8q0ow"]
+
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_b4qqx"]
+[ext_resource type="PackedScene" uid="uid://b1f0lgtrg8p4p" path="res://scene/weapons/enemies/orc_melee.tscn" id="1_pspbd"]
+
+[resource]
+script = ExtResource("1_b4qqx")
+Damage = 5
+AttackCooldown = 0.0
+KnockbackForce = 2.0
+WeaponVisualPrefab = ExtResource("1_pspbd")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"
