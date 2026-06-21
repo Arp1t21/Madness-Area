@@ -14,7 +14,6 @@ IsRanged = true
 BulletPrefab = ExtResource("1_3rtr2")
 BulletSpeed = 700.0
 Spread = 0.01
-Recoil = 8.0
 MaxAmmo = 7
 ReloadTime = 1.4
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

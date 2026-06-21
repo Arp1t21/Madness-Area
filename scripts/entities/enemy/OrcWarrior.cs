@@ -90,7 +90,7 @@ public partial class OrcWarrior : Enemy
 			// Вычисляем силу разделения (Separation), чтобы враги не ходили паровозиком
 			Vector2 separation = Vector2.Zero;
 			var enemies = GetTree().GetNodesInGroup("enemy");
-			float separationRadius = 35.0f; // Радиус расталкивания
+			float separationRadius = 18.0f; // Радиус расталкивания (чуть больше ширины орка)
 			int neighborsCount = 0;
 
 			foreach (Node node in enemies) {
@@ -105,8 +105,9 @@ public partial class OrcWarrior : Enemy
 			}
 
 			if (neighborsCount > 0) {
-				// Смешиваем направление на игрока и силу расталкивания
-				direction = (direction + separation.Normalized() * 1.5f).Normalized();
+				// Мягко подмешиваем среднюю силу расталкивания, чтобы враги не мешали друг другу и окружали плотнее
+				separation /= neighborsCount;
+				direction = (direction + separation * 0.06f).Normalized();
 			}
 
 			Vector2 targetVelocity = direction * Config.Speed;
@@ -193,12 +194,6 @@ public partial class OrcWarrior : Enemy
 
 	public override void TakeDamage(float amount, Vector2 knockbackSource, float knockbackForce = 15.0f, bool isMelee = true) {
 		base.TakeDamage(amount, knockbackSource, knockbackForce, isMelee);
-		
-		// Специфичная для орка логика: отмена атаки при получении урона
-		if (CurrentHealth > 0) {
-			CancelAttack();
-			_isStopping = false;
-		}
 	}
 
 	private void _on_area_2d_area_entered(Area2D area) {

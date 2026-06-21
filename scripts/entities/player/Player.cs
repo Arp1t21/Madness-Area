@@ -55,6 +55,31 @@ public partial class Player : CharacterBody2D
 		}
 
 		SpawnStartingWeapons();
+
+		// Добавляем факел/свет вокруг игрока
+		var light = new PointLight2D();
+		light.Name = "TorchLight";
+		light.ShadowEnabled = true; // Включаем тени от стен!
+		light.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5; // Мягкие тени
+		
+		var gradient = new Gradient();
+		gradient.Colors = new Color[] { 
+			new Color(1f, 0.92f, 0.75f, 1f), // Теплый свет факела в центре
+			new Color(1f, 0.92f, 0.75f, 0.8f),
+			new Color(0f, 0f, 0f, 0f)      // Плавное затухание в темноту
+		};
+		gradient.Offsets = new float[] { 0.0f, 0.2f, 1.0f };
+		
+		var gradTex = new GradientTexture2D();
+		gradTex.Gradient = gradient;
+		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
+		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
+		gradTex.FillTo = new Vector2(0.8f, 0.8f);
+		gradTex.Width = 320; // Радиус освещения
+		gradTex.Height = 320;
+		
+		light.Texture = gradTex;
+		AddChild(light);
 	}
 
 	public override void _PhysicsProcess(double delta) {
