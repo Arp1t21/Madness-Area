@@ -84,7 +84,7 @@ public partial class OrcWarrior : Enemy
 		}
 		else 
 		{
-			// Движение к игроку с учетом распределения (разделения) от других врагов
+			// Движение к игроку с учетом распределения (разделения) от других врагов и игрока
 			Vector2 direction = (_player.GlobalPosition - GlobalPosition).Normalized();
 			
 			// Вычисляем силу разделения (Separation), чтобы враги не ходили паровозиком
@@ -108,6 +108,14 @@ public partial class OrcWarrior : Enemy
 				// Мягко подмешиваем среднюю силу расталкивания, чтобы враги не мешали друг другу и окружали плотнее
 				separation /= neighborsCount;
 				direction = (direction + separation * 0.06f).Normalized();
+			}
+
+			// Сила разделения от игрока, чтобы мобы не налезали на него вплотную
+			float playerDist = GlobalPosition.DistanceTo(_player.GlobalPosition);
+			float playerSeparationRadius = 22.0f; // Радиус неперекрытия с игроком
+			if (playerDist < playerSeparationRadius && playerDist > 0.1f) {
+				Vector2 pushFromPlayer = (GlobalPosition - _player.GlobalPosition).Normalized() * (playerSeparationRadius - playerDist);
+				direction = (direction + pushFromPlayer * 0.35f).Normalized();
 			}
 
 			Vector2 targetVelocity = direction * Config.Speed;

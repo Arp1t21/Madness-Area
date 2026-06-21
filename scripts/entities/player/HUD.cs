@@ -20,6 +20,7 @@ public partial class HUD : CanvasLayer
 
 	private Player _player;
 	private WaveManager _waveManager;
+	private ArrowIndicator _arrowIndicator;
 
 	public override void _Ready()
 	{
@@ -63,8 +64,13 @@ public partial class HUD : CanvasLayer
 
 		// Сразу запускаем первую волну, если время уже 0
 		if (_time <= 0 && Engine.TimeScale > 0) {
-			StartGame();
+			CallDeferred(nameof(StartGame));
 		}
+
+		// Создаем стрелку для лестницы
+		_arrowIndicator = new ArrowIndicator();
+		_arrowIndicator.Visible = false;
+		AddChild(_arrowIndicator);
 	}
 
 	public override void _Process(double delta)
@@ -86,7 +92,10 @@ public partial class HUD : CanvasLayer
 
 		// Логика таймера
 		ProcessTimer((float)delta);
-		}
+
+		// Стрелка к лестнице
+		UpdateExitLadderArrow();
+	}
 
 		private void ProcessTimer(float delta)
 	{
@@ -130,5 +139,91 @@ public partial class HUD : CanvasLayer
 		int minutes = totalSeconds / 60;
 		int seconds = totalSeconds % 60;
 		_timeLabel.Text = string.Format("{0:D2}:{1:D2}", minutes, seconds);
+	}
+
+	private void UpdateExitLadderArrow()
+	{
+		if (_arrowIndicator == null) return;
+
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		var exitLadder = level?.GetExitLadderNode();
+		
+		if (exitLadder == null || !GodotObject.IsInstanceValid(exitLadder)) {
+			_arrowIndicator.Visible = false;
+			return;
+		}
+
+		_arrowIndicator.Visible = true;
+
+		Vector2 screenPos = exitLadder.GetGlobalTransformWithCanvas().Origin;
+		Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
+		Vector2 center = viewportSize / 2.0f;
+
+		float margin = 25.0f;
+		float minX = margin;
+		float maxX = viewportSize.X - margin;
+		float minY = margin;
+		float maxY = viewportSize.Y - margin;
+
+		Vector2 arrowPos = screenPos;
+		float angle = 0.0f;
+
+		if (screenPos.X < minX || screenPos.X > maxX || screenPos.Y < minY || screenPos.Y > maxY) {
+			// Вне экрана: прижимаем к краю
+			Vector2 dir = (screenPos - center).Normalized();
+			float tX = float.MaxValue;
+			if (dir.X > 0) tX = (maxX - center.X) / dir.X;
+			else if (dir.X < 0) tX = (minX - center.X) / dir.X;
+
+			float tY = float.MaxValue;
+			if (dir.Y > 0) tY = (maxY - center.Y) / dir.Y;
+			else if (dir.Y < 0) tY = (minY - center.Y) / dir.Y;
+
+			float t = Math.Min(tX, tY);
+			arrowPos = center + dir * t;
+			angle = (screenPos - arrowPos).Angle();
+		} else {
+			// На экране: парит над лестницей и указывает вниз
+			arrowPos = screenPos + new Vector2(0, -22);
+			angle = (float)(Math.PI / 2.0f); // 90 градусов (вниз)
+			
+			// Добавим легкое покачивание (пульсацию) по высоте
+			float wave = (float)Math.Sin(Time.GetTicksMsec() * 0.007f) * 3.0f;
+			arrowPos.Y += wave;
+		}
+
+		_arrowIndicator.Position = arrowPos;
+		if (Math.Abs(_arrowIndicator.Angle - angle) > 0.001f) {
+			_arrowIndicator.Angle = angle;
+			_arrowIndicator.QueueRedraw();
+		}
+	}
+}
+
+public partial class ArrowIndicator : Control
+{
+	public float Angle = 0.0f;
+	public Color Color = new Color(0.2f, 1.0f, 0.2f, 0.9f); // Ярко-зеленый
+
+	public override void _Draw()
+	{
+		// Стрелка, направленная вправо по умолчанию
+		Vector2[] points = new Vector2[] {
+			new Vector2(10, 0).Rotated(Angle),
+			new Vector2(-6, -7).Rotated(Angle),
+			new Vector2(-3, 0).Rotated(Angle),
+			new Vector2(-6, 7).Rotated(Angle)
+		};
+		DrawPolygon(points, new Color[] { Color, Color, Color, Color });
+		
+		// Обводка для контраста
+		Vector2[] outline = new Vector2[] {
+			new Vector2(10, 0).Rotated(Angle),
+			new Vector2(-6, -7).Rotated(Angle),
+			new Vector2(-3, 0).Rotated(Angle),
+			new Vector2(-6, 7).Rotated(Angle),
+			new Vector2(10, 0).Rotated(Angle)
+		};
+		DrawPolyline(outline, new Color(0, 0, 0, 1), 1.5f, true);
 	}
 }

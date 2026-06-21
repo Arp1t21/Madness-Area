@@ -11,6 +11,7 @@ public partial class Door : StaticBody2D
 	private Area2D _interactArea;
 	private Label _promptLabel;
 	private bool _playerInRange = false;
+	private bool _eWasPressed = false;
 
 	// Текстуры закрытой и открытой двери (задаются в инспекторе)
 	[Export] public Texture2D ClosedTexture;
@@ -36,7 +37,7 @@ public partial class Door : StaticBody2D
 			_promptLabel = new Label();
 			_promptLabel.Text = "Press E to open";
 			_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_promptLabel.Position = new Vector2(-50, -35);
+			_promptLabel.Position = new Vector2(-34, -35);
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 			
@@ -49,8 +50,8 @@ public partial class Door : StaticBody2D
 		}
 
 		if (_interactArea != null) {
-			// Гарантируем правильную маску коллизий: слой 1 (тело игрока) и 16 (зона оружия)
-			_interactArea.CollisionMask |= 1 | 16;
+			// Гарантируем правильную маску коллизий: слой 5 (значение 16)
+			_interactArea.CollisionMask = 16;
 			
 			// Подписываемся на события входа как физических тел, так и зон (для надежности)
 			_interactArea.BodyEntered += OnBodyEntered;
@@ -64,9 +65,11 @@ public partial class Door : StaticBody2D
 
 	public override void _PhysicsProcess(double delta)
 	{
-		if (_playerInRange && (Input.IsActionJustPressed("interact") || Input.IsPhysicalKeyPressed(Key.E))) {
+		bool isPressed = Input.IsActionPressed("interact") || Input.IsPhysicalKeyPressed(Key.E);
+		if (_playerInRange && isPressed && !_eWasPressed) {
 			ToggleDoor();
 		}
+		_eWasPressed = isPressed;
 	}
 
 	public void ToggleDoor()

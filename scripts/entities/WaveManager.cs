@@ -72,10 +72,10 @@ public partial class WaveManager : Node2D
 			
 			ShowYouWon();
 
-			// Базовое время 10с, увеличивается на 5с каждую волну (макс 60)
-			float prepTime = Math.Min(10.0f + (_currentWave - 1) * 5.0f, 60.0f);
-			var timer = GetTree().CreateTimer(prepTime);
-			timer.Timeout += StartNextWave;
+			var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+			if (level != null) {
+				level.OnWaveCleared();
+			}
 		}
 	}
 

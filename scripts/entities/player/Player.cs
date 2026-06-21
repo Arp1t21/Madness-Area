@@ -6,6 +6,14 @@ public partial class Player : CharacterBody2D
 	[Export] public PlayerData Config; 
 	[Export] public float DamageShakeIntensity = 5.0f;
 
+	[ExportGroup("Torch Light")]
+	[Export] public int TorchRadius = 320;
+	[Export] public float TorchGradientMiddleOffset = 0.2f;
+	[Export] public float TorchFillToX = 0.8f;
+	[Export] public float TorchFillToY = 0.8f;
+
+	private PointLight2D _torchLight;
+
 	private AnimatedSprite2D _animatedSprite;
 	private Node2D _abilityManager;
 	private Camera2D _camera;
@@ -57,10 +65,10 @@ public partial class Player : CharacterBody2D
 		SpawnStartingWeapons();
 
 		// Добавляем факел/свет вокруг игрока
-		var light = new PointLight2D();
-		light.Name = "TorchLight";
-		light.ShadowEnabled = true; // Включаем тени от стен!
-		light.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5; // Мягкие тени
+		_torchLight = new PointLight2D();
+		_torchLight.Name = "TorchLight";
+		_torchLight.ShadowEnabled = true; // Включаем тени от стен!
+		_torchLight.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5; // Мягкие тени
 		
 		var gradient = new Gradient();
 		gradient.Colors = new Color[] { 
@@ -68,18 +76,18 @@ public partial class Player : CharacterBody2D
 			new Color(1f, 0.92f, 0.75f, 0.8f),
 			new Color(0f, 0f, 0f, 0f)      // Плавное затухание в темноту
 		};
-		gradient.Offsets = new float[] { 0.0f, 0.2f, 1.0f };
+		gradient.Offsets = new float[] { 0.0f, TorchGradientMiddleOffset, 1.0f };
 		
 		var gradTex = new GradientTexture2D();
 		gradTex.Gradient = gradient;
 		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
 		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
-		gradTex.FillTo = new Vector2(0.8f, 0.8f);
-		gradTex.Width = 320; // Радиус освещения
-		gradTex.Height = 320;
+		gradTex.FillTo = new Vector2(TorchFillToX, TorchFillToY);
+		gradTex.Width = TorchRadius;
+		gradTex.Height = TorchRadius;
 		
-		light.Texture = gradTex;
-		AddChild(light);
+		_torchLight.Texture = gradTex;
+		AddChild(_torchLight);
 	}
 
 	public override void _PhysicsProcess(double delta) {
@@ -298,6 +306,19 @@ public partial class Player : CharacterBody2D
 	private void ExecuteAttack() {
 		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
 			WeaponSlots[_currentSlotIndex].HandleManualAttack();
+		}
+	}
+
+	public void UpdateTorchLight() {
+		if (_torchLight == null) return;
+		var gradTex = _torchLight.Texture as GradientTexture2D;
+		if (gradTex != null) {
+			gradTex.Width = TorchRadius;
+			gradTex.Height = TorchRadius;
+			gradTex.FillTo = new Vector2(TorchFillToX, TorchFillToY);
+			if (gradTex.Gradient != null) {
+				gradTex.Gradient.Offsets = new float[] { 0.0f, TorchGradientMiddleOffset, 1.0f };
+			}
 		}
 	}
 }
