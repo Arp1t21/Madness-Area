@@ -36,15 +36,22 @@ public partial class WaveManager : Node2D
 
 	private void SpawnEnemy()
 	{
-		if (EnemyPrefab == null) {
-			EnemyPrefab = GD.Load<PackedScene>("res://scene/actors/orc_warrior.tscn");
+		PackedScene selectedPrefab = EnemyPrefab;
+		if (selectedPrefab == null) {
+			selectedPrefab = GD.Load<PackedScene>("res://scene/actors/orc_warrior.tscn");
 		}
 
-		var enemy = EnemyPrefab.Instantiate() as Node2D;
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
+
+		if (levelIndex >= 2 && GD.Randf() <= 0.10f) {
+			selectedPrefab = GD.Load<PackedScene>("res://scene/actors/ghost.tscn");
+		}
+
+		var enemy = selectedPrefab.Instantiate() as Node2D;
 		var player = GetTree().GetFirstNodeInGroup("Player") as Node2D;
 		
 		Vector2 spawnPos = Vector2.Zero;
-		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		if (level != null && player != null)
 		{
 			spawnPos = level.GetNextEnemySpawnPosition(player.GlobalPosition);

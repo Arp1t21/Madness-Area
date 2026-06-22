@@ -9,6 +9,7 @@ public partial class Projectile : Node2D
 	public Vector2 Direction = Vector2.Right;
 	public bool IsPlayerOwned = true;
 	public bool IsPiercing = false; // Если false, пуля исчезнет после первого попадания
+	public float KnockbackForce = 5.0f;
 
 	private Vector2 _startPos;
 	private readonly System.Collections.Generic.HashSet<ulong> _hitTargets = new System.Collections.Generic.HashSet<ulong>();
@@ -62,7 +63,7 @@ public partial class Projectile : Node2D
 
 			if (hitNode.HasMethod("TakeDamage"))
 			{
-				hitNode.Call("TakeDamage", Damage, GlobalPosition, 5.0f, false);
+				hitNode.Call("TakeDamage", Damage, GlobalPosition, KnockbackForce, false);
 			}
 
 			if (!IsPiercing) {
@@ -79,7 +80,7 @@ public partial class Projectile : Node2D
 
 			if (hitNode.HasMethod("TakeDamage"))
 			{
-				hitNode.Call("TakeDamage", Damage, GlobalPosition, 2.0f);
+				hitNode.Call("TakeDamage", Damage, GlobalPosition, KnockbackForce);
 			}
 
 			if (!IsPiercing) {

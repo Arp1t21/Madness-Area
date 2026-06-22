@@ -5,6 +5,7 @@
 
 [resource]
 script = ExtResource("1_b4qqx")
+WeaponName = "Orc_melee"
 Damage = 5
 AttackCooldown = 1.2
 KnockbackForce = 2.0

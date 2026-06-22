@@ -331,8 +331,11 @@ public partial class AttackController : Node2D
 	private void Shoot(Vector2 targetPos) {
 		if (CurrentWeapon.BulletPrefab == null) return;
 
-		Marker2D muzzle = _visualContainer.GetNodeOrNull<Marker2D>("Muzzle") ?? 
-						  _visualContainer.GetChildren().Cast<Node>().OfType<Marker2D>().FirstOrDefault();
+		Marker2D muzzle = null;
+		if (_visualContainer != null) {
+			muzzle = _visualContainer.GetNodeOrNull<Marker2D>("Muzzle") ?? 
+					 _visualContainer.GetChildren().Cast<Node>().OfType<Marker2D>().FirstOrDefault();
+		}
 		
 		Vector2 spawnPos = muzzle != null ? muzzle.GlobalPosition : GlobalPosition;
 
@@ -351,6 +354,7 @@ public partial class AttackController : Node2D
 				bullet.IsPlayerOwned = _isPlayerOwned;
 				bullet.IsPiercing = CurrentWeapon.IsPiercing; // Передаем настройку пробития
 				bullet.Speed = CurrentWeapon.BulletSpeed; // Устанавливаем скорость пули из настроек оружия
+				bullet.KnockbackForce = CurrentWeapon.KnockbackForce;
 				
 				Vector2 dir = (targetPos - spawnPos).Normalized();
 				if (CurrentWeapon.Spread > 0) {

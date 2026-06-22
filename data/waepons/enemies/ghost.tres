@@ -1,15 +1,21 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3 uid="uid://df3157ckmg7ty"]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3 uid="uid://df3157ckmg7ty"]
 
 [ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_7t4pf"]
+[ext_resource type="PackedScene" uid="uid://dr0bk4tlaigmg" path="res://scene/weapons/bullets/ghost_bullet.tscn" id="1_uf17m"]
 
 [resource]
 script = ExtResource("1_7t4pf")
-AttackCooldown = 2.0
-KnockbackForce = 20.0
-Recoil = 15.0
+WeaponName = "Wind"
+Damage = 4
+AttackCooldown = 3.5
+AttackRange = 200.0
+KnockbackForce = 10.0
+Recoil = 8.0
 IsRanged = true
-BulletSpeed = 100.0
+BulletPrefab = ExtResource("1_uf17m")
+BulletSpeed = 90.0
 Spread = 0.01
+IsPiercing = true
 MaxAmmo = 1
 ReloadTime = 1.0
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"
