@@ -1,5 +1,6 @@
 using Godot;
 using System;
+using System.Collections.Generic;
 
 public partial class OrcWarrior : Enemy
 {
@@ -12,6 +13,9 @@ public partial class OrcWarrior : Enemy
 	private float _preAttackTimer = 0.0f;
 	private float _periodicCheckTimer = 0.0f;
 	private float _cancelAttackCooldown = 0.0f;
+	
+	private List<Vector2> _navigationPath = new List<Vector2>();
+	private float _pathUpdateTimer = 0.0f;
 	
 	private SceneTreeTimer _stopTimer;
 	private Label _warningLabel;
@@ -84,8 +88,35 @@ public partial class OrcWarrior : Enemy
 		}
 		else 
 		{
+			// Обновляем путь раз в 0.25 секунд (с небольшим разбросом)
+			_pathUpdateTimer -= (float)delta;
+			if (_pathUpdateTimer <= 0)
+			{
+				_pathUpdateTimer = 0.25f + (float)GD.RandRange(-0.05f, 0.05f);
+				var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+				if (level != null && _player != null)
+				{
+					_navigationPath = level.GetPathToPlayer(GlobalPosition, _player.GlobalPosition);
+				}
+			}
+
+			// Определяем целевую позицию для движения
+			Vector2 targetPos = _player.GlobalPosition;
+			if (_navigationPath != null && _navigationPath.Count > 0)
+			{
+				// Удаляем точки пути, которые мы уже достигли
+				while (_navigationPath.Count > 1 && GlobalPosition.DistanceTo(_navigationPath[0]) < 12.0f)
+				{
+					_navigationPath.RemoveAt(0);
+				}
+				if (_navigationPath.Count > 0)
+				{
+					targetPos = _navigationPath[0];
+				}
+			}
+
 			// Движение к игроку с учетом распределения (разделения) от других врагов и игрока
-			Vector2 direction = (_player.GlobalPosition - GlobalPosition).Normalized();
+			Vector2 direction = (targetPos - GlobalPosition).Normalized();
 			
 			// Вычисляем силу разделения (Separation), чтобы враги не ходили паровозиком
 			Vector2 separation = Vector2.Zero;

@@ -6,7 +6,7 @@
 
 [resource]
 script = ExtResource("1_7nkeh")
-Damage = 4
+Damage = 2
 AttackCooldown = 1.4
 KnockbackForce = 2.0
 Recoil = 7.0
@@ -14,8 +14,8 @@ WeaponVisualPrefab = ExtResource("1_um4eo")
 IsRanged = true
 BulletPrefab = ExtResource("1_kfiy3")
 BulletSpeed = 400.0
-BulletCount = 11
-Spread = 0.7
+BulletCount = 12
+Spread = 0.75
 MaxAmmo = 4
-ReloadTime = 2.5
+ReloadTime = 2.3
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

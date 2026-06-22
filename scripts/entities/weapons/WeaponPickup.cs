@@ -2,7 +2,7 @@ using Godot;
 using System;
 using System.Linq;
 
-public partial class WeaponPickup : Node2D
+public partial class WeaponPickup : Node2D, IInteractable
 {
 	[Export] public WeaponData WeaponToGive;
 	
@@ -71,70 +71,78 @@ public partial class WeaponPickup : Node2D
 			return null;
 			}
 
-	public override void _Process(double delta)
+	public void Interact(Player player)
 	{
-		// Проверяем нажатие E (через Input Map или жестко по кнопке)
-		bool isEPressed = Input.IsActionJustPressed("interact") || Input.IsPhysicalKeyPressed(Key.E);
+		if (WeaponToGive == null) return;
 
-		if (_playerInRange && isEPressed) 
-		{
-			if (_player != null && WeaponToGive != null)
-			{
-				// Ищем первый пустой слот (null)
-				int emptySlotIndex = -1;
-				for (int i = 0; i < _player.WeaponSlots.Count; i++) {
-					if (_player.WeaponSlots[i].CurrentWeapon == null) {
-						emptySlotIndex = i;
-						break;
-					}
-				}
+		// Ищем первый пустой слот (null)
+		int emptySlotIndex = -1;
+		for (int i = 0; i < player.WeaponSlots.Count; i++) {
+			if (player.WeaponSlots[i].CurrentWeapon == null) {
+				emptySlotIndex = i;
+				break;
+			}
+		}
 
-				if (emptySlotIndex != -1) {
-					_player.WeaponSlots[emptySlotIndex].CurrentWeapon = WeaponToGive;
-					_player.SelectSlot(emptySlotIndex); // Сразу берем в руки
-					GD.Print($"Подобрано оружие: {WeaponToGive.WeaponName} в слот {emptySlotIndex + 1}");
-					QueueFree();
-				} else {
-					// Все слоты заняты. Меняем оружие в текущей активной руке!
-					int activeIndex = _player.CurrentSlotIndex;
-					if (activeIndex >= 0 && activeIndex < _player.WeaponSlots.Count) {
-						WeaponData oldWeapon = _player.WeaponSlots[activeIndex].CurrentWeapon;
-						
-						// 1. Устанавливаем новое оружие в этот слот
-						_player.WeaponSlots[activeIndex].CurrentWeapon = WeaponToGive;
-						
-						// 2. Деактивируем старое состояние
-						_player.WeaponSlots[activeIndex].Deactivate();
-						
-						// 3. Вызываем SelectSlot, который активирует новое оружие
-						_player.SelectSlot(activeIndex);
+		if (emptySlotIndex != -1) {
+			player.WeaponSlots[emptySlotIndex].CurrentWeapon = WeaponToGive;
+			player.SelectSlot(emptySlotIndex); // Сразу берем в руки
+			GD.Print($"Подобрано оружие: {WeaponToGive.WeaponName} в слот {emptySlotIndex + 1}");
+			
+			player.UnregisterInteractable(this);
+			QueueFree();
+		} else {
+			// Все слоты заняты. Меняем оружие в текущей активной руке!
+			int activeIndex = player.CurrentSlotIndex;
+			if (activeIndex >= 0 && activeIndex < player.WeaponSlots.Count) {
+				WeaponData oldWeapon = player.WeaponSlots[activeIndex].CurrentWeapon;
+				
+				// 1. Устанавливаем новое оружие в этот слот
+				player.WeaponSlots[activeIndex].CurrentWeapon = WeaponToGive;
+				
+				// 2. Деактивируем старое состояние
+				player.WeaponSlots[activeIndex].Deactivate();
+				
+				// 3. Вызываем SelectSlot, который активирует новое оружие
+				player.SelectSlot(activeIndex);
 
-						GD.Print($"Заменено оружие в слоте {activeIndex + 1}: {oldWeapon?.WeaponName} -> {WeaponToGive.WeaponName}");
+				GD.Print($"Заменено оружие в слоте {activeIndex + 1}: {oldWeapon?.WeaponName} -> {WeaponToGive.WeaponName}");
 
-						// 4. Выбрасываем старое оружие на землю
-						if (oldWeapon != null) {
-							var pickupPrefab = GD.Load<PackedScene>("res://scene/weapons/weapon_pickup.tscn");
-							if (pickupPrefab != null) {
-								var droppedPickup = pickupPrefab.Instantiate() as WeaponPickup;
-								if (droppedPickup != null) {
-									droppedPickup.WeaponToGive = oldWeapon;
-									droppedPickup.GlobalPosition = _player.GlobalPosition;
-									
-									// Добавляем на сцену (на уровень)
-									Node levelNode = _player.GetParent();
-									if (levelNode != null) {
-										levelNode.AddChild(droppedPickup);
-									} else {
-										_player.GetTree().CurrentScene.AddChild(droppedPickup);
-									}
-								}
+				// 4. Выбрасываем старое оружие на землю
+				if (oldWeapon != null) {
+					var pickupPrefab = GD.Load<PackedScene>("res://scene/weapons/weapon_pickup.tscn");
+					if (pickupPrefab != null) {
+						var droppedPickup = pickupPrefab.Instantiate() as WeaponPickup;
+						if (droppedPickup != null) {
+							droppedPickup.WeaponToGive = oldWeapon;
+							droppedPickup.GlobalPosition = player.GlobalPosition;
+							
+							// Добавляем на сцену (на уровень)
+							Node levelNode = player.GetParent();
+							if (levelNode != null) {
+								levelNode.AddChild(droppedPickup);
+							} else {
+								player.GetTree().CurrentScene.AddChild(droppedPickup);
 							}
 						}
-
-						QueueFree();
 					}
 				}
+
+				player.UnregisterInteractable(this);
+				QueueFree();
 			}
+		}
+	}
+
+	public Vector2 GetInteractionPosition()
+	{
+		return GlobalPosition;
+	}
+
+	public void ShowPrompt(bool show)
+	{
+		if (_nameLabel != null) {
+			_nameLabel.Visible = show;
 		}
 	}
 
@@ -148,9 +156,9 @@ public partial class WeaponPickup : Node2D
 
 	private void OnAreaExited(Area2D area)
 	{
-		if (area.GetParent() is Player)
+		if (area.GetParent() is Player player)
 		{
-			SetPlayerInRange(null, false);
+			SetPlayerInRange(player, false);
 		}
 	}
 
@@ -164,18 +172,25 @@ public partial class WeaponPickup : Node2D
 
 	private void OnBodyExited(Node2D body)
 	{
-		if (body is Player)
+		if (body is Player player)
 		{
-			SetPlayerInRange(null, false);
+			SetPlayerInRange(player, false);
 		}
 	}
 
 	private void SetPlayerInRange(Player player, bool inRange)
 	{
 		_playerInRange = inRange;
-		_player = player;
-		if (_nameLabel != null) {
-			_nameLabel.Visible = inRange;
+		if (inRange) {
+			_player = player;
+			if (_player != null) {
+				_player.RegisterInteractable(this);
+			}
+		} else {
+			if (_player != null) {
+				_player.UnregisterInteractable(this);
+			}
+			_player = null;
 		}
 	}
 }

@@ -30,6 +30,22 @@ public partial class Player : CharacterBody2D
 	private StatusEffectManager _statusManager;
 	private Vector2 _externalVelocity = Vector2.Zero;
 
+	private readonly List<IInteractable> _interactablesInRange = new List<IInteractable>();
+	private bool _eJustPressed = false;
+
+	public void RegisterInteractable(IInteractable interactable)
+	{
+		if (!_interactablesInRange.Contains(interactable)) {
+			_interactablesInRange.Add(interactable);
+		}
+	}
+
+	public void UnregisterInteractable(IInteractable interactable)
+	{
+		_interactablesInRange.Remove(interactable);
+		interactable.ShowPrompt(false);
+	}
+
 	public override void _Ready() {
 		_animatedSprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
 		_abilityManager = GetNode<Node2D>("AbilityManager");
@@ -134,6 +150,32 @@ public partial class Player : CharacterBody2D
 		}
 
 		ProcessRegen(delta);
+
+		// Centralized interaction check
+		bool isInteractPressed = Input.IsActionPressed("interact") || Input.IsPhysicalKeyPressed(Key.E);
+		bool interactJustPressed = isInteractPressed && !_eJustPressed;
+		_eJustPressed = isInteractPressed;
+
+		_interactablesInRange.RemoveAll(x => !GodotObject.IsInstanceValid(x as GodotObject));
+
+		IInteractable closest = null;
+		float minDist = float.MaxValue;
+		foreach (var interactable in _interactablesInRange) {
+			float dist = GlobalPosition.DistanceTo(interactable.GetInteractionPosition());
+			if (dist < minDist) {
+				minDist = dist;
+				closest = interactable;
+			}
+		}
+
+		// Update prompt visibility so only the closest one is shown
+		foreach (var interactable in _interactablesInRange) {
+			interactable.ShowPrompt(interactable == closest);
+		}
+
+		if (interactJustPressed && closest != null) {
+			closest.Interact(this);
+		}
 	}
 
 	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0) {

@@ -44,15 +44,16 @@ public partial class WaveManager : Node2D
 		var player = GetTree().GetFirstNodeInGroup("Player") as Node2D;
 		
 		Vector2 spawnPos = Vector2.Zero;
-		if (player != null)
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		if (level != null && player != null)
 		{
-			// Берем размер экрана, чтобы гарантировать спаун за его пределами
-			Vector2 screenSize = GetViewport().GetVisibleRect().Size;
-			float minRadius = Math.Max(screenSize.X, screenSize.Y) / 2.0f + 100.0f;
-			float actualRadius = Math.Max(SpawnRadius, minRadius);
-
+			spawnPos = level.GetNextEnemySpawnPosition(player.GlobalPosition);
+		}
+		else if (player != null)
+		{
+			// Резервный спавн
 			float angle = (float)GD.RandRange(0, Math.PI * 2);
-			spawnPos = player.GlobalPosition + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * actualRadius;
+			spawnPos = player.GlobalPosition + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * 180.0f;
 		}
 
 		enemy.GlobalPosition = spawnPos;

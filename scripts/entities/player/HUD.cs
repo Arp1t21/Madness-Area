@@ -155,6 +155,10 @@ public partial class HUD : CanvasLayer
 
 		_arrowIndicator.Visible = true;
 
+		// 1. Пульсация размера (на 10% меньше)
+		float pulseScale = (1.0f + (float)Math.Sin(Time.GetTicksMsec() * 0.01f) * 0.15f) * 0.9f;
+		_arrowIndicator.Scale = new Vector2(pulseScale, pulseScale);
+
 		Vector2 screenPos = exitLadder.GetGlobalTransformWithCanvas().Origin;
 		Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
 		Vector2 center = viewportSize / 2.0f;
@@ -182,13 +186,17 @@ public partial class HUD : CanvasLayer
 			float t = Math.Min(tX, tY);
 			arrowPos = center + dir * t;
 			angle = (screenPos - arrowPos).Angle();
+			
+			// Качание вперед-назад по направлению к лестнице
+			float bounce = (float)Math.Sin(Time.GetTicksMsec() * 0.015f) * 5.0f;
+			arrowPos += new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * bounce;
 		} else {
 			// На экране: парит над лестницей и указывает вниз
 			arrowPos = screenPos + new Vector2(0, -22);
 			angle = (float)(Math.PI / 2.0f); // 90 градусов (вниз)
 			
-			// Добавим легкое покачивание (пульсацию) по высоте
-			float wave = (float)Math.Sin(Time.GetTicksMsec() * 0.007f) * 3.0f;
+			// Плавное покачивание по высоте
+			float wave = (float)Math.Sin(Time.GetTicksMsec() * 0.007f) * 4.0f;
 			arrowPos.Y += wave;
 		}
 

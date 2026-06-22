@@ -1,8 +1,7 @@
-[gd_resource type="TileSet" load_steps=7 format=3 uid="uid://begr6bvrdcl6"]
+[gd_resource type="TileSet" load_steps=5 format=3 uid="uid://begr6bvrdcl6"]
 
 [ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="1_xxjv7"]
 [ext_resource type="Texture2D" uid="uid://1cqvvp3dlogd" path="res://assets/objects/atlas_walls_low-16x16.png" id="2_408bw"]
-[ext_resource type="Texture2D" uid="uid://ju25tsuildlp" path="res://assets/objects/atlas_floor-16x16.png" id="3_37b47"]
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_povm3"]
 texture = ExtResource("1_xxjv7")
@@ -145,9 +144,6 @@ texture = ExtResource("2_408bw")
 10:3/0 = 0
 11:3/0 = 0
 
-[sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_fjjgc"]
-texture = ExtResource("3_37b47")
-
 [resource]
 physics_layer_0/collision_layer = 1
 terrain_set_0/mode = 0
@@ -155,4 +151,3 @@ terrain_set_0/terrain_0/name = "wall"
 terrain_set_0/terrain_0/color = Color(1, 0.4649247, 0.2347951, 1)
 sources/0 = SubResource("TileSetAtlasSource_povm3")
 sources/1 = SubResource("TileSetAtlasSource_rgi58")
-sources/3 = SubResource("TileSetAtlasSource_fjjgc")

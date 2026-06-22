@@ -2,7 +2,7 @@ using Godot;
 using System;
 using System.Linq;
 
-public partial class Door : StaticBody2D
+public partial class Door : StaticBody2D, IInteractable
 {
 	[Export] public bool IsOpen = false;
 
@@ -19,6 +19,7 @@ public partial class Door : StaticBody2D
 
 	public override void _Ready()
 	{
+		AddToGroup("Door");
 		// Ищем дочерние узлы по типу (на случай, если пользователь назвал их иначе)
 		_collisionShape = GetNodeOrNull<CollisionShape2D>("CollisionShape2D") ??
 						  GetChildren().Cast<Node>().OfType<CollisionShape2D>().FirstOrDefault();
@@ -63,13 +64,22 @@ public partial class Door : StaticBody2D
 		UpdateDoorState();
 	}
 
-	public override void _PhysicsProcess(double delta)
+	public void Interact(Player player)
 	{
-		bool isPressed = Input.IsActionPressed("interact") || Input.IsPhysicalKeyPressed(Key.E);
-		if (_playerInRange && isPressed && !_eWasPressed) {
-			ToggleDoor();
+		ToggleDoor();
+	}
+
+	public Vector2 GetInteractionPosition()
+	{
+		return GlobalPosition;
+	}
+
+	public void ShowPrompt(bool show)
+	{
+		if (_promptLabel != null) {
+			_promptLabel.Text = IsOpen ? "Press E to close" : "Press E to open";
+			_promptLabel.Visible = show;
 		}
-		_eWasPressed = isPressed;
 	}
 
 	public void ToggleDoor()
@@ -97,6 +107,16 @@ public partial class Door : StaticBody2D
 		if (_promptLabel != null && _playerInRange) {
 			_promptLabel.Text = IsOpen ? "Press E to close" : "Press E to open";
 		}
+
+		// Обновляем проходимость сетки AStar в уровне
+		var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
+		if (level != null)
+		{
+			level.SetCellSolid(GlobalPosition + new Vector2(-8, -8), !IsOpen);
+			level.SetCellSolid(GlobalPosition + new Vector2(8, -8), !IsOpen);
+			level.SetCellSolid(GlobalPosition + new Vector2(-8, 8), !IsOpen);
+			level.SetCellSolid(GlobalPosition + new Vector2(8, 8), !IsOpen);
+		}
 	}
 
 	private void OnBodyEntered(Node2D body) { CheckPlayer(body, true); }
@@ -106,11 +126,17 @@ public partial class Door : StaticBody2D
 
 	private void CheckPlayer(Node node, bool entered)
 	{
-		if (node is Player || (node != null && node.IsInGroup("Player"))) {
+		Player player = node as Player;
+		if (player == null && node != null && node.IsInGroup("Player")) {
+			player = GetTree().GetFirstNodeInGroup("Player") as Player;
+		}
+
+		if (player != null) {
 			_playerInRange = entered;
-			if (_promptLabel != null) {
-				_promptLabel.Text = IsOpen ? "Press E to close" : "Press E to open";
-				_promptLabel.Visible = entered;
+			if (entered) {
+				player.RegisterInteractable(this);
+			} else {
+				player.UnregisterInteractable(this);
 			}
 		}
 	}

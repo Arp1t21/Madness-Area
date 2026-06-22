@@ -52,6 +52,8 @@ public partial class Projectile : Node2D
 	{
 		if (_isDestroyed || hitNode == null || hitNode.IsQueuedForDeletion()) return;
 
+		// GD.Print($"Projectile hit: {hitNode.Name} of type {hitNode.GetType().Name}");
+
 		// Если пуля игрока попала во врага
 		if (IsPlayerOwned && hitNode.IsInGroup("enemy"))
 		{
@@ -77,6 +79,17 @@ public partial class Projectile : Node2D
 				_isDestroyed = true;
 				QueueFree();
 			}
+		}
+		// Если пуля попала в стену или препятствие (дверь)
+		else if (hitNode is TileMapLayer || 
+				 hitNode is StaticBody2D || 
+				 hitNode.GetType().Name.Contains("TileMap") || 
+				 hitNode.GetType().Name.Contains("StaticBody") ||
+				 hitNode.Name.ToString().Contains("Wall") || 
+				 hitNode.Name.ToString().Contains("Floor"))
+		{
+			_isDestroyed = true;
+			QueueFree();
 		}
 	}
 
