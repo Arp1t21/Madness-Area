@@ -17,6 +17,7 @@ public partial class FloatingText : Node2D
 		var font = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
 		_label.AddThemeFontOverride("font", font);
 		_label.AddThemeFontSizeOverride("font_size", 8);
+		_label.AddThemeConstantOverride("letter_spacing", 3);
 		
 		_label.HorizontalAlignment = HorizontalAlignment.Center;
 		_label.VerticalAlignment = VerticalAlignment.Center;

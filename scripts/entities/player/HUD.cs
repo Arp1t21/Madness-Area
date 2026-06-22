@@ -31,7 +31,7 @@ public partial class HUD : CanvasLayer
 		_coinLabel = GetNodeOrNull<Label>("CoinControl/HBoxContainer/CoinLabel");
 		if (_coinLabel != null) {
 			var emptyStyle = new StyleBoxEmpty();
-			emptyStyle.ContentMarginBottom = 2.0f;
+			emptyStyle.ContentMarginBottom = 0.0f;
 			_coinLabel.AddThemeStyleboxOverride("normal", emptyStyle);
 		}
 
@@ -51,14 +51,15 @@ public partial class HUD : CanvasLayer
 		_announcementLabel.VerticalAlignment = VerticalAlignment.Center;
 		_announcementLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
 		
-		// Сдвигаем на 2 пикселя выше
-		_announcementLabel.OffsetTop -= 2;
-		_announcementLabel.OffsetBottom -= 2;
+		// Сдвигаем на 0 пикселей (на 2 пикселя ниже, чем было в предыдущей версии)
+		_announcementLabel.OffsetTop += 0;
+		_announcementLabel.OffsetBottom += 0;
 
-		var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
+		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 		if (font != null) {
 			_announcementLabel.AddThemeFontOverride("font", font);
 		}
+		_announcementLabel.AddThemeConstantOverride("letter_spacing", 1);
 
 		_announcementLabel.AddThemeFontSizeOverride("font_size", 13);
 		_announcementLabel.AddThemeColorOverride("font_color", new Color(1, 0, 0));

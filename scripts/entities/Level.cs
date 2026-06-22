@@ -9,6 +9,7 @@ public partial class Level : Node2D
 	private TileMapLayer _floorLayer;
 	private TileMapLayer _wallLayer;
 	private TileMapLayer _stairsLayer;
+	private TileMapLayer _spikesLayer;
 	private Sprite2D _entryLadder;
 	private ExitLadder _exitLadder;
 	private Vector2 _stairsPosition = Vector2.Zero;
@@ -19,6 +20,21 @@ public partial class Level : Node2D
 	private List<Vector2> _enemySpawnPositions = new List<Vector2>();
 	private int _spawnPosIndex = 0;
 	private AStarGrid2D _astarGrid;
+
+	private int _halfW;
+	private int _halfH;
+
+	private double _spikesTimer = 0.0;
+	private double _playerSpikeInvulnerabilityTimer = 0.0;
+	private SpikePhase _currentSpikePhase = SpikePhase.Retracted;
+
+	private enum SpikePhase
+	{
+		Retracted,
+		Warning,
+		Active,
+		Retracting
+	}
 
 	private static readonly (Vector2I coords, float prob)[] FloorTiles = new[]
 	{
@@ -34,9 +50,7 @@ public partial class Level : Node2D
 
 	private static readonly Vector2I[] WallTiles = new[]
 	{
-		new Vector2I(1, 1),
-		new Vector2I(2, 1),
-		new Vector2I(3, 1)
+		new Vector2I(2, 3)
 	};
 
 	private Vector2I GetRandomFloorTile()
@@ -64,11 +78,15 @@ public partial class Level : Node2D
 
 		// 2. Находим слой тайлов карты (для генерации окклюдеров)
 		_floorLayer = GetNodeOrNull<TileMapLayer>("Map/Floor") ??
-		              GetNodeOrNull<TileMapLayer>("Map/Layer0") ?? 
-		              GetNodeOrNull<TileMapLayer>("Map") ??
-		              GetChildren().Cast<Node>().OfType<TileMapLayer>().FirstOrDefault();
+					  GetNodeOrNull<TileMapLayer>("Map/Layer0") ?? 
+					  GetNodeOrNull<TileMapLayer>("Map") ??
+					  GetChildren().Cast<Node>().OfType<TileMapLayer>().FirstOrDefault();
 
 		_wallLayer = GetNodeOrNull<TileMapLayer>("Map/Wall");
+		if (_wallLayer != null) {
+			_wallLayer.UseParentMaterial = false;
+		}
+		_spikesLayer = GetNodeOrNull<TileMapLayer>("Map/Spikes");
 
 		if (_floorLayer != null) {
 			var usedCells = _floorLayer.GetUsedCells();
@@ -140,6 +158,13 @@ public partial class Level : Node2D
 		// 5. Инициализируем спавн-позиции мобов для первого уровня
 		InitializeSpawnPositions();
 		InitializeAStarGrid();
+
+		var door = GetNodeOrNull<Door>("Map/Door");
+		if (door != null)
+		{
+			door.HideDoor();
+		}
+		GenerateSpikes();
 	}
 
 	private void SpawnEntryLadder(Vector2 position)
@@ -170,6 +195,30 @@ public partial class Level : Node2D
 
 		if (_hasStairs) {
 			SpawnExitLadderTrigger();
+		}
+
+		// 3. Активируем дверь и убираем стены под ней
+		var door = GetNodeOrNull<Door>("Map/Door");
+		if (door != null)
+		{
+			// Для процедурных уровней (Level 2+) перемещаем дверь на верхнюю границу
+			if (_currentLevelIndex > 1 && _wallLayer != null)
+			{
+				door.GlobalPosition = _wallLayer.ToGlobal(_wallLayer.MapToLocal(new Vector2I(0, -_halfH - 1)) + new Vector2(-8, 0));
+			}
+
+			// Удаляем стены на пути двери
+			if (_wallLayer != null)
+			{
+				Vector2I doorCell = _wallLayer.LocalToMap(_wallLayer.ToLocal(door.GlobalPosition));
+				_wallLayer.SetCell(doorCell, -1);
+				_wallLayer.SetCell(doorCell + new Vector2I(-1, 0), -1);
+
+				// Перестраиваем сетку AStar
+				InitializeAStarGrid();
+			}
+
+			door.SpawnDoor();
 		}
 	}
 
@@ -241,13 +290,22 @@ public partial class Level : Node2D
 		int width = GD.RandRange(22, 35);
 		int height = GD.RandRange(22, 35);
 
-		int halfW = width / 2;
-		int halfH = height / 2;
+		_halfW = width / 2;
+		_halfH = height / 2;
+		int halfW = _halfW;
+		int halfH = _halfH;
 
 		// 3. Очищаем тайлы
 		_floorLayer.Clear();
 		if (_wallLayer != null) _wallLayer.Clear();
 		if (_stairsLayer != null) _stairsLayer.Clear();
+		if (_spikesLayer != null) _spikesLayer.Clear();
+
+		var door = GetNodeOrNull<Door>("Map/Door");
+		if (door != null)
+		{
+			door.HideDoor();
+		}
 
 		// 4. Заполняем пол
 		for (int x = -halfW; x <= halfW; x++)
@@ -266,15 +324,15 @@ public partial class Level : Node2D
 			// Верхняя и нижняя границы
 			for (int x = -halfW - 1; x <= halfW + 1; x++)
 			{
-				_wallLayer.SetCell(new Vector2I(x, -halfH - 1), 0, wallTile);
-				_wallLayer.SetCell(new Vector2I(x, halfH + 1), 0, wallTile);
+				_wallLayer.SetCell(new Vector2I(x, -halfH - 1), 1, wallTile);
+				_wallLayer.SetCell(new Vector2I(x, halfH + 1), 1, wallTile);
 			}
 
 			// Левая и правая границы
 			for (int y = -halfH; y <= halfH; y++)
 			{
-				_wallLayer.SetCell(new Vector2I(-halfW - 1, y), 0, wallTile);
-				_wallLayer.SetCell(new Vector2I(halfW + 1, y), 0, wallTile);
+				_wallLayer.SetCell(new Vector2I(-halfW - 1, y), 1, wallTile);
+				_wallLayer.SetCell(new Vector2I(halfW + 1, y), 1, wallTile);
 			}
 
 			// 6. Рисуем внутренние колонны/препятствия
@@ -288,10 +346,10 @@ public partial class Level : Node2D
 				if (Math.Abs(px) < 5 && Math.Abs(py) < 5) continue;
 
 				Vector2I pTile = WallTiles[GD.RandRange(0, WallTiles.Length - 1)];
-				_wallLayer.SetCell(new Vector2I(px, py), 0, pTile);
-				_wallLayer.SetCell(new Vector2I(px + 1, py), 0, pTile);
-				_wallLayer.SetCell(new Vector2I(px, py + 1), 0, pTile);
-				_wallLayer.SetCell(new Vector2I(px + 1, py + 1), 0, pTile);
+				_wallLayer.SetCell(new Vector2I(px, py), 1, pTile);
+				_wallLayer.SetCell(new Vector2I(px + 1, py), 1, pTile);
+				_wallLayer.SetCell(new Vector2I(px, py + 1), 1, pTile);
+				_wallLayer.SetCell(new Vector2I(px + 1, py + 1), 1, pTile);
 			}
 		}
 
@@ -303,11 +361,11 @@ public partial class Level : Node2D
 
 			while (!validPosition)
 			{
-				sx = GD.RandRange(-halfW + 2, halfW - 2);
-				sy = GD.RandRange(-halfH + 2, halfH - 2);
+				sx = GD.RandRange(-halfW + 4, halfW - 4);
+				sy = GD.RandRange(-halfH + 4, halfH - 4);
 
 				// Лестница должна быть далеко от игрока
-				if (Math.Abs(sx) > 8 || Math.Abs(sy) > 8)
+				if (Math.Abs(sx) > 6 || Math.Abs(sy) > 6)
 				{
 					// И не пересекаться со стенами
 					if (_wallLayer == null || _wallLayer.GetCellSourceId(new Vector2I(sx, sy)) == -1)
@@ -357,6 +415,7 @@ public partial class Level : Node2D
 		// 10. Обновляем доступные точки спавна врагов
 		InitializeSpawnPositions();
 		InitializeAStarGrid();
+		GenerateSpikes();
 	}
 
 	public void InitializeSpawnPositions()
@@ -505,5 +564,92 @@ public partial class Level : Node2D
 			path.Add(pt);
 		}
 		return path;
+	}
+
+	public override void _PhysicsProcess(double delta)
+	{
+		if (_spikesLayer == null) return;
+
+		if (_playerSpikeInvulnerabilityTimer > 0)
+		{
+			_playerSpikeInvulnerabilityTimer -= delta;
+		}
+
+		_spikesTimer += delta;
+		double cycleTime = _spikesTimer % 4.0;
+
+		SpikePhase newPhase;
+		if (cycleTime < 1.7) newPhase = SpikePhase.Retracted;
+		else if (cycleTime < 2.0) newPhase = SpikePhase.Warning;
+		else if (cycleTime < 3.8) newPhase = SpikePhase.Active;
+		else newPhase = SpikePhase.Retracting;
+
+		if (newPhase != _currentSpikePhase)
+		{
+			_currentSpikePhase = newPhase;
+			UpdateSpikeTiles();
+		}
+
+		// Урон наносим только во время активной фазы
+		if (_currentSpikePhase == SpikePhase.Active && _playerSpikeInvulnerabilityTimer <= 0 && _player != null)
+		{
+			Vector2 playerPos = _player.GlobalPosition;
+			var spikeCells = _spikesLayer.GetUsedCells();
+			foreach (var cell in spikeCells)
+			{
+				Vector2 cellCenter = _spikesLayer.GlobalPosition + _spikesLayer.MapToLocal(cell);
+				if (playerPos.DistanceTo(cellCenter) < 12.0f)
+				{
+					_player.TakeDamage(5f, cellCenter, 5.0f);
+					_playerSpikeInvulnerabilityTimer = 1.0;
+					break;
+				}
+			}
+		}
+	}
+
+	private void UpdateSpikeTiles()
+	{
+		if (_spikesLayer == null) return;
+		Vector2I tileCoords;
+		switch (_currentSpikePhase)
+		{
+			case SpikePhase.Retracted: tileCoords = new Vector2I(0, 3); break;
+			case SpikePhase.Warning: tileCoords = new Vector2I(1, 3); break;
+			case SpikePhase.Active: tileCoords = new Vector2I(2, 3); break;
+			case SpikePhase.Retracting: tileCoords = new Vector2I(3, 3); break;
+			default: tileCoords = new Vector2I(0, 3); break;
+		}
+
+		var cells = _spikesLayer.GetUsedCells();
+		foreach (var cell in cells)
+		{
+			_spikesLayer.SetCell(cell, 0, tileCoords);
+		}
+	}
+
+	private void GenerateSpikes()
+	{
+		if (_spikesLayer == null || _floorLayer == null) return;
+		_spikesLayer.Clear();
+
+		var floorCells = _floorLayer.GetUsedCells();
+		foreach (var cell in floorCells)
+		{
+			// Не спавним шипы в центре (где игрок появляется)
+			if (Math.Abs(cell.X) < 3 && Math.Abs(cell.Y) < 3) continue;
+
+			// Не спавним на стенах
+			if (_wallLayer != null && _wallLayer.GetCellSourceId(cell) != -1) continue;
+
+			// Не спавним на лестнице
+			if (_stairsLayer != null && _stairsLayer.GetCellSourceId(cell) != -1) continue;
+
+			// Шанс 1% (1/100)
+			if (GD.Randf() < 0.01f)
+			{
+				_spikesLayer.SetCell(cell, 0, new Vector2I(0, 3));
+			}
+		}
 	}
 }

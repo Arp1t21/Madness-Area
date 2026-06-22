@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b7bikpxya28tb" path="res://scripts/entities/player/HUD.cs" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dnvqer6ird6v1" path="res://assets/objects/coin/coin_anim_f0.png" id="2_icon"]
-[ext_resource type="FontFile" uid="uid://gimuv24jkdk" path="res://assets/fonts/monogram/monogram.ttf" id="4_m5x7"]
+[ext_resource type="FontFile" uid="uid://clxpal7bjk6jp" path="res://assets/fonts/silver/Silver.ttf" id="4_m5x7"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
 bg_color = Color(0.2, 0, 0, 0.6)
@@ -35,9 +35,9 @@ anchors_preset = 5
 anchor_left = 0.5
 anchor_right = 0.5
 offset_left = -13.5
-offset_top = 9.0
+offset_top = 11.0
 offset_right = 13.5
-offset_bottom = 18.0
+offset_bottom = 20.0
 grow_horizontal = 2
 
 [node name="Label" type="Label" parent="TimerControl"]
@@ -45,12 +45,12 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -1.0
-offset_bottom = 1.0
+offset_top = 1.0
+offset_bottom = 3.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("4_m5x7")
-theme_override_font_sizes/font_size = 11
+theme_override_font_sizes/font_size = 13
 text = "00:00"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -58,18 +58,18 @@ vertical_alignment = 1
 [node name="CoinControl" type="Control" parent="."]
 layout_mode = 3
 anchors_preset = 0
-offset_left = 10.0
-offset_top = 9.0
-offset_right = 50.0
-offset_bottom = 21.0
+offset_left = 4.0
+offset_top = 6.0
+offset_right = 44.0
+offset_bottom = 18.0
 
 [node name="HBoxContainer" type="HBoxContainer" parent="CoinControl"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = 1.0
-offset_bottom = 3.0
+offset_top = 3.0
+offset_bottom = 5.0
 grow_horizontal = 2
 grow_vertical = 2
 theme_override_constants/separation = 7
@@ -89,7 +89,7 @@ layout_mode = 2
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 1
 theme_override_fonts/font = ExtResource("4_m5x7")
-theme_override_font_sizes/font_size = 12
+theme_override_font_sizes/font_size = 14
 text = "0"
 vertical_alignment = 1
 
@@ -99,9 +99,9 @@ anchors_preset = 2
 anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 10.0
-offset_top = -34.0
+offset_top = -32.0
 offset_right = 120.0
-offset_bottom = -13.0
+offset_bottom = -11.0
 grow_vertical = 0
 
 [node name="HealthBar" type="ProgressBar" parent="HealthUI"]
@@ -148,9 +148,9 @@ anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
 offset_left = 64.0
-offset_top = -11.0
+offset_top = -9.0
 offset_right = 105.0
-offset_bottom = 2.0
+offset_bottom = 4.0
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("4_m5x7")
 theme_override_font_sizes/font_size = 12
@@ -163,9 +163,8 @@ anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
 offset_left = 64.0
-offset_top = -2.0
 offset_right = 105.0
-offset_bottom = 11.0
+offset_bottom = 13.0
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("4_m5x7")
 theme_override_font_sizes/font_size = 12

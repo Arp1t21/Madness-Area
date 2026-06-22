@@ -17,6 +17,9 @@ public partial class Door : StaticBody2D, IInteractable
 	[Export] public Texture2D ClosedTexture;
 	[Export] public Texture2D OpenTexture;
 
+	private bool _isActive = false;
+	public bool IsActive => _isActive;
+
 	public override void _Ready()
 	{
 		AddToGroup("Door");
@@ -42,12 +45,15 @@ public partial class Door : StaticBody2D, IInteractable
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 			
-			var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
+			var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 			if (font != null) {
 				_promptLabel.AddThemeFontOverride("font", font);
 				_promptLabel.AddThemeFontSizeOverride("font_size", 8);
 			}
+			_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
 			AddChild(_promptLabel);
+		} else {
+			_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
 		}
 
 		if (_interactArea != null) {
@@ -61,7 +67,7 @@ public partial class Door : StaticBody2D, IInteractable
 			_interactArea.AreaExited += OnAreaExited;
 		}
 
-		UpdateDoorState();
+		HideDoor();
 	}
 
 	public void Interact(Player player)
@@ -90,9 +96,32 @@ public partial class Door : StaticBody2D, IInteractable
 
 	private void UpdateDoorState()
 	{
+		if (!_isActive)
+		{
+			if (_collisionShape != null) {
+				_collisionShape.SetDeferred("disabled", true);
+			}
+			if (_interactArea != null) {
+				foreach (var child in _interactArea.GetChildren()) {
+					if (child is CollisionShape2D cs) {
+						cs.SetDeferred("disabled", true);
+					}
+				}
+			}
+			return;
+		}
+
 		// Включаем или отключаем физическую преграду
 		if (_collisionShape != null) {
 			_collisionShape.SetDeferred("disabled", IsOpen);
+		}
+
+		if (_interactArea != null) {
+			foreach (var child in _interactArea.GetChildren()) {
+				if (child is CollisionShape2D cs) {
+					cs.SetDeferred("disabled", false);
+				}
+			}
 		}
 
 		// Меняем текстуру
@@ -134,10 +163,24 @@ public partial class Door : StaticBody2D, IInteractable
 		if (player != null) {
 			_playerInRange = entered;
 			if (entered) {
-				player.RegisterInteractable(this);
+				if (_isActive) player.RegisterInteractable(this);
 			} else {
 				player.UnregisterInteractable(this);
 			}
 		}
+	}
+
+	public void SpawnDoor()
+	{
+		_isActive = true;
+		Visible = true;
+		UpdateDoorState();
+	}
+
+	public void HideDoor()
+	{
+		_isActive = false;
+		Visible = false;
+		UpdateDoorState();
 	}
 }

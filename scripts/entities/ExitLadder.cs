@@ -24,11 +24,12 @@ public partial class ExitLadder : Area2D, IInteractable
 		_promptLabel.Position = new Vector2(-40, -25);
 		_promptLabel.Size = new Vector2(80, 15);
 		
-		var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
+		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 		if (font != null) {
 			_promptLabel.AddThemeFontOverride("font", font);
 			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
 		}
+		_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
 		_promptLabel.Visible = false;
 		AddChild(_promptLabel);
 

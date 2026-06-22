@@ -17,10 +17,11 @@ public partial class WeaponPickup : Node2D, IInteractable
 		_nameLabel = GetNode<Label>("NameLabel");
 
 		// Принудительно ставим шрифт m5x7
-		var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
+		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 		if (font != null) {
 			_nameLabel.AddThemeFontOverride("font", font);
 		}
+		_nameLabel.AddThemeConstantOverride("letter_spacing", 1);
 
 		// Маска 18: Слой 2 (игрок, значение 2) + Слой 5 (зона подбора, значение 16)
 		_pickupArea.CollisionMask = 18;
