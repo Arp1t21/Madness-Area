@@ -6,7 +6,8 @@
 [resource]
 script = ExtResource("1_b4qqx")
 Damage = 5
-AttackCooldown = 0.0
+AttackCooldown = 1.2
 KnockbackForce = 2.0
+IsAutoAim = true
 WeaponVisualPrefab = ExtResource("1_pspbd")
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

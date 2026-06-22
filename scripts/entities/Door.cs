@@ -42,7 +42,7 @@ public partial class Door : StaticBody2D, IInteractable
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 			
-			var font = GD.Load<Font>("res://assets/fonts/m5x7/m5x7.ttf");
+			var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
 			if (font != null) {
 				_promptLabel.AddThemeFontOverride("font", font);
 				_promptLabel.AddThemeFontSizeOverride("font_size", 8);

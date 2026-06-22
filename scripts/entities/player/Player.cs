@@ -29,6 +29,7 @@ public partial class Player : CharacterBody2D
 
 	private StatusEffectManager _statusManager;
 	private Vector2 _externalVelocity = Vector2.Zero;
+	private float _noManaWarningCooldown = 0.0f;
 
 	private readonly List<IInteractable> _interactablesInRange = new List<IInteractable>();
 	private bool _eJustPressed = false;
@@ -85,6 +86,7 @@ public partial class Player : CharacterBody2D
 		_torchLight.Name = "TorchLight";
 		_torchLight.ShadowEnabled = true; // Включаем тени от стен!
 		_torchLight.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5; // Мягкие тени
+		_torchLight.Position = new Vector2(0, -9); // Выравниваем источник света по центру коллизии игрока
 		
 		var gradient = new Gradient();
 		gradient.Colors = new Color[] { 
@@ -109,6 +111,10 @@ public partial class Player : CharacterBody2D
 	public override void _PhysicsProcess(double delta) {
 		if (Config == null) return;
 
+		if (_noManaWarningCooldown > 0.0f) {
+			_noManaWarningCooldown -= (float)delta;
+		}
+
 		// Если в стане или оцепенении - не можем двигаться
 		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root)) {
 			Velocity = Vector2.Zero;
@@ -122,8 +128,14 @@ public partial class Player : CharacterBody2D
 		float speedMod = _statusManager.HasEffect(StatusEffectType.Slow) ? 0.5f : 1.0f;
 		float currentSpeed = Config.WalkSpeed * speedMod;
 
-		if (Input.IsActionPressed("shift")) {
-			currentSpeed *= Config.RunMultiplier; 
+		bool isRunningPressed = direction != Vector2.Zero && Input.IsActionPressed("shift");
+		bool hasManaToRun = CurrentMana > 0;
+		bool isRunning = isRunningPressed && hasManaToRun;
+		if (isRunning) {
+			currentSpeed *= Config.RunMultiplier;
+			CurrentMana = Mathf.Max(0.0f, CurrentMana - Config.ManaCostPerSecondRunning * (float)delta);
+		} else if (isRunningPressed && !hasManaToRun) {
+			ShowNoManaWarning();
 		}
 		Velocity = direction * currentSpeed + _externalVelocity;
 		MoveAndSlide();
@@ -248,7 +260,11 @@ public partial class Player : CharacterBody2D
 			// Находим контроллер врага, чтобы взять урон
 			var controller = area.GetParent()?.GetParent() as AttackController;
 			if (controller != null && controller.CurrentWeapon != null) {
-				TakeDamage(controller.CurrentWeapon.Damage, controller.GlobalPosition, controller.CurrentWeapon.KnockbackForce);
+				float damage = controller.CurrentWeapon.Damage;
+				if (controller.OwnerNode is Enemy enemy) {
+					damage *= enemy.DamageMultiplier;
+				}
+				TakeDamage(damage, controller.GlobalPosition, controller.CurrentWeapon.KnockbackForce);
 			}
 		}
 	}
@@ -361,6 +377,16 @@ public partial class Player : CharacterBody2D
 			if (gradTex.Gradient != null) {
 				gradTex.Gradient.Offsets = new float[] { 0.0f, TorchGradientMiddleOffset, 1.0f };
 			}
+		}
+	}
+
+	public void ShowNoManaWarning() {
+		if (_noManaWarningCooldown <= 0.0f) {
+			var ft = new FloatingText();
+			GetParent().AddChild(ft);
+			ft.GlobalPosition = GlobalPosition + new Vector2(0, -25);
+			ft.Init("You dont have enough mana", new Color(0.2f, 0.6f, 1.0f));
+			_noManaWarningCooldown = 1.5f;
 		}
 	}
 }

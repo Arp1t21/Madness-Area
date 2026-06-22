@@ -10,5 +10,6 @@ Damage = 15
 AttackCooldown = 0.7
 AttackRange = 200.0
 KnockbackForce = 10.0
+ManaCost = 2.0
 WeaponVisualPrefab = ExtResource("1_ws4yc")
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

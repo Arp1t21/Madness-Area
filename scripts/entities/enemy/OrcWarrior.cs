@@ -237,18 +237,9 @@ public partial class OrcWarrior : Enemy
 
 	private void _on_area_2d_area_entered(Area2D area) {
 		if (area.IsInGroup("PlayerWeapon")) {
-			// Находим либо контроллер оружия (ближний бой), либо саму пулю
-			var projectile = area.GetParent() as Projectile;
 			var controller = area.GetParent()?.GetParent() as AttackController;
 
-			if (projectile != null) {
-				TakeDamage(projectile.Damage, projectile.GlobalPosition, 5.0f, false);
-				// ФИКС ПРОБИТИЯ: Если пуля не пронзающая — удаляем её после попадания
-				if (!projectile.IsPiercing) {
-					projectile.QueueFree();
-				}
-			}
-			else if (controller != null && controller.CurrentWeapon != null) {
+			if (controller != null && controller.CurrentWeapon != null) {
 				var player = GetTree().GetFirstNodeInGroup("Player") as Node2D;
 				Vector2 source = player != null ? player.GlobalPosition : GlobalPosition;
 				

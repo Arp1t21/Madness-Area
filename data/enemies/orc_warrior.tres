@@ -9,4 +9,6 @@ Speed = 40.0
 Damage = 10
 AttackRange = 25.0
 StopDuration = 0.2
+CoinDropChance = 0.3
+ManaCrystalDropChance = 0.6
 metadata/_custom_type_script = "uid://bljefiu15ackd"

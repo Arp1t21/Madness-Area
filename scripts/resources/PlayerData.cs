@@ -10,6 +10,7 @@ public partial class PlayerData : Resource
 	[Export] public float HealthRegen = 0.0f;
 	[Export] public int MaxMana = 100;
 	[Export] public float ManaRegen = 0.0f;
+	[Export] public float ManaCostPerSecondRunning = 10.0f;
 	[Export] public float WalkSpeed = 70.0f;
 	[Export] public float RunMultiplier = 1.8f;
 

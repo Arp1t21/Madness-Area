@@ -20,6 +20,7 @@ public partial class EnemyData : Resource
 	
 	[ExportGroup("Rewards")]
 	[Export(PropertyHint.Range, "0,1")] public float CoinDropChance = 0.2f;
+	[Export(PropertyHint.Range, "0,1")] public float ManaCrystalDropChance = 0.1f;
 
 	[ExportGroup("Visuals")]
 	[Export] public Color DamageNumberColor = new Color(1, 1, 0); // Желтый

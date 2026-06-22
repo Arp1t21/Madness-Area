@@ -10,6 +10,7 @@ Damage = 2
 AttackCooldown = 1.4
 KnockbackForce = 2.0
 Recoil = 7.0
+ManaCost = 7.0
 WeaponVisualPrefab = ExtResource("1_um4eo")
 IsRanged = true
 BulletPrefab = ExtResource("1_kfiy3")

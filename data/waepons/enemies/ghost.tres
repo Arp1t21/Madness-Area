@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=2 format=3 uid="uid://df3157ckmg7ty"]
+
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_7t4pf"]
+
+[resource]
+script = ExtResource("1_7t4pf")
+AttackCooldown = 2.0
+KnockbackForce = 20.0
+Recoil = 15.0
+IsRanged = true
+BulletSpeed = 100.0
+Spread = 0.01
+MaxAmmo = 1
+ReloadTime = 1.0
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

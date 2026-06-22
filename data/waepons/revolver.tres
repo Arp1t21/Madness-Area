@@ -9,6 +9,7 @@ script = ExtResource("3_n10iw")
 WeaponName = "Revolver"
 Damage = 13
 KnockbackForce = 0.5
+ManaCost = 3.0
 WeaponVisualPrefab = ExtResource("2_yqg12")
 IsRanged = true
 BulletPrefab = ExtResource("1_3rtr2")

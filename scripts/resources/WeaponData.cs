@@ -9,6 +9,7 @@ public partial class WeaponData : Resource
 	[Export] public float AttackRange = 100.0f;
 	[Export] public float KnockbackForce = 15.0f;
 	[Export] public float Recoil = 0.0f;
+	[Export] public float ManaCost = 0.0f;
 	[Export] public bool AllowMultiHit = false; // Можно ли ударить одного и того же врага дважды за один взмах
 	[Export] public bool IsAutoAim = false; // Автоприцеливание на ближайшую цель
 	[Export] public float OrientationOffset = 0.0f; // Смещение угла (в градусах)

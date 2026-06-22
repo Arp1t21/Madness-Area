@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3 uid="uid://c7q0xm2or6j1t"]
+
+[ext_resource type="Script" uid="uid://bljefiu15ackd" path="res://scripts/resources/EnemyData.cs" id="1_lidie"]
+
+[resource]
+script = ExtResource("1_lidie")
+EnemyName = "Ghost"
+MaxHealth = 15
+Damage = 3
+AttackRange = 150.0
+PreAttackDelay = 2.0
+StopDuration = 0.5
+CoinDropChance = 0.3
+ManaCrystalDropChance = 0.7
+IsRanged = true
+metadata/_custom_type_script = "uid://bljefiu15ackd"

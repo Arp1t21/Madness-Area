@@ -17,7 +17,7 @@ public partial class WeaponPickup : Node2D, IInteractable
 		_nameLabel = GetNode<Label>("NameLabel");
 
 		// Принудительно ставим шрифт m5x7
-		var font = GD.Load<Font>("res://assets/fonts/m5x7/m5x7.ttf");
+		var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
 		if (font != null) {
 			_nameLabel.AddThemeFontOverride("font", font);
 		}

@@ -6,13 +6,21 @@ public partial class Enemy : CharacterBody2D
 	public float CurrentHealth;
 	protected AnimatedSprite2D _sprite;
 
+	public float DamageMultiplier { get; protected set; } = 1.0f;
+
 	public override void _Ready()
 	{
 		AddToGroup("enemy");
 		_sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
+
+		float healthMultiplier = 1.0f + (levelIndex - 1) * 0.15f;
+		DamageMultiplier = 1.0f + (levelIndex - 1) * 0.15f;
+
 		if (Config != null) {
-			CurrentHealth = Config.MaxHealth;
+			CurrentHealth = Config.MaxHealth * healthMultiplier;
 		}
 	}
 
@@ -63,8 +71,13 @@ public partial class Enemy : CharacterBody2D
 	protected virtual void Die() {
 		GD.Print($"{Config?.EnemyName} погиб!");
 		
-		if (Config != null && GD.Randf() <= Config.CoinDropChance) {
-			CallDeferred("SpawnCoin");
+		if (Config != null) {
+			if (GD.Randf() <= Config.CoinDropChance) {
+				CallDeferred("SpawnCoin");
+			}
+			if (GD.Randf() <= Config.ManaCrystalDropChance) {
+				CallDeferred("SpawnManaCrystal");
+			}
 		}
 
 		QueueFree();
@@ -76,6 +89,15 @@ public partial class Enemy : CharacterBody2D
 			var coin = coinPrefab.Instantiate() as Node2D;
 			coin.GlobalPosition = GlobalPosition;
 			GetParent().AddChild(coin);
+		}
+	}
+
+	protected void SpawnManaCrystal() {
+		var crystalPrefab = GD.Load<PackedScene>("res://scene/objects/mana_crystal.tscn");
+		if (crystalPrefab != null) {
+			var crystal = crystalPrefab.Instantiate() as Node2D;
+			crystal.GlobalPosition = GlobalPosition;
+			GetParent().AddChild(crystal);
 		}
 	}
 

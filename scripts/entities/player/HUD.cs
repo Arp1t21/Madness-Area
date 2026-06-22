@@ -10,6 +10,10 @@ public partial class HUD : CanvasLayer
 	private ProgressBar _healthBar;
 	private Label _hpLabel;
 	
+	// Мана
+	private ProgressBar _manaBar;
+	private Label _mpLabel;
+	
 	// Таймер
 	private Label _timeLabel;
 	private Label _announcementLabel;
@@ -33,6 +37,8 @@ public partial class HUD : CanvasLayer
 
 		_healthBar = GetNodeOrNull<ProgressBar>("HealthUI/HealthBar");
 		_hpLabel = GetNodeOrNull<Label>("HealthUI/HPLabel");
+		_manaBar = GetNodeOrNull<ProgressBar>("HealthUI/ManaBar");
+		_mpLabel = GetNodeOrNull<Label>("HealthUI/MPLabel");
 		_timeLabel = GetNodeOrNull<Label>("TimerControl/Label");
 		_markersContainer = GetNodeOrNull<Control>("HealthUI/HealthBar/Markers");
 
@@ -49,7 +55,7 @@ public partial class HUD : CanvasLayer
 		_announcementLabel.OffsetTop -= 2;
 		_announcementLabel.OffsetBottom -= 2;
 
-		var font = GD.Load<Font>("res://assets/fonts/m5x7/m5x7.ttf");
+		var font = GD.Load<Font>("res://assets/fonts/monogram/monogram.ttf");
 		if (font != null) {
 			_announcementLabel.AddThemeFontOverride("font", font);
 		}
@@ -87,6 +93,12 @@ public partial class HUD : CanvasLayer
 				_healthBar.MaxValue = _player.Config.MaxHealth;
 				_healthBar.Value = _player.CurrentHealth;
 				_hpLabel.Text = $"{(int)_player.CurrentHealth}/{(int)_player.Config.MaxHealth}";
+			}
+
+			if (_player.Config != null && IsInstanceValid(_manaBar) && IsInstanceValid(_mpLabel)) {
+				_manaBar.MaxValue = _player.Config.MaxMana;
+				_manaBar.Value = _player.CurrentMana;
+				_mpLabel.Text = $"{(int)_player.CurrentMana}/{(int)_player.Config.MaxMana}";
 			}
 		}
 

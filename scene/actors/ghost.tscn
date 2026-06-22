@@ -1,0 +1,73 @@
+[gd_scene load_steps=12 format=3 uid="uid://yac3rnbmxhqa"]
+
+[ext_resource type="Texture2D" uid="uid://bdyg1q08ep2b4" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_idle_anim_f0.png" id="1_sh7pl"]
+[ext_resource type="Texture2D" uid="uid://d4lvaosdab66e" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_idle_anim_f1.png" id="2_yglqh"]
+[ext_resource type="Texture2D" uid="uid://cm4ceinjck6km" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_idle_anim_f2.png" id="3_swvra"]
+[ext_resource type="Texture2D" uid="uid://c5pfyh23i8xts" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_idle_anim_f3.png" id="4_onnua"]
+[ext_resource type="Texture2D" uid="uid://c8e8adgfjk2kk" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_run_anim_f0.png" id="5_7yk14"]
+[ext_resource type="Texture2D" uid="uid://bh5biwjoyqhmb" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_run_anim_f1.png" id="6_524ah"]
+[ext_resource type="Texture2D" uid="uid://cfshsifsa23qn" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_run_anim_f2.png" id="7_b51p8"]
+[ext_resource type="Texture2D" uid="uid://boioip0ki5vg3" path="res://assets/sprites/ghost_tiny_zombie/tiny_zombie_run_anim_f3.png" id="8_4ueuw"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_jea6h"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("1_sh7pl")
+}, {
+"duration": 1.0,
+"texture": ExtResource("2_yglqh")
+}, {
+"duration": 1.0,
+"texture": ExtResource("3_swvra")
+}, {
+"duration": 1.0,
+"texture": ExtResource("4_onnua")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 4.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("5_7yk14")
+}, {
+"duration": 1.0,
+"texture": ExtResource("6_524ah")
+}, {
+"duration": 1.0,
+"texture": ExtResource("7_b51p8")
+}, {
+"duration": 1.0,
+"texture": ExtResource("8_4ueuw")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 6.0
+}]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_gvjuu"]
+size = Vector2(9, 12)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_sh7pl"]
+size = Vector2(9, 12)
+
+[node name="Ghost" type="Node2D"]
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+position = Vector2(0, -8)
+sprite_frames = SubResource("SpriteFrames_jea6h")
+animation = &"walk"
+frame_progress = 0.488951
+
+[node name="Area2DHitBox" type="Area2D" parent="."]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2DHitBox"]
+position = Vector2(0.5, -6)
+shape = SubResource("RectangleShape2D_gvjuu")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+position = Vector2(0.5, -6)
+shape = SubResource("RectangleShape2D_sh7pl")

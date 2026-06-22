@@ -11,6 +11,7 @@ public partial class Projectile : Node2D
 	public bool IsPiercing = false; // Если false, пуля исчезнет после первого попадания
 
 	private Vector2 _startPos;
+	private readonly System.Collections.Generic.HashSet<ulong> _hitTargets = new System.Collections.Generic.HashSet<ulong>();
 
 	public override void _Ready()
 	{
@@ -52,11 +53,13 @@ public partial class Projectile : Node2D
 	{
 		if (_isDestroyed || hitNode == null || hitNode.IsQueuedForDeletion()) return;
 
-		// GD.Print($"Projectile hit: {hitNode.Name} of type {hitNode.GetType().Name}");
-
 		// Если пуля игрока попала во врага
 		if (IsPlayerOwned && hitNode.IsInGroup("enemy"))
 		{
+			ulong targetId = hitNode.GetInstanceId();
+			if (_hitTargets.Contains(targetId)) return;
+			_hitTargets.Add(targetId);
+
 			if (hitNode.HasMethod("TakeDamage"))
 			{
 				hitNode.Call("TakeDamage", Damage, GlobalPosition, 5.0f, false);
@@ -70,6 +73,10 @@ public partial class Projectile : Node2D
 		// Если пуля врага попала в игрока
 		else if (!IsPlayerOwned && hitNode.IsInGroup("Player"))
 		{
+			ulong targetId = hitNode.GetInstanceId();
+			if (_hitTargets.Contains(targetId)) return;
+			_hitTargets.Add(targetId);
+
 			if (hitNode.HasMethod("TakeDamage"))
 			{
 				hitNode.Call("TakeDamage", Damage, GlobalPosition, 2.0f);

@@ -15,6 +15,7 @@ public partial class Level : Node2D
 	private bool _hasStairs = false;
 
 	private int _currentLevelIndex = 1;
+	public int CurrentLevelIndex => _currentLevelIndex;
 	private List<Vector2> _enemySpawnPositions = new List<Vector2>();
 	private int _spawnPosIndex = 0;
 	private AStarGrid2D _astarGrid;

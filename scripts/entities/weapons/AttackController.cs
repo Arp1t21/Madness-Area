@@ -31,7 +31,11 @@ public partial class AttackController : Node2D
 	}
 
 	public bool CanAttack() {
-		return _canAttack && !IsAttacking && !_isReloading;
+		if (!_canAttack || IsAttacking || _isReloading) return false;
+		if (_isPlayerOwned && _player != null && CurrentWeapon != null) {
+			if (_player.CurrentMana < CurrentWeapon.ManaCost) return false;
+		}
+		return true;
 	}
 
 	public void Deactivate() {
@@ -56,6 +60,7 @@ public partial class AttackController : Node2D
 	}
 
 	private Node2D _ownerNode;
+	public Node2D OwnerNode => _ownerNode;
 
 	public override void _Ready() {
 		_timer = GetNode<Timer>("Timer");
@@ -228,9 +233,19 @@ public partial class AttackController : Node2D
 	public void HandleManualAttack() {
 		if (!_canAttack || CurrentWeapon == null || _isReloading) return;
 
-		if (CurrentWeapon.IsRanged && _currentAmmo <= 0) {
+		// 1. Сначала проверяем патроны (только для игрока)
+		if (_isPlayerOwned && CurrentWeapon.IsRanged && _currentAmmo <= 0) {
 			StartReload();
 			return;
+		}
+
+		// 2. Затем проверяем и тратим ману
+		if (_isPlayerOwned && _player != null) {
+			if (_player.CurrentMana < CurrentWeapon.ManaCost) {
+				_player.ShowNoManaWarning();
+				return;
+			}
+			_player.CurrentMana = Mathf.Max(0.0f, _player.CurrentMana - CurrentWeapon.ManaCost);
 		}
 
 		Vector2 targetPosition = GetTargetPosition();
@@ -240,7 +255,9 @@ public partial class AttackController : Node2D
 
 		if (CurrentWeapon.IsRanged) {
 			Shoot(targetPosition);
-			_currentAmmo--;
+			if (_isPlayerOwned) {
+				_currentAmmo--;
+			}
 		}
 
 		if (CurrentWeapon.Recoil > 0 && _isPlayerOwned && _player != null) {
@@ -324,7 +341,13 @@ public partial class AttackController : Node2D
 			
 			if (bulletNode is Projectile bullet) {
 				bullet.Position = spawnPos;
-				bullet.Damage = CurrentWeapon.Damage;
+				
+				float bulletDamage = CurrentWeapon.Damage;
+				if (_ownerNode is Enemy enemy) {
+					bulletDamage *= enemy.DamageMultiplier;
+				}
+				bullet.Damage = bulletDamage;
+
 				bullet.IsPlayerOwned = _isPlayerOwned;
 				bullet.IsPiercing = CurrentWeapon.IsPiercing; // Передаем настройку пробития
 				bullet.Speed = CurrentWeapon.BulletSpeed; // Устанавливаем скорость пули из настроек оружия

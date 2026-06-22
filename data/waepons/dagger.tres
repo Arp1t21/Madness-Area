@@ -9,5 +9,6 @@ WeaponName = "Dagger"
 AttackCooldown = 0.35
 AttackRange = 50.0
 KnockbackForce = 5.0
+ManaCost = 1.0
 WeaponVisualPrefab = ExtResource("2_j4un7")
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"
