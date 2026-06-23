@@ -1,6 +1,6 @@
-[gd_scene load_steps=10 format=3 uid="uid://37bg77l5ymch"]
+[gd_scene format=3 uid="uid://37bg77l5ymch"]
 
-[ext_resource type="Script" path="res://scripts/entities/Level.cs" id="1_level_script"]
+[ext_resource type="Script" uid="uid://crkll016e5w10" path="res://scripts/entities/Level.cs" id="1_level_script"]
 [ext_resource type="PackedScene" uid="uid://nfl7ggdvuwmr" path="res://scene/actors/player.tscn" id="2_p3y32"]
 [ext_resource type="Script" uid="uid://cw5gfofmcsx2t" path="res://scripts/entities/WaveManager.cs" id="4_wave"]
 [ext_resource type="PackedScene" uid="uid://b8y1v2d6q4p5r" path="res://scene/levels/hud.tscn" id="6_hud"]
@@ -10,26 +10,49 @@
 [ext_resource type="Resource" uid="uid://bna55p0vfoiby" path="res://data/waepons/revolver.tres" id="9_revolver_res"]
 [ext_resource type="Resource" uid="uid://d0w28ty2vtvfs" path="res://data/waepons/shotgun.tres" id="10_shotgun_res"]
 
-[node name="Level" type="Node2D"]
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_u28oc"]
+content_margin_left = 0.0
+content_margin_top = 0.0
+content_margin_right = 0.0
+content_margin_bottom = 0.0
+bg_color = Color(0, 0, 0, 1)
+corner_radius_top_left = 3
+corner_radius_top_right = 3
+corner_radius_bottom_right = 3
+corner_radius_bottom_left = 3
+corner_detail = 5
+
+[node name="Level" type="Node2D" unique_id=1510294308]
 script = ExtResource("1_level_script")
 
-[node name="Map" parent="." instance=ExtResource("8_htqai")]
+[node name="Map" parent="." unique_id=1443464610 instance=ExtResource("8_htqai")]
 
-[node name="Player" parent="." instance=ExtResource("2_p3y32")]
+[node name="Player" parent="." unique_id=219480278 instance=ExtResource("2_p3y32")]
 
-[node name="WaveManager" type="Node2D" parent="." groups=["WaveManager"]]
+[node name="WaveManager" type="Node2D" parent="." unique_id=1353381833 groups=["WaveManager"]]
 script = ExtResource("4_wave")
 
-[node name="HUD" parent="." instance=ExtResource("6_hud")]
+[node name="HUD" parent="." unique_id=393314233 instance=ExtResource("6_hud")]
 
-[node name="TestDaggerPickup" parent="." instance=ExtResource("7_pickup")]
+[node name="TestDaggerPickup" parent="." unique_id=1350479248 instance=ExtResource("7_pickup")]
 position = Vector2(100, 0)
 WeaponToGive = ExtResource("8_dagger_res")
 
-[node name="TestRevolverPickup" parent="." instance=ExtResource("7_pickup")]
+[node name="TestRevolverPickup" parent="." unique_id=1879635919 instance=ExtResource("7_pickup")]
 position = Vector2(100, 50)
 WeaponToGive = ExtResource("9_revolver_res")
 
-[node name="TestShotgunPickup" parent="." instance=ExtResource("7_pickup")]
+[node name="TestShotgunPickup" parent="." unique_id=488334783 instance=ExtResource("7_pickup")]
 position = Vector2(100, 100)
 WeaponToGive = ExtResource("10_shotgun_res")
+
+[node name="Background" type="CanvasLayer" parent="." unique_id=1615794751]
+layer = -1
+
+[node name="PanelContainer" type="PanelContainer" parent="Background" unique_id=1258495972]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_u28oc")
