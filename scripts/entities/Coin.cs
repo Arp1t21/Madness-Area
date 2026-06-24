@@ -6,10 +6,11 @@ public partial class Coin : Node2D
 	private bool _isBeingPickedUp = false;
 	private bool _isAnimatingSpawn = true;
 	private Node2D _targetPlayer;
-	private float _speed = 200.0f;
+	private float _speed = 600.0f;
 
 	public override void _Ready()
 	{
+		Scale = new Vector2(3.0f, 3.0f);
 		// Подключаем сигнал из Area2D
 		var area = GetNode<Area2D>("Area2D");
 		area.AreaEntered += _on_area_2d_area_entered;
@@ -25,8 +26,8 @@ public partial class Coin : Node2D
 		_isAnimatingSpawn = true;
 		
 		Vector2 startPos = GlobalPosition;
-		Vector2 jumpPos = startPos + new Vector2(0, -20); // Прыжок вверх на 20 пикселей
-		Vector2 landPos = startPos + new Vector2((float)GD.RandRange(-15, 15), 5); // Приземление со случайным разбросом
+		Vector2 jumpPos = startPos + new Vector2(0, -20 * 3f); // Прыжок вверх на 60 пикселей (20 * 3)
+		Vector2 landPos = startPos + new Vector2((float)GD.RandRange(-15, 15) * 3f, 5 * 3f); // Приземление со случайным разбросом (масштабировано 3x)
 
 		var tween = CreateTween();
 		// Вверх
@@ -48,10 +49,10 @@ public partial class Coin : Node2D
 			GlobalPosition += direction * _speed * (float)delta;
 			
 			// Увеличиваем скорость для эффекта притяжения
-			_speed += 500.0f * (float)delta;
+			_speed += 1500.0f * (float)delta;
 
 			// Если долетели совсем близко - удаляем
-			if (GlobalPosition.DistanceTo(_targetPlayer.GlobalPosition) < 5.0f)
+			if (GlobalPosition.DistanceTo(_targetPlayer.GlobalPosition) < 15.0f)
 			{
 				if (_targetPlayer is Player p) {
 					p.CoinCount++;

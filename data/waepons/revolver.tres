@@ -1,15 +1,23 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3 uid="uid://bna55p0vfoiby"]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=7 format=3 uid="uid://bna55p0vfoiby"]
 
 [ext_resource type="PackedScene" uid="uid://lj0667ylclpd" path="res://scene/weapons/bullets/revolver_bullet.tscn" id="1_3rtr2"]
+[ext_resource type="AudioStream" uid="uid://2am52okbojh" path="res://assets/sounds/revolver_shot.wav" id="1_et1bg"]
 [ext_resource type="PackedScene" uid="uid://swv2p4xqjgl0" path="res://scene/weapons/revolver.tscn" id="2_yqg12"]
+[ext_resource type="AudioStream" uid="uid://cym0q2pai5f31" path="res://assets/sounds/no_ammo_revolver.wav" id="3_2ff3i"]
 [ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="3_n10iw"]
+[ext_resource type="AudioStream" uid="uid://dc4u6cno1j5bl" path="res://assets/sounds/take_revolver.wav" id="4_8ijdl"]
 
 [resource]
 script = ExtResource("3_n10iw")
 WeaponName = "Revolver"
 Damage = 13
+AttackCooldown = 0.6
 KnockbackForce = 0.5
 ManaCost = 3.0
+AttackSound = ExtResource("1_et1bg")
+ReloadSound = ExtResource("4_8ijdl")
+EquipSound = ExtResource("4_8ijdl")
+EmptySound = ExtResource("3_2ff3i")
 WeaponVisualPrefab = ExtResource("2_yqg12")
 IsRanged = true
 BulletPrefab = ExtResource("1_3rtr2")

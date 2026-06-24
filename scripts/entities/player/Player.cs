@@ -34,6 +34,14 @@ public partial class Player : CharacterBody2D
 	private readonly List<IInteractable> _interactablesInRange = new List<IInteractable>();
 	private bool _eJustPressed = false;
 
+	public int Ability1Level = 0; // Fireball
+	public int Ability2Level = 0; // Passive Shield
+	public int SkillPoints = 0;
+	public float FireballCooldownTimer = 0.0f;
+	public const float FireballCooldownMax = 10.0f;
+	private bool _qWasPressed = false;
+	private PackedScene _fireballScene;
+
 	public void RegisterInteractable(IInteractable interactable)
 	{
 		if (!_interactablesInRange.Contains(interactable)) {
@@ -48,6 +56,7 @@ public partial class Player : CharacterBody2D
 	}
 
 	public override void _Ready() {
+		Scale = new Vector2(3.0f, 3.0f);
 		_animatedSprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
 		_abilityManager = GetNode<Node2D>("AbilityManager");
 		_camera = GetNodeOrNull<Camera2D>("Camera2D") ?? GetNodeOrNull<Camera2D>("../Camera2D");
@@ -74,12 +83,61 @@ public partial class Player : CharacterBody2D
 
 		AddToGroup("Player");
 
-		if (Config != null) {
-			CurrentHealth = Config.MaxHealth;
-			CurrentMana = Config.MaxMana;
-		}
+		if (SaveManager.CurrentSave != null) {
+			var save = SaveManager.CurrentSave;
+			CurrentHealth = save.CurrentHealth;
+			CurrentMana = save.CurrentMana;
+			CoinCount = save.Coins;
+			SkillPoints = save.SkillPoints;
+			Ability1Level = save.Ability1Level;
+			Ability2Level = save.Ability2Level;
 
-		SpawnStartingWeapons();
+			// Spawn weapon slots
+			foreach (Node child in _abilityManager.GetChildren()) {
+				child.QueueFree();
+			}
+			var controllerPrefab = GD.Load<PackedScene>("res://scene/weapons/attack_controller.tscn");
+			WeaponSlots.Clear();
+			for (int i = 0; i < 3; i++) {
+				var controllerInstance = controllerPrefab.Instantiate() as AttackController;
+				_abilityManager.AddChild(controllerInstance);
+				WeaponSlots.Add(controllerInstance);
+				controllerInstance.Visible = false;
+			}
+
+			// Load weapons from save
+			if (save.WeaponResourcePaths == null || save.WeaponResourcePaths.Count == 0) {
+				if (Config != null && Config.StartingWeapons != null) {
+					for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++) {
+						var weaponData = Config.StartingWeapons[i];
+						if (weaponData != null) {
+							WeaponSlots[i].CurrentWeapon = weaponData;
+							WeaponSlots[i].ApplyWeaponSettings();
+							save.WeaponResourcePaths.Add(weaponData.ResourcePath);
+						}
+					}
+					SaveManager.SaveGame(save);
+				}
+			} else {
+				for (int i = 0; i < save.WeaponResourcePaths.Count && i < 3; i++) {
+					string resPath = save.WeaponResourcePaths[i];
+					if (!string.IsNullOrEmpty(resPath)) {
+						var weaponData = GD.Load<WeaponData>(resPath);
+						if (weaponData != null) {
+							WeaponSlots[i].CurrentWeapon = weaponData;
+							WeaponSlots[i].ApplyWeaponSettings();
+						}
+					}
+				}
+			}
+			SelectSlot(0);
+		} else {
+			if (Config != null) {
+				CurrentHealth = Config.MaxHealth;
+				CurrentMana = Config.MaxMana;
+			}
+			SpawnStartingWeapons();
+		}
 
 		// Добавляем факел/свет вокруг игрока
 		_torchLight = new PointLight2D();
@@ -106,10 +164,22 @@ public partial class Player : CharacterBody2D
 		
 		_torchLight.Texture = gradTex;
 		AddChild(_torchLight);
+
+		_fireballScene = GD.Load<PackedScene>("res://scene/abilities/fireball.tscn");
 	}
 
 	public override void _PhysicsProcess(double delta) {
 		if (Config == null) return;
+
+		if (FireballCooldownTimer > 0.0f) {
+			FireballCooldownTimer = Mathf.Max(0.0f, FireballCooldownTimer - (float)delta);
+		}
+
+		bool qPressed = Input.IsKeyPressed(Key.Q);
+		if (qPressed && !_qWasPressed) {
+			UseFireball();
+		}
+		_qWasPressed = qPressed;
 
 		if (_noManaWarningCooldown > 0.0f) {
 			_noManaWarningCooldown -= (float)delta;
@@ -126,7 +196,7 @@ public partial class Player : CharacterBody2D
 		Vector2 direction = Input.GetVector("move_left", "move_right", "move_up", "move_down");
 
 		float speedMod = _statusManager.HasEffect(StatusEffectType.Slow) ? 0.5f : 1.0f;
-		float currentSpeed = Config.WalkSpeed * speedMod;
+		float currentSpeed = Config.WalkSpeed * speedMod * 3f;
 
 		bool isRunningPressed = direction != Vector2.Zero && Input.IsActionPressed("shift");
 		bool hasManaToRun = CurrentMana > 0;
@@ -193,11 +263,16 @@ public partial class Player : CharacterBody2D
 	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0) {
 		if (CurrentHealth <= 0) return;
 
+		if (Ability2Level > 0) {
+			float res = 0.05f + (Ability2Level - 1) * 0.05f;
+			amount *= (1.0f - res);
+		}
+
 		CurrentHealth -= amount;
 		GD.Print($"Игрок получил урон: {amount}. ХП: {CurrentHealth}");
 		
 		// 1. Тряска камеры
-		ApplyCameraShake(DamageShakeIntensity);
+		ApplyCameraShake(DamageShakeIntensity * SettingsManager.ScreenShake);
 
 		// 2. Отброс
 		if (knockForce > 0 && sourcePos != default) {
@@ -221,38 +296,63 @@ public partial class Player : CharacterBody2D
 	}
 
 	public void ApplyRecoil(Vector2 attackDir, float force) {
-		_externalVelocity -= attackDir.Normalized() * force * 15.0f;
+		_externalVelocity -= attackDir.Normalized() * force * 45.0f;
 	}
 
 	private void ApplyKnockback(Vector2 source, float force) {
 		Vector2 dir = (GlobalPosition - source).Normalized();
-		_externalVelocity = dir * force * 100.0f;
+		_externalVelocity = dir * force * 300.0f;
 	}
 
 	private void Die() {
-		GD.Print("Игрок погиб!");
-		// Создаем надпись смерти
-		var hud = GetTree().GetFirstNodeInGroup("HUD") as CanvasLayer;
-		if (hud != null) {
-			var label = new Label();
-			label.Text = "YOU DEAD";
-			label.HorizontalAlignment = HorizontalAlignment.Center;
-			label.VerticalAlignment = VerticalAlignment.Center;
-			label.AddThemeColorOverride("font_color", new Color(1, 0, 0));
-			
-			// Используем fff-forward для большой надписи
-			var font = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
-			label.AddThemeFontOverride("font", font);
-			label.AddThemeFontSizeOverride("font_size", 30);
-			
-			label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
-			label.OffsetTop -= 2;
-			label.OffsetBottom -= 2;
-			hud.AddChild(label);
+		GD.Print("Player died!");
+
+		// Play dead.wav
+		try {
+			var deadSound = GD.Load<AudioStream>("res://assets/sounds/dead.wav");
+			if (deadSound != null) {
+				MainMenu.PlayUISound(deadSound);
+			}
+		} catch (Exception e) {
+			GD.PrintErr($"Failed to play death sound: {e.Message}");
 		}
+
+		// Delete save slot progress
+		if (!string.IsNullOrEmpty(SaveManager.ActiveSlotId)) {
+			SaveManager.DeleteSave(SaveManager.ActiveSlotId);
+		}
+
+		// Pause the game
+		GetTree().Paused = true;
+
+		// Instantiate DeathScreen and setup stats
+		var deathScreen = new DeathScreen();
 		
-		// Замедляем время
-		Engine.TimeScale = 0.2f;
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		float timePlayed = level != null ? level.LevelPlayedTime : 0.0f;
+		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
+
+		if (SaveManager.CurrentSave != null) {
+			timePlayed += SaveManager.CurrentSave.PlayedTimeSeconds;
+		}
+
+		var weaponsList = new List<string>();
+		foreach (var slot in WeaponSlots) {
+			if (slot.CurrentWeapon != null) {
+				weaponsList.Add(slot.CurrentWeapon.WeaponName);
+			}
+		}
+
+		deathScreen.SetupStats(
+			Config != null ? Config.CharacterName : "Knight",
+			_animatedSprite.SpriteFrames,
+			levelIndex,
+			timePlayed,
+			CoinCount,
+			weaponsList
+		);
+
+		GetTree().Root.AddChild(deathScreen);
 	}
 
 	private void _on_area_2d_area_entered(Area2D area) {
@@ -308,6 +408,9 @@ public partial class Player : CharacterBody2D
 
 	private void SpawnStartingWeapons() {
 		// Создаем 3 пустых контроллера (слота)
+		foreach (Node child in _abilityManager.GetChildren()) {
+			child.QueueFree();
+		}
 		var controllerPrefab = GD.Load<PackedScene>("res://scene/weapons/attack_controller.tscn");
 		WeaponSlots.Clear();
 		for (int i = 0; i < 3; i++) {
@@ -337,6 +440,18 @@ public partial class Player : CharacterBody2D
 		if (Input.IsActionJustPressed("weapon_3")) SelectSlot(2);
 	}
 
+	public override void _Input(InputEvent @event)
+	{
+		if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
+		{
+			var key = keyEvent.Keycode;
+			var physKey = keyEvent.PhysicalKeycode;
+			if (key == Key.Key1 || physKey == Key.Key1) SelectSlot(0);
+			else if (key == Key.Key2 || physKey == Key.Key2) SelectSlot(1);
+			else if (key == Key.Key3 || physKey == Key.Key3) SelectSlot(2);
+		}
+	}
+
 	public void SelectSlot(int slotIndex) {
 		if (slotIndex == _currentSlotIndex && WeaponSlots[slotIndex].Visible) return;
 
@@ -357,6 +472,10 @@ public partial class Player : CharacterBody2D
 			if (WeaponSlots[_currentSlotIndex] != null) {
 				WeaponSlots[_currentSlotIndex].Visible = true;
 				WeaponSlots[_currentSlotIndex].ApplyWeaponSettings();
+
+				if (WeaponSlots[_currentSlotIndex].CurrentWeapon.EquipSound != null) {
+					WeaponSlots[_currentSlotIndex].PlaySound(WeaponSlots[_currentSlotIndex].CurrentWeapon.EquipSound);
+				}
 			}
 		}
 	}
@@ -387,6 +506,50 @@ public partial class Player : CharacterBody2D
 			ft.GlobalPosition = GlobalPosition + new Vector2(0, -25);
 			ft.Init("You dont have enough mana", new Color(0.2f, 0.6f, 1.0f));
 			_noManaWarningCooldown = 1.5f;
+		}
+	}
+
+	private void UseFireball()
+	{
+		if (Ability1Level <= 0 || FireballCooldownTimer > 0.0f) return;
+
+		if (CurrentMana < 20.0f)
+		{
+			ShowNoManaWarning();
+			return;
+		}
+
+		CurrentMana -= 20.0f;
+		FireballCooldownTimer = FireballCooldownMax;
+
+		Vector2 mousePos = GetGlobalMousePosition();
+		Vector2 dir = (mousePos - GlobalPosition).Normalized();
+
+		Fireball fireball;
+		if (_fireballScene != null)
+		{
+			fireball = _fireballScene.Instantiate<Fireball>();
+		}
+		else
+		{
+			fireball = new Fireball();
+		}
+		
+		fireball.GlobalPosition = GlobalPosition;
+		fireball.Direction = dir;
+		fireball.Damage = 5.0f + (Ability1Level - 1) * 5.0f;
+		GetParent().AddChild(fireball);
+	}
+
+	public void OnWaveCleared()
+	{
+		SkillPoints++;
+		GD.Print($"Игрок получил очко способностей! Всего очков: {SkillPoints}");
+		
+		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+		if (hud != null)
+		{
+			hud.UpdateAbilitiesUI();
 		}
 	}
 }

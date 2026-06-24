@@ -16,6 +16,7 @@ public partial class Projectile : Node2D
 
 	public override void _Ready()
 	{
+		Scale = new Vector2(3.0f, 3.0f);
 		_startPos = GlobalPosition;
 		
 		var area = GetNodeOrNull<Area2D>("Area2D") ?? GetNodeOrNull<Area2D>(".");

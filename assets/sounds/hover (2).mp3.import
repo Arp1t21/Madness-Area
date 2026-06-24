@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dgkmepqw7vgxc"
+path="res://.godot/imported/hover (2).mp3-5c59601bdc65ca04a32c5255f7bc2279.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/hover (2).mp3"
+dest_files=["res://.godot/imported/hover (2).mp3-5c59601bdc65ca04a32c5255f7bc2279.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

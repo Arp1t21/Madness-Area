@@ -30,8 +30,6 @@ animations = [{
 }]
 
 [node name="Revolver" type="Node2D"]
-texture_filter = 1
-texture_repeat = 1
 script = ExtResource("1_v732k")
 
 [node name="Muzzle" type="Marker2D" parent="."]
@@ -53,7 +51,7 @@ position = Vector2(3, -1)
 emitting = false
 amount = 1
 texture = ExtResource("4_qpgev")
-lifetime = 1.4000000000000001
+lifetime = 1.4
 one_shot = true
 explosiveness = 1.0
 fract_delta = false

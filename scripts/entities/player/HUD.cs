@@ -18,7 +18,7 @@ public partial class HUD : CanvasLayer
 	private Label _timeLabel;
 	private Label _announcementLabel;
 	private Control _markersContainer;
-	private float _time = 0.0f;
+	private float _time = 5.0f;
 	private bool _isCountingDown = true;
 	private float _lastMaxHealth = 0;
 
@@ -26,21 +26,52 @@ public partial class HUD : CanvasLayer
 	private WaveManager _waveManager;
 	private ArrowIndicator _arrowIndicator;
 
+	private Control _abilitiesContainer;
+	private AbilitySlotUI _ability1Slot;
+	private AbilitySlotUI _ability2Slot;
+	private Control _hudRoot;
+
 	public override void _Ready()
 	{
-		_coinLabel = GetNodeOrNull<Label>("CoinControl/HBoxContainer/CoinLabel");
+		AddToGroup("HUD");
+		_hudRoot = new Control();
+		_hudRoot.Name = "HUDRoot";
+		AddChild(_hudRoot);
+
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		_hudRoot.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		_hudRoot.Size = viewportSize / 3.5f;
+		_hudRoot.Scale = new Vector2(3.5f, 3.5f);
+
+		var timerControl = GetNodeOrNull<Control>("TimerControl");
+		if (timerControl != null) {
+			RemoveChild(timerControl);
+			_hudRoot.AddChild(timerControl);
+		}
+		var coinControl = GetNodeOrNull<Control>("CoinControl");
+		if (coinControl != null) {
+			RemoveChild(coinControl);
+			_hudRoot.AddChild(coinControl);
+		}
+		var healthUI = GetNodeOrNull<Control>("HealthUI");
+		if (healthUI != null) {
+			RemoveChild(healthUI);
+			_hudRoot.AddChild(healthUI);
+		}
+
+		_coinLabel = _hudRoot.GetNodeOrNull<Label>("CoinControl/HBoxContainer/CoinLabel");
 		if (_coinLabel != null) {
 			var emptyStyle = new StyleBoxEmpty();
 			emptyStyle.ContentMarginBottom = 0.0f;
 			_coinLabel.AddThemeStyleboxOverride("normal", emptyStyle);
 		}
 
-		_healthBar = GetNodeOrNull<ProgressBar>("HealthUI/HealthBar");
-		_hpLabel = GetNodeOrNull<Label>("HealthUI/HPLabel");
-		_manaBar = GetNodeOrNull<ProgressBar>("HealthUI/ManaBar");
-		_mpLabel = GetNodeOrNull<Label>("HealthUI/MPLabel");
-		_timeLabel = GetNodeOrNull<Label>("TimerControl/Label");
-		_markersContainer = GetNodeOrNull<Control>("HealthUI/HealthBar/Markers");
+		_healthBar = _hudRoot.GetNodeOrNull<ProgressBar>("HealthUI/HealthBar");
+		_hpLabel = _hudRoot.GetNodeOrNull<Label>("HealthUI/HPLabel");
+		_manaBar = _hudRoot.GetNodeOrNull<ProgressBar>("HealthUI/ManaBar");
+		_mpLabel = _hudRoot.GetNodeOrNull<Label>("HealthUI/MPLabel");
+		_timeLabel = _hudRoot.GetNodeOrNull<Label>("TimerControl/Label");
+		_markersContainer = _hudRoot.GetNodeOrNull<Control>("HealthUI/HealthBar/Markers");
 
 		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
 		_waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
@@ -59,12 +90,12 @@ public partial class HUD : CanvasLayer
 		if (font != null) {
 			_announcementLabel.AddThemeFontOverride("font", font);
 		}
-		_announcementLabel.AddThemeConstantOverride("letter_spacing", 1);
+		_announcementLabel.AddThemeConstantOverride("letter_spacing", 2);
 
 		_announcementLabel.AddThemeFontSizeOverride("font_size", 13);
 		_announcementLabel.AddThemeColorOverride("font_color", new Color(1, 0, 0));
 		_announcementLabel.Text = "First wave is coming!";
-		AddChild(_announcementLabel);
+		_hudRoot.AddChild(_announcementLabel);
 		_announcementLabel.Visible = false;
 
 		UpdateTimerLabel();
@@ -77,7 +108,9 @@ public partial class HUD : CanvasLayer
 		// Создаем стрелку для лестницы
 		_arrowIndicator = new ArrowIndicator();
 		_arrowIndicator.Visible = false;
-		AddChild(_arrowIndicator);
+		_hudRoot.AddChild(_arrowIndicator);
+
+		CreateAbilitiesUI();
 	}
 
 	public override void _Process(double delta)
@@ -108,6 +141,10 @@ public partial class HUD : CanvasLayer
 
 		// Стрелка к лестнице
 		UpdateExitLadderArrow();
+
+		// Обновление состояния кд и плюсиков способностей
+		if (IsInstanceValid(_ability1Slot)) _ability1Slot.UpdateState();
+		if (IsInstanceValid(_ability2Slot)) _ability2Slot.UpdateState();
 	}
 
 		private void ProcessTimer(float delta)
@@ -142,6 +179,18 @@ public partial class HUD : CanvasLayer
 		if (_waveManager != null) {
 			_waveManager.StartNextWave();
 		}
+	}
+
+	public void StartCountdown(float duration, string announcementText)
+	{
+		_time = duration;
+		_isCountingDown = true;
+		if (_announcementLabel != null)
+		{
+			_announcementLabel.Text = announcementText;
+			_announcementLabel.Visible = true;
+		}
+		UpdateTimerLabel();
 	}
 
 	private void UpdateTimerLabel()
@@ -213,11 +262,46 @@ public partial class HUD : CanvasLayer
 			arrowPos.Y += wave;
 		}
 
-		_arrowIndicator.Position = arrowPos;
+		_arrowIndicator.Position = arrowPos / 3.5f;
 		if (Math.Abs(_arrowIndicator.Angle - angle) > 0.001f) {
 			_arrowIndicator.Angle = angle;
 			_arrowIndicator.QueueRedraw();
 		}
+	}
+
+	private void CreateAbilitiesUI()
+	{
+		_abilitiesContainer = new Control();
+		_abilitiesContainer.Name = "AbilitiesContainer";
+		_abilitiesContainer.LayoutMode = 1;
+		_abilitiesContainer.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
+		
+		// Смещаем к центру и прижимаем к нижнему краю
+		_abilitiesContainer.OffsetLeft = -30;
+		_abilitiesContainer.OffsetRight = 30;
+		_abilitiesContainer.OffsetTop = -30;
+		_abilitiesContainer.OffsetBottom = -6;
+
+		var hbox = new HBoxContainer();
+		hbox.LayoutMode = 1;
+		hbox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		hbox.Alignment = BoxContainer.AlignmentMode.Center;
+		hbox.AddThemeConstantOverride("separation", 10);
+		_abilitiesContainer.AddChild(hbox);
+
+		_ability1Slot = new AbilitySlotUI(1, this);
+		_ability2Slot = new AbilitySlotUI(2, this);
+
+		hbox.AddChild(_ability1Slot);
+		hbox.AddChild(_ability2Slot);
+
+		_hudRoot.AddChild(_abilitiesContainer);
+	}
+
+	public void UpdateAbilitiesUI()
+	{
+		if (IsInstanceValid(_ability1Slot)) _ability1Slot.UpdateState();
+		if (IsInstanceValid(_ability2Slot)) _ability2Slot.UpdateState();
 	}
 }
 

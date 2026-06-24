@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://reypwnx2b0mc"
+path="res://.godot/imported/doom_09. Impure Spectrum.mp3-c9d48141725c496a0dec07e0763fd002.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/doom_09. Impure Spectrum.mp3"
+dest_files=["res://.godot/imported/doom_09. Impure Spectrum.mp3-c9d48141725c496a0dec07e0763fd002.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

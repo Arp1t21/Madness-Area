@@ -9,6 +9,7 @@ public partial class ExitLadder : Area2D, IInteractable
 	{
 		_level = level;
 		Name = "ExitLadder";
+		Scale = new Vector2(3.0f, 3.0f);
 		CollisionLayer = 0;
 		CollisionMask = 16; // Слой 5 коллизий (для детекта Area2DPickWeapon игрока)
 
@@ -29,7 +30,7 @@ public partial class ExitLadder : Area2D, IInteractable
 			_promptLabel.AddThemeFontOverride("font", font);
 			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
 		}
-		_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
+		_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
 		_promptLabel.Visible = false;
 		AddChild(_promptLabel);
 

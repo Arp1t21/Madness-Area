@@ -82,47 +82,86 @@ public partial class Ghost : Enemy
 		}
 		else 
 		{
-			_pathUpdateTimer -= (float)delta;
-			if (_pathUpdateTimer <= 0)
+			float dist = GlobalPosition.DistanceTo(_player.GlobalPosition);
+			Vector2 direction = Vector2.Zero;
+			float currentSpeed = Config.Speed * 3f;
+
+			if (dist > 150.0f * 3f)
 			{
-				_pathUpdateTimer = 0.25f + (float)GD.RandRange(-0.05f, 0.05f);
-				var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-				if (level != null && _player != null)
+				_pathUpdateTimer -= (float)delta;
+				if (_pathUpdateTimer <= 0)
 				{
-					_navigationPath = level.GetPathToPlayer(GlobalPosition, _player.GlobalPosition);
+					_pathUpdateTimer = 0.25f + (float)GD.RandRange(-0.05f, 0.05f);
+					var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+					if (level != null && _player != null)
+					{
+						_navigationPath = level.GetPathToPlayer(GlobalPosition, _player.GlobalPosition);
+					}
+				}
+
+				if (_navigationPath != null && _navigationPath.Count > 0)
+				{
+					while (_navigationPath.Count > 1 && GlobalPosition.DistanceTo(_navigationPath[0]) < 12.0f * 3f)
+					{
+						_navigationPath.RemoveAt(0);
+					}
+					Vector2 nextPos = _navigationPath[0];
+					direction = (nextPos - GlobalPosition).Normalized();
+				}
+				else
+				{
+					direction = (_player.GlobalPosition - GlobalPosition).Normalized();
 				}
 			}
-
-			Vector2 direction = Vector2.Zero;
-			if (_navigationPath != null && _navigationPath.Count > 0)
+			else if (dist < 110.0f * 3f)
 			{
-				Vector2 nextPos = _navigationPath[0];
-				if (GlobalPosition.DistanceTo(nextPos) < 8.0f)
-				{
-					_navigationPath.RemoveAt(0);
-					if (_navigationPath.Count > 0) nextPos = _navigationPath[0];
-				}
-				direction = (nextPos - GlobalPosition).Normalized();
+				// Retreat away from player
+				direction = (GlobalPosition - _player.GlobalPosition).Normalized();
+				currentSpeed = Config.Speed * 0.6f * 3f;
 			}
 			else
 			{
-				direction = (_player.GlobalPosition - GlobalPosition).Normalized();
+				// Stand still (between 110 and 150)
+				direction = Vector2.Zero;
 			}
 
-			Vector2 targetVelocity = direction * Config.Speed;
+			// Вычисляем силу разделения (Separation), чтобы враги не ходили паровозиком и не накладывались друг на друга
+			Vector2 separation = Vector2.Zero;
+			var enemies = GetTree().GetNodesInGroup("enemy");
+			float separationRadius = 18.0f; // Радиус расталкивания
+			int neighborsCount = 0;
+
+			foreach (Node node in enemies) {
+				if (node is CharacterBody2D otherEnemy && otherEnemy != this && IsInstanceValid(otherEnemy)) {
+					float d = GlobalPosition.DistanceTo(otherEnemy.GlobalPosition);
+					if (d < separationRadius && d > 0.1f) {
+						separation += (GlobalPosition - otherEnemy.GlobalPosition).Normalized() * (separationRadius - d);
+						neighborsCount++;
+					}
+				}
+			}
+
+			if (neighborsCount > 0) {
+				separation /= neighborsCount;
+				direction = (direction + separation * 0.15f).Normalized();
+			}
+
+			Vector2 targetVelocity = direction * currentSpeed;
 			Velocity = Velocity.Lerp(targetVelocity, 0.1f);
 
 			if (_sprite != null) {
-				if (Mathf.Abs(Velocity.X) > 5.0f) {
-					_sprite.FlipH = Velocity.X < 0;
+				if (Velocity.Length() > 5.0f) {
+					_sprite.Play("walk");
+					_sprite.FlipH = _player.GlobalPosition.X < GlobalPosition.X;
+				} else {
+					_sprite.Play("idle");
+					_sprite.FlipH = _player.GlobalPosition.X < GlobalPosition.X;
 				}
-				_sprite.Play("walk");
 			}
 
 			// Проверка на атаку
 			if (_cancelAttackCooldown <= 0 && _attackController != null && _attackController.CanAttack()) {
-				float dist = GlobalPosition.DistanceTo(_player.GlobalPosition);
-				if (dist < Config.AttackRange) {
+				if (dist <= 150.0f * 3f) {
 					StartAttackPreparation();
 				}
 			}
@@ -149,7 +188,7 @@ public partial class Ghost : Enemy
 
 		if (_periodicCheckTimer <= 0) {
 			_periodicCheckTimer = 0.5f;
-			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > Config.AttackRange + 15.0f) {
+			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > (Config.AttackRange + 15.0f) * 3f) {
 				CancelAttack();
 				return;
 			}
@@ -197,9 +236,9 @@ public partial class Ghost : Enemy
 				Vector2 source = player != null ? player.GlobalPosition : GlobalPosition;
 				
 				float dist = GlobalPosition.DistanceTo(source);
-				float weaponRange = controller.CurrentWeapon.AttackRange;
+				float weaponRange = controller.CurrentWeapon.AttackRange * 3f;
 
-				if (dist <= weaponRange + 15.0f) {
+				if (dist <= weaponRange + 15.0f * 3f) {
 					if (controller.CanHitEnemy(GetInstanceId())) {
 						TakeDamage(controller.CurrentWeapon.Damage, source, controller.CurrentWeapon.KnockbackForce, true); 
 					}

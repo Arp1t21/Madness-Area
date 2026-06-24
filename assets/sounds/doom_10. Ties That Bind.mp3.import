@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://guftnhwac8wj"
+path="res://.godot/imported/doom_10. Ties That Bind.mp3-99ef2ef45ce42862ecad2e6e20c64513.mp3str"
+
+[deps]
+
+source_file="res://assets/sounds/doom_10. Ties That Bind.mp3"
+dest_files=["res://.godot/imported/doom_10. Ties That Bind.mp3-99ef2ef45ce42862ecad2e6e20c64513.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_lidie")
 EnemyName = "Ghost"
+Speed = 40.0
 MaxHealth = 15
-Damage = 3
 AttackRange = 150.0
 PreAttackDelay = 2.5
 StopDuration = 0.5

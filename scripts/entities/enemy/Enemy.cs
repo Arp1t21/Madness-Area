@@ -10,6 +10,7 @@ public partial class Enemy : CharacterBody2D
 
 	public override void _Ready()
 	{
+		Scale = new Vector2(3.0f, 3.0f);
 		AddToGroup("enemy");
 		_sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		
@@ -54,16 +55,16 @@ public partial class Enemy : CharacterBody2D
 
 	protected void ApplyKnockback(Vector2 source, float force) {
 		Vector2 dir = (GlobalPosition - source).Normalized();
-		Velocity = dir * force * 10.0f;
+		Velocity = dir * force * 30.0f;
 		MoveAndSlide();
 	}
 
 	protected void SpawnDamageNumber(float amount) {
 		var ft = new FloatingText();
 		GetParent().AddChild(ft);
-		float offsetX = (float)GD.RandRange(-15.0f, 15.0f);
-		float offsetY = (float)GD.RandRange(-5.0f, 5.0f);
-		ft.GlobalPosition = GlobalPosition + new Vector2(offsetX, -10.0f + offsetY);
+		float offsetX = (float)GD.RandRange(-15.0f, 15.0f) * 3f;
+		float offsetY = (float)GD.RandRange(-5.0f, 5.0f) * 3f;
+		ft.GlobalPosition = GlobalPosition + new Vector2(offsetX, -30.0f + offsetY);
 		Color textColor = Config?.DamageNumberColor ?? new Color(1, 1, 0);
 		ft.Init(((int)amount).ToString(), textColor);
 	}
@@ -105,7 +106,7 @@ public partial class Enemy : CharacterBody2D
 	public void MoveTowards(Vector2 target, double delta) {
 		if (Config == null) return;
 		Vector2 direction = GlobalPosition.DirectionTo(target);
-		Velocity = direction * Config.Speed;
+		Velocity = direction * Config.Speed * 3f;
 		MoveAndSlide();
 	}
 }

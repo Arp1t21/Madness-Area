@@ -7,7 +7,9 @@ public partial class Level : Node2D
 {
 	private Player _player;
 	private TileMapLayer _floorLayer;
-	private TileMapLayer _wallLayer;
+	private TileMapLayer _wallsVerticalLayer;
+	private TileMapLayer _wallsHorizontalLayer;
+	private TileMapLayer _columnsLayer;
 	private TileMapLayer _stairsLayer;
 	private TileMapLayer _spikesLayer;
 	private Sprite2D _entryLadder;
@@ -17,6 +19,7 @@ public partial class Level : Node2D
 
 	private int _currentLevelIndex = 1;
 	public int CurrentLevelIndex => _currentLevelIndex;
+	public float LevelPlayedTime { get; private set; } = 0.0f;
 	private List<Vector2> _enemySpawnPositions = new List<Vector2>();
 	private int _spawnPosIndex = 0;
 	private AStarGrid2D _astarGrid;
@@ -71,9 +74,20 @@ public partial class Level : Node2D
 	{
 		AddToGroup("Level");
 
+		if (SaveManager.CurrentSave != null) {
+			_currentLevelIndex = SaveManager.CurrentSave.CurrentLevelIndex;
+		}
+
+		var mapNode = GetNodeOrNull<Node2D>("Map");
+		if (mapNode != null) {
+			mapNode.Scale = new Vector2(3.0f, 3.0f);
+		}
+
 		// 1. Создаем CanvasModulate для общего затемнения сцены (черный void за картой)
 		var modulate = new CanvasModulate();
-		modulate.Color = new Color(0.0f, 0.0f, 0.0f, 1.0f); // Полная темнота
+		modulate.Name = "CanvasModulate";
+		float ambient = Mathf.Clamp((SettingsManager.Brightness - 1.0f) * 0.5f, 0.0f, 0.5f);
+		modulate.Color = new Color(ambient, ambient, ambient, 1.0f);
 		AddChild(modulate);
 
 		// 2. Находим слой тайлов карты (для генерации окклюдеров)
@@ -82,10 +96,20 @@ public partial class Level : Node2D
 					  GetNodeOrNull<TileMapLayer>("Map") ??
 					  GetChildren().Cast<Node>().OfType<TileMapLayer>().FirstOrDefault();
 
-		_wallLayer = GetNodeOrNull<TileMapLayer>("Map/Wall");
-		if (_wallLayer != null) {
-			_wallLayer.UseParentMaterial = false;
+		_wallsVerticalLayer = GetNodeOrNull<TileMapLayer>("Map/WallsVertical");
+		_wallsHorizontalLayer = GetNodeOrNull<TileMapLayer>("Map/WallHorizontal");
+		_columnsLayer = GetNodeOrNull<TileMapLayer>("Map/Collumn");
+
+		if (_wallsVerticalLayer != null) {
+			_wallsVerticalLayer.UseParentMaterial = false;
 		}
+		if (_wallsHorizontalLayer != null) {
+			_wallsHorizontalLayer.UseParentMaterial = false;
+		}
+		if (_columnsLayer != null) {
+			_columnsLayer.UseParentMaterial = false;
+		}
+		
 		_spikesLayer = GetNodeOrNull<TileMapLayer>("Map/Spikes");
 
 		if (_floorLayer != null) {
@@ -118,7 +142,7 @@ public partial class Level : Node2D
 		if (_stairsLayer != null) {
 			var cells = _stairsLayer.GetUsedCells();
 			if (cells.Count > 0) {
-				_stairsPosition = _stairsLayer.GlobalPosition + _stairsLayer.MapToLocal(cells[0]);
+				_stairsPosition = _stairsLayer.ToGlobal(_stairsLayer.MapToLocal(cells[0]));
 				_hasStairs = true;
 			} else {
 				// Fallback лестницы, если она не поставлена в редакторе (решает баг отсутствия лестницы на Level 1)
@@ -129,9 +153,11 @@ public partial class Level : Node2D
 					float maxDist = -1f;
 
 					foreach (var cell in floorCells) {
-						if (_wallLayer != null && _wallLayer.GetCellSourceId(cell) != -1) continue;
+						if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(cell) != -1) continue;
+						if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(cell) != -1) continue;
+						if (_columnsLayer != null && _columnsLayer.GetCellSourceId(cell) != -1) continue;
 
-						Vector2 cellGlobalPos = _floorLayer.GlobalPosition + _floorLayer.MapToLocal(cell);
+						Vector2 cellGlobalPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(cell));
 						float dist = cellGlobalPos.DistanceTo(playerPos);
 						if (dist > maxDist) {
 							maxDist = dist;
@@ -141,7 +167,7 @@ public partial class Level : Node2D
 
 					if (maxDist > 0) {
 						_stairsLayer.SetCell(bestCell, 1, new Vector2I(0, 5));
-						_stairsPosition = _stairsLayer.GlobalPosition + _stairsLayer.MapToLocal(bestCell);
+						_stairsPosition = _stairsLayer.ToGlobal(_stairsLayer.MapToLocal(bestCell));
 						_hasStairs = true;
 					}
 				}
@@ -159,12 +185,62 @@ public partial class Level : Node2D
 		InitializeSpawnPositions();
 		InitializeAStarGrid();
 
+		// Скрываем и отключаем дефолтный сундук
+		var chest = GetNodeOrNull<Node2D>("Map/Chest");
+		if (chest != null)
+		{
+			chest.Hide();
+			chest.GlobalPosition = new Vector2(-9999, -9999);
+			if (chest is StaticBody2D sb)
+			{
+				foreach (var child in sb.GetChildren())
+				{
+					if (child is CollisionShape2D cs)
+					{
+						cs.SetDeferred("disabled", true);
+					}
+					else if (child is Area2D area)
+					{
+						foreach (var areaChild in area.GetChildren())
+						{
+							if (areaChild is CollisionShape2D acs)
+							{
+								acs.SetDeferred("disabled", true);
+							}
+						}
+					}
+				}
+			}
+		}
+
+		Chest.OpenedChestsCount = 0;
+		GenerateSpikes();
+
+		// Скрываем и отключаем дверь полностью
 		var door = GetNodeOrNull<Door>("Map/Door");
 		if (door != null)
 		{
-			door.HideDoor();
+			door.Hide();
+			door.GlobalPosition = new Vector2(-9999, -9999);
+			foreach (var child in door.GetChildren())
+			{
+				if (child is CollisionShape2D cs) cs.SetDeferred("disabled", true);
+				else if (child is Area2D area)
+				{
+					foreach (var areaChild in area.GetChildren())
+					{
+						if (areaChild is CollisionShape2D acs) acs.SetDeferred("disabled", true);
+					}
+				}
+			}
 		}
-		GenerateSpikes();
+
+		// Заполняем проем двери вертикальной стеной
+		if (_wallsVerticalLayer != null)
+		{
+			_wallsVerticalLayer.SetCell(new Vector2I(0, -6), 0, new Vector2I(2, 1));
+			_wallsVerticalLayer.SetCell(new Vector2I(-1, -6), 0, new Vector2I(2, 1));
+		}
 	}
 
 	private void SpawnEntryLadder(Vector2 position)
@@ -197,29 +273,7 @@ public partial class Level : Node2D
 			SpawnExitLadderTrigger();
 		}
 
-		// 3. Активируем дверь и убираем стены под ней
-		var door = GetNodeOrNull<Door>("Map/Door");
-		if (door != null)
-		{
-			// Для процедурных уровней (Level 2+) перемещаем дверь на верхнюю границу
-			if (_currentLevelIndex > 1 && _wallLayer != null)
-			{
-				door.GlobalPosition = _wallLayer.ToGlobal(_wallLayer.MapToLocal(new Vector2I(0, -_halfH - 1)) + new Vector2(-8, 0));
-			}
-
-			// Удаляем стены на пути двери
-			if (_wallLayer != null)
-			{
-				Vector2I doorCell = _wallLayer.LocalToMap(_wallLayer.ToLocal(door.GlobalPosition));
-				_wallLayer.SetCell(doorCell, -1);
-				_wallLayer.SetCell(doorCell + new Vector2I(-1, 0), -1);
-
-				// Перестраиваем сетку AStar
-				InitializeAStarGrid();
-			}
-
-			door.SpawnDoor();
-		}
+		// 3. Двери убраны, ничего не делаем
 	}
 
 	private void SpawnExitLadderTrigger()
@@ -254,9 +308,14 @@ public partial class Level : Node2D
 			SpawnEntryLadder(_player.GlobalPosition);
 		}
 
-		// 5. Запускаем следующую волну
+		// 5. Запускаем следующую волну через countdown
 		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
-		if (waveManager != null) {
+		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+		if (hud != null) {
+			int nextWaveNum = (waveManager != null) ? waveManager.CurrentWave + 1 : 1;
+			hud.StartCountdown(5.0f, $"Wave {nextWaveNum} is coming!");
+		}
+		else if (waveManager != null) {
 			waveManager.StartNextWave();
 		}
 	}
@@ -265,19 +324,7 @@ public partial class Level : Node2D
 	{
 		GD.Print($"Generating Random Level {_currentLevelIndex}...");
 
-		// 1. Очистка старых объектов с Уровня 1
-		var mapNode = GetNodeOrNull("Map");
-		if (mapNode != null)
-		{
-			foreach (var child in mapNode.GetChildren())
-			{
-				if (child is Door || child.Name.ToString().Contains("Door"))
-				{
-					child.QueueFree();
-				}
-			}
-		}
-
+		// 1. Очистка старых объектов с Уровня 1 (оставляем дверь)
 		foreach (var child in GetChildren())
 		{
 			if (child is WeaponPickup)
@@ -297,7 +344,9 @@ public partial class Level : Node2D
 
 		// 3. Очищаем тайлы
 		_floorLayer.Clear();
-		if (_wallLayer != null) _wallLayer.Clear();
+		if (_wallsVerticalLayer != null) _wallsVerticalLayer.Clear();
+		if (_wallsHorizontalLayer != null) _wallsHorizontalLayer.Clear();
+		if (_columnsLayer != null) _columnsLayer.Clear();
 		if (_stairsLayer != null) _stairsLayer.Clear();
 		if (_spikesLayer != null) _spikesLayer.Clear();
 
@@ -317,39 +366,70 @@ public partial class Level : Node2D
 		}
 
 		// 5. Рисуем внешние стены
-		if (_wallLayer != null)
+		// Горизонтальные границы (top and bottom walls) on _wallsVerticalLayer (uses floor.tres front walls)
+		if (_wallsVerticalLayer != null)
 		{
-			Vector2I wallTile = WallTiles[0];
-
-			// Верхняя и нижняя границы
+			Vector2I vTile = new Vector2I(2, 1); // Source ID 0 in floor.tres
 			for (int x = -halfW - 1; x <= halfW + 1; x++)
 			{
-				_wallLayer.SetCell(new Vector2I(x, -halfH - 1), 1, wallTile);
-				_wallLayer.SetCell(new Vector2I(x, halfH + 1), 1, wallTile);
+				_wallsVerticalLayer.SetCell(new Vector2I(x, -halfH - 1), 0, vTile);
+				_wallsVerticalLayer.SetCell(new Vector2I(x, halfH + 1), 0, vTile);
 			}
+		}
 
-			// Левая и правая границы
+		// Вертикальные границы (left and right walls) on _wallsHorizontalLayer (uses TileSet_tmxlf side walls)
+		if (_wallsHorizontalLayer != null)
+		{
+			Vector2I hTile = new Vector2I(2, 10); // Source ID 2
 			for (int y = -halfH; y <= halfH; y++)
 			{
-				_wallLayer.SetCell(new Vector2I(-halfW - 1, y), 1, wallTile);
-				_wallLayer.SetCell(new Vector2I(halfW + 1, y), 1, wallTile);
+				_wallsHorizontalLayer.SetCell(new Vector2I(-halfW - 1, y), 2, hTile);
+				_wallsHorizontalLayer.SetCell(new Vector2I(halfW + 1, y), 2, hTile);
 			}
+		}
 
-			// 6. Рисуем внутренние колонны/препятствия
-			int numPillars = GD.RandRange(3, 8);
+		// 6. Рисуем внутренние колонны/препятствия
+		if (_columnsLayer != null)
+		{
+			int numPillars = GD.RandRange(2, 4);
+			var pillarPositions = new System.Collections.Generic.List<Vector2I>();
 			for (int i = 0; i < numPillars; i++)
 			{
-				int px = GD.RandRange(-halfW + 3, halfW - 3);
-				int py = GD.RandRange(-halfH + 3, halfH - 3);
+				int px = 0;
+				int py = 0;
+				bool valid = false;
+				int attempts = 0;
+				while (!valid && attempts < 100)
+				{
+					attempts++;
+					px = GD.RandRange(-halfW + 3, halfW - 3);
+					py = GD.RandRange(-halfH + 3, halfH - 5);
 
-				// Не спавним колонны у центра (0,0), где появляется игрок
-				if (Math.Abs(px) < 5 && Math.Abs(py) < 5) continue;
+					// Не спавним колонны у центра (0,0), где появляется игрок
+					if (Math.Abs(px) < 5 && Math.Abs(py) < 6) continue;
 
-				Vector2I pTile = WallTiles[GD.RandRange(0, WallTiles.Length - 1)];
-				_wallLayer.SetCell(new Vector2I(px, py), 1, pTile);
-				_wallLayer.SetCell(new Vector2I(px + 1, py), 1, pTile);
-				_wallLayer.SetCell(new Vector2I(px, py + 1), 1, pTile);
-				_wallLayer.SetCell(new Vector2I(px + 1, py + 1), 1, pTile);
+					// Проверяем расстояние до других колонн
+					bool tooClose = false;
+					foreach (var pos in pillarPositions)
+					{
+						if (Math.Abs(pos.X - px) < 4 && Math.Abs(pos.Y - py) < 5)
+						{
+							tooClose = true;
+							break;
+						}
+					}
+					if (tooClose) continue;
+
+					valid = true;
+				}
+
+				if (valid)
+				{
+					pillarPositions.Add(new Vector2I(px, py));
+					_columnsLayer.SetCell(new Vector2I(px, py), 0, new Vector2I(15, 5));
+					_columnsLayer.SetCell(new Vector2I(px, py + 1), 0, new Vector2I(15, 6));
+					_columnsLayer.SetCell(new Vector2I(px, py + 2), 0, new Vector2I(15, 7));
+				}
 			}
 		}
 
@@ -368,7 +448,12 @@ public partial class Level : Node2D
 				if (Math.Abs(sx) > 6 || Math.Abs(sy) > 6)
 				{
 					// И не пересекаться со стенами
-					if (_wallLayer == null || _wallLayer.GetCellSourceId(new Vector2I(sx, sy)) == -1)
+					bool hitWall = false;
+					if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
+					if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
+					if (_columnsLayer != null && _columnsLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
+
+					if (!hitWall)
 					{
 						validPosition = true;
 					}
@@ -376,33 +461,31 @@ public partial class Level : Node2D
 			}
 
 			_stairsLayer.SetCell(new Vector2I(sx, sy), 1, new Vector2I(0, 5));
-			_stairsPosition = _stairsLayer.GlobalPosition + _stairsLayer.MapToLocal(new Vector2I(sx, sy));
+			_stairsPosition = _stairsLayer.ToGlobal(_stairsLayer.MapToLocal(new Vector2I(sx, sy)));
 			_hasStairs = true;
 			_stairsLayer.Visible = false;
 		}
 
-		// 8. Генерируем LightOccluder2D для всех стен
-		if (_wallLayer != null)
+		// 8. Генерируем LightOccluder2D для всех стен (удаляем старые, новые не генерируем, чтобы стены были видны)
+		if (_wallsVerticalLayer != null)
 		{
-			foreach (var child in _wallLayer.GetChildren())
+			foreach (var child in _wallsVerticalLayer.GetChildren())
 			{
 				if (child is LightOccluder2D) child.QueueFree();
 			}
-
-			var usedCells = _wallLayer.GetUsedCells();
-			foreach (var cell in usedCells)
+		}
+		if (_wallsHorizontalLayer != null)
+		{
+			foreach (var child in _wallsHorizontalLayer.GetChildren())
 			{
-				var occluder = new LightOccluder2D();
-				var polygon = new OccluderPolygon2D();
-				polygon.Polygon = new Vector2[] {
-					new Vector2(-8, -8),
-					new Vector2(8, -8),
-					new Vector2(8, 8),
-					new Vector2(-8, 8)
-				};
-				occluder.Occluder = polygon;
-				occluder.Position = _wallLayer.MapToLocal(cell);
-				_wallLayer.AddChild(occluder);
+				if (child is LightOccluder2D) child.QueueFree();
+			}
+		}
+		if (_columnsLayer != null)
+		{
+			foreach (var child in _columnsLayer.GetChildren())
+			{
+				if (child is LightOccluder2D) child.QueueFree();
 			}
 		}
 
@@ -424,7 +507,6 @@ public partial class Level : Node2D
 		_spawnPosIndex = 0;
 
 		var floorLayer = _floorLayer;
-		var wallLayer = _wallLayer;
 
 		if (floorLayer == null) return;
 
@@ -433,13 +515,15 @@ public partial class Level : Node2D
 
 		foreach (var cell in floorCells)
 		{
-			// Не спавним врагов внутри стен
-			if (wallLayer != null && wallLayer.GetCellSourceId(cell) != -1)
-			{
-				continue;
-			}
+			// Exclude shop room
+			if (cell.Y <= -_halfH - 2) continue;
 
-			Vector2 globalPos = floorLayer.GlobalPosition + floorLayer.MapToLocal(cell);
+			// Не спавним врагов внутри стен
+			if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(cell) != -1) continue;
+			if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(cell) != -1) continue;
+			if (_columnsLayer != null && _columnsLayer.GetCellSourceId(cell) != -1) continue;
+
+			Vector2 globalPos = floorLayer.ToGlobal(floorLayer.MapToLocal(cell));
 			_enemySpawnPositions.Add(globalPos);
 		}
 
@@ -496,13 +580,33 @@ public partial class Level : Node2D
 		_astarGrid.Region = new Rect2I(minX, minY, width, height);
 		_astarGrid.CellSize = new Vector2(16, 16);
 		_astarGrid.Offset = new Vector2(8, 8);
-		_astarGrid.DiagonalMode = AStarGrid2D.DiagonalModeEnum.AtLeastOneWalkable;
+		_astarGrid.DiagonalMode = AStarGrid2D.DiagonalModeEnum.OnlyIfNoObstacles;
 		_astarGrid.Update();
 
 		// Заполняем стены как непроходимые препятствия
-		if (_wallLayer != null)
+		if (_wallsVerticalLayer != null)
 		{
-			foreach (var cell in _wallLayer.GetUsedCells())
+			foreach (var cell in _wallsVerticalLayer.GetUsedCells())
+			{
+				if (_astarGrid.Region.HasPoint(cell))
+				{
+					_astarGrid.SetPointSolid(cell, true);
+				}
+			}
+		}
+		if (_wallsHorizontalLayer != null)
+		{
+			foreach (var cell in _wallsHorizontalLayer.GetUsedCells())
+			{
+				if (_astarGrid.Region.HasPoint(cell))
+				{
+					_astarGrid.SetPointSolid(cell, true);
+				}
+			}
+		}
+		if (_columnsLayer != null)
+		{
+			foreach (var cell in _columnsLayer.GetUsedCells())
 			{
 				if (_astarGrid.Region.HasPoint(cell))
 				{
@@ -516,10 +620,10 @@ public partial class Level : Node2D
 		{
 			if (node is Door door && !door.IsOpen)
 			{
-				SetCellSolid(door.GlobalPosition + new Vector2(-8, -8), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(8, -8), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(-8, 8), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(8, 8), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(-8 * 3f, -8 * 3f), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(8 * 3f, -8 * 3f), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(-8 * 3f, 8 * 3f), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(8 * 3f, 8 * 3f), true);
 			}
 		}
 	}
@@ -561,13 +665,22 @@ public partial class Level : Node2D
 		var path = new List<Vector2>();
 		foreach (var pt in points)
 		{
-			path.Add(pt);
+			path.Add(_floorLayer.ToGlobal(pt));
 		}
 		return path;
 	}
 
 	public override void _PhysicsProcess(double delta)
 	{
+		LevelPlayedTime += (float)delta;
+		// 1. Обработка музыки в зависимости от положения игрока
+		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
+		bool waveActive = waveManager != null && waveManager.WaveInProgress;
+		if (!waveActive)
+		{
+			MusicManager.Instance?.PlayMusic("res://assets/sounds/doom_10. Ties That Bind.mp3");
+		}
+
 		if (_spikesLayer == null) return;
 
 		if (_playerSpikeInvulnerabilityTimer > 0)
@@ -576,12 +689,12 @@ public partial class Level : Node2D
 		}
 
 		_spikesTimer += delta;
-		double cycleTime = _spikesTimer % 4.0;
+		double cycleTime = _spikesTimer % 6.0; // 6.0 seconds total cycle
 
 		SpikePhase newPhase;
-		if (cycleTime < 1.7) newPhase = SpikePhase.Retracted;
-		else if (cycleTime < 2.0) newPhase = SpikePhase.Warning;
-		else if (cycleTime < 3.8) newPhase = SpikePhase.Active;
+		if (cycleTime < 4.0) newPhase = SpikePhase.Retracted;
+		else if (cycleTime < 4.2) newPhase = SpikePhase.Warning;
+		else if (cycleTime < 5.8) newPhase = SpikePhase.Active;
 		else newPhase = SpikePhase.Retracting;
 
 		if (newPhase != _currentSpikePhase)
@@ -597,8 +710,8 @@ public partial class Level : Node2D
 			var spikeCells = _spikesLayer.GetUsedCells();
 			foreach (var cell in spikeCells)
 			{
-				Vector2 cellCenter = _spikesLayer.GlobalPosition + _spikesLayer.MapToLocal(cell);
-				if (playerPos.DistanceTo(cellCenter) < 12.0f)
+				Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
+				if (playerPos.DistanceTo(cellCenter) < 12.0f * 3f)
 				{
 					_player.TakeDamage(5f, cellCenter, 5.0f);
 					_playerSpikeInvulnerabilityTimer = 1.0;
@@ -633,22 +746,136 @@ public partial class Level : Node2D
 		if (_spikesLayer == null || _floorLayer == null) return;
 		_spikesLayer.Clear();
 
+		float spawnChance = 0.005f; // Baseline 1/200
+		if (_currentLevelIndex >= 2)
+		{
+			spawnChance = 0.005f * Mathf.Pow(1.5f, _currentLevelIndex - 2);
+		}
+
 		var floorCells = _floorLayer.GetUsedCells();
 		foreach (var cell in floorCells)
 		{
+			// Exclude shop room
+			if (cell.Y <= -_halfH - 2) continue;
+
 			// Не спавним шипы в центре (где игрок появляется)
 			if (Math.Abs(cell.X) < 3 && Math.Abs(cell.Y) < 3) continue;
 
 			// Не спавним на стенах
-			if (_wallLayer != null && _wallLayer.GetCellSourceId(cell) != -1) continue;
+			if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(cell) != -1) continue;
+			if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(cell) != -1) continue;
+			if (_columnsLayer != null && _columnsLayer.GetCellSourceId(cell) != -1) continue;
 
 			// Не спавним на лестнице
 			if (_stairsLayer != null && _stairsLayer.GetCellSourceId(cell) != -1) continue;
 
-			// Шанс 1% (1/100)
-			if (GD.Randf() < 0.01f)
+			if (GD.Randf() < spawnChance)
 			{
 				_spikesLayer.SetCell(cell, 0, new Vector2I(0, 3));
+			}
+		}
+	}
+
+	public void SpawnShopItems()
+	{
+		var door = GetNodeOrNull<Door>("Map/Door");
+		if (door == null) return;
+
+		var pickupPrefab = GD.Load<PackedScene>("res://scene/weapons/weapon_pickup.tscn");
+		if (pickupPrefab == null) return;
+
+		string[] weaponPaths = new string[] {
+			"res://data/waepons/axe.tres",
+			"res://data/waepons/dagger.tres",
+			"res://data/waepons/revolver.tres",
+			"res://data/waepons/shotgun.tres"
+		};
+
+		Vector2[] offsets = new Vector2[] {
+			new Vector2(-72, -144),
+			new Vector2(0, -144),
+			new Vector2(72, -144)
+		};
+
+		var random = new Random();
+		for (int i = 0; i < offsets.Length; i++)
+		{
+			var pickup = pickupPrefab.Instantiate() as WeaponPickup;
+			if (pickup != null)
+			{
+				string path = weaponPaths[random.Next(weaponPaths.Length)];
+				var weaponData = GD.Load<WeaponData>(path);
+				pickup.WeaponToGive = weaponData;
+				pickup.GlobalPosition = door.GlobalPosition + offsets[i];
+				AddChild(pickup);
+			}
+		}
+	}
+
+	public void SpawnWeaponPickupAt(Vector2 pos, string weaponPath)
+	{
+		var pickupPrefab = GD.Load<PackedScene>("res://scene/weapons/weapon_pickup.tscn");
+		if (pickupPrefab == null) return;
+
+		var pickup = pickupPrefab.Instantiate() as WeaponPickup;
+		if (pickup != null)
+		{
+			var weaponData = GD.Load<WeaponData>(weaponPath);
+			pickup.WeaponToGive = weaponData;
+			pickup.GlobalPosition = pos;
+			CallDeferred(MethodName.AddChild, pickup);
+		}
+	}
+
+	public void SpawnChestAt(Vector2 pos)
+	{
+		var templateChest = GetNodeOrNull<Node2D>("Map/Chest");
+		if (templateChest != null)
+		{
+			var newChest = templateChest.Duplicate() as Node2D;
+			if (newChest != null)
+			{
+				newChest.GlobalPosition = pos;
+				newChest.Visible = true;
+				
+				// Enable StaticBody2D collisions and child Area2D collisions
+				if (newChest is StaticBody2D sb)
+				{
+					// Enable primary collision shapes
+					foreach (var child in sb.GetChildren())
+					{
+						if (child is CollisionShape2D cs)
+						{
+							cs.SetDeferred("disabled", false);
+						}
+						else if (child is Area2D area)
+						{
+							foreach (var areaChild in area.GetChildren())
+							{
+								if (areaChild is CollisionShape2D acs)
+								{
+									acs.SetDeferred("disabled", false);
+								}
+							}
+						}
+					}
+				}
+				
+				CallDeferred(MethodName.AddChild, newChest);
+			}
+		}
+	}
+
+	public override void _Input(InputEvent @event)
+	{
+		if (@event.IsActionPressed("ui_cancel"))
+		{
+			if (!GetTree().Paused)
+			{
+				GetTree().Paused = true;
+				var pauseMenu = new PauseMenu();
+				GetTree().Root.AddChild(pauseMenu);
+				GetViewport().SetInputAsHandled();
 			}
 		}
 	}

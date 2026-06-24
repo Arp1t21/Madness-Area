@@ -4,12 +4,15 @@ using System;
 public partial class WaveManager : Node2D
 {
 	[Export] public PackedScene EnemyPrefab;
-	[Export] public int InitialEnemyCount = 6;
+	[Export] public int InitialEnemyCount = 4;
 	[Export] public float SpawnRadius = 400.0f;
 	
 	private int _currentWave = 0;
 	private int _enemiesAlive = 0;
 	private bool _waveInProgress = false;
+
+	public bool WaveInProgress => _waveInProgress;
+	public int CurrentWave => _currentWave;
 
 	public override void _Ready()
 	{
@@ -21,6 +24,8 @@ public partial class WaveManager : Node2D
 		if (_waveInProgress || Engine.TimeScale == 0) return;
 		_waveInProgress = true;
 		_currentWave++;
+		
+		MusicManager.Instance?.PlayMusic("res://assets/sounds/doom_22. Damnation.mp3");
 		
 		// В 2 раза больше мобов
 		int enemyCount = (InitialEnemyCount + (_currentWave - 1) * 3) * 2;
@@ -67,12 +72,14 @@ public partial class WaveManager : Node2D
 		GetParent().CallDeferred("add_child", enemy);
 		
 		_enemiesAlive++;
-		enemy.TreeExiting += OnEnemyDied;
+		enemy.TreeExiting += () => OnEnemyDied(enemy);
 	}
 
-	private void OnEnemyDied()
+	private void OnEnemyDied(Node2D enemy)
 	{
 		_enemiesAlive--;
+		Vector2 lastEnemyPos = IsInstanceValid(enemy) ? enemy.GlobalPosition : Vector2.Zero;
+		
 		if (_enemiesAlive <= 0)
 		{
 			_waveInProgress = false;
@@ -83,6 +90,21 @@ public partial class WaveManager : Node2D
 			var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 			if (level != null) {
 				level.OnWaveCleared();
+				
+				// Spawn weapon pickups instead of chests!
+				if (_currentWave == 1)
+				{
+					level.SpawnWeaponPickupAt(lastEnemyPos, "res://data/waepons/shotgun.tres");
+				}
+				else if (_currentWave == 2)
+				{
+					level.SpawnWeaponPickupAt(lastEnemyPos, "res://data/waepons/revolver.tres");
+				}
+			}
+
+			var player = GetTree().GetFirstNodeInGroup("Player") as Player;
+			if (player != null) {
+				player.OnWaveCleared();
 			}
 		}
 	}
@@ -90,6 +112,13 @@ public partial class WaveManager : Node2D
 	private void ShowYouWon()
 	{
 		CanvasLayer canvas = new CanvasLayer();
+		var rootControl = new Control();
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		rootControl.Size = viewportSize / 3.5f;
+		rootControl.Scale = new Vector2(3.5f, 3.5f);
+		canvas.AddChild(rootControl);
+
 		Label label = new Label();
 		label.Text = "You killed wave!";
 		
@@ -99,7 +128,7 @@ public partial class WaveManager : Node2D
 		label.AddThemeFontSizeOverride("font_size", 13); // 17 / 1.3 = 13
 		label.AddThemeColorOverride("font_color", new Color(0, 1, 0));
 		
-		canvas.AddChild(label);
+		rootControl.AddChild(label);
 		AddChild(canvas);
 
 		// Логика мигания: 0.6с виден, 0.4с скрыт
@@ -107,7 +136,11 @@ public partial class WaveManager : Node2D
 
 		// Удаляем надпись через 5 секунд
 		var timer = GetTree().CreateTimer(5.0f);
-		timer.Timeout += () => canvas.QueueFree();
+		timer.Timeout += () => {
+			if (GodotObject.IsInstanceValid(canvas)) {
+				canvas.QueueFree();
+			}
+		};
 	}
 
 	private async void StartBlinking(Label label, float duration)

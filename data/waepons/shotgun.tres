@@ -1,8 +1,11 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3 uid="uid://d0w28ty2vtvfs"]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=7 format=3 uid="uid://d0w28ty2vtvfs"]
 
 [ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_7nkeh"]
 [ext_resource type="PackedScene" uid="uid://bk2fbslsnq7iq" path="res://scene/weapons/bullets/shotgun_bullet.tscn" id="1_kfiy3"]
+[ext_resource type="AudioStream" uid="uid://i01hmrfqsfv2" path="res://assets/sounds/shotgun_shot.wav" id="1_uhuv7"]
 [ext_resource type="PackedScene" uid="uid://exaw5nwlsbvh" path="res://scene/weapons/shotgun.tscn" id="1_um4eo"]
+[ext_resource type="AudioStream" uid="uid://dwefug53fuyms" path="res://assets/sounds/shotgun_reload.wav" id="3_4wkow"]
+[ext_resource type="AudioStream" uid="uid://c3k3tf8s5ha17" path="res://assets/sounds/no_ammo_revolver (2).mp3" id="3_ykmn8"]
 
 [resource]
 script = ExtResource("1_7nkeh")
@@ -11,6 +14,9 @@ AttackCooldown = 1.4
 KnockbackForce = 2.0
 Recoil = 7.0
 ManaCost = 7.0
+AttackSound = ExtResource("1_uhuv7")
+ReloadSound = ExtResource("3_4wkow")
+EmptySound = ExtResource("3_ykmn8")
 WeaponVisualPrefab = ExtResource("1_um4eo")
 IsRanged = true
 BulletPrefab = ExtResource("1_kfiy3")

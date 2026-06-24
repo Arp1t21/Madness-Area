@@ -20,6 +20,7 @@ public partial class AttackController : Node2D
 
 	private int _currentAmmo = 0;
 	private bool _isReloading = false;
+	private bool _playedEmptySoundThisPress = false;
 	private WeaponData _instantiatedWeapon;
 
 	public bool IsAttacking {
@@ -57,6 +58,7 @@ public partial class AttackController : Node2D
 		}
 		
 		_hitEnemies.Clear();
+		_playedEmptySoundThisPress = false;
 	}
 
 	private Node2D _ownerNode;
@@ -177,6 +179,12 @@ public partial class AttackController : Node2D
 			pos.Y = -4.0f; 
 			Position = pos;
 		}
+
+		if (_isPlayerOwned) {
+			if (!Input.IsActionPressed("attack")) {
+				_playedEmptySoundThisPress = false;
+			}
+		}
 	}
 
 	private void UpdateWeaponOrientation(Vector2 targetPos) {
@@ -235,7 +243,12 @@ public partial class AttackController : Node2D
 
 		// 1. Сначала проверяем патроны (только для игрока)
 		if (_isPlayerOwned && CurrentWeapon.IsRanged && _currentAmmo <= 0) {
-			StartReload();
+			if (!_playedEmptySoundThisPress) {
+				if (CurrentWeapon.EmptySound != null) {
+					PlaySound(CurrentWeapon.EmptySound);
+				}
+				_playedEmptySoundThisPress = true;
+			}
 			return;
 		}
 
@@ -252,6 +265,10 @@ public partial class AttackController : Node2D
 		UpdateWeaponOrientation(targetPosition);
 
 		_hitEnemies.Clear();
+
+		if (CurrentWeapon != null && CurrentWeapon.AttackSound != null) {
+			PlaySound(CurrentWeapon.AttackSound);
+		}
 
 		if (CurrentWeapon.IsRanged) {
 			Shoot(targetPosition);
@@ -310,6 +327,10 @@ public partial class AttackController : Node2D
 		
 		_isReloading = true;
 		GD.Print($"{CurrentWeapon.WeaponName}: Перезарядка...");
+
+		if (CurrentWeapon.ReloadSound != null) {
+			PlaySound(CurrentWeapon.ReloadSound);
+		}
 		
 		if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("reload")) {
 			_animSpriteNode.Play("reload");
@@ -353,7 +374,7 @@ public partial class AttackController : Node2D
 
 				bullet.IsPlayerOwned = _isPlayerOwned;
 				bullet.IsPiercing = CurrentWeapon.IsPiercing; // Передаем настройку пробития
-				bullet.Speed = CurrentWeapon.BulletSpeed; // Устанавливаем скорость пули из настроек оружия
+				bullet.Speed = CurrentWeapon.BulletSpeed * 3f; // Устанавливаем скорость пули из настроек оружия (масштабировано 3x)
 				bullet.KnockbackForce = CurrentWeapon.KnockbackForce;
 				
 				Vector2 dir = (targetPos - spawnPos).Normalized();
@@ -425,7 +446,7 @@ public partial class AttackController : Node2D
 			foreach (Node node in enemies) {
 				if (node is OrcWarrior orc) {
 					float dist = GlobalPosition.DistanceTo(orc.GlobalPosition);
-					if (dist <= CurrentWeapon.AttackRange) {
+					if (dist <= CurrentWeapon.AttackRange * 3f) {
 						Vector2 dirToEnemy = (orc.GlobalPosition - GlobalPosition).Normalized();
 						Vector2 faceDir = Vector2.Up.Rotated(Rotation);
 						if (faceDir.Dot(dirToEnemy) > 0.5f) {
@@ -441,8 +462,19 @@ public partial class AttackController : Node2D
 			var playerNode = GetTree().GetFirstNodeInGroup("Player") as Player;
 			if (playerNode != null) {
 				float dist = GlobalPosition.DistanceTo(playerNode.GlobalPosition);
-				if (dist <= CurrentWeapon.AttackRange) playerNode.TakeDamage(CurrentWeapon.Damage);
+				if (dist <= CurrentWeapon.AttackRange * 3f) playerNode.TakeDamage(CurrentWeapon.Damage);
 			}
 		}
+	}
+
+	public void PlaySound(AudioStream stream)
+	{
+		if (stream == null) return;
+		var audioPlayer = new AudioStreamPlayer();
+		audioPlayer.Stream = stream;
+		audioPlayer.Bus = "SFX";
+		AddChild(audioPlayer);
+		audioPlayer.Play();
+		audioPlayer.Finished += () => audioPlayer.QueueFree();
 	}
 }

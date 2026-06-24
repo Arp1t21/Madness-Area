@@ -13,6 +13,7 @@ public partial class WeaponPickup : Node2D, IInteractable
 
 	public override void _Ready()
 	{
+		Scale = new Vector2(3.0f, 3.0f);
 		_pickupArea = GetNode<Area2D>("Area2D");
 		_nameLabel = GetNode<Label>("NameLabel");
 
@@ -21,7 +22,7 @@ public partial class WeaponPickup : Node2D, IInteractable
 		if (font != null) {
 			_nameLabel.AddThemeFontOverride("font", font);
 		}
-		_nameLabel.AddThemeConstantOverride("letter_spacing", 1);
+		_nameLabel.AddThemeConstantOverride("letter_spacing", 2);
 
 		// Маска 18: Слой 2 (игрок, значение 2) + Слой 5 (зона подбора, значение 16)
 		_pickupArea.CollisionMask = 18;

@@ -1,0 +1,33 @@
+[gd_scene load_steps=5 format=3 uid="uid://cv8n142q4b6k8"]
+
+[ext_resource type="Script" uid="uid://blr04wh2euouj" path="res://scripts/entities/weapons/Fireball.cs" id="1_fireball_script"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_1"]
+radius = 6.0
+
+[sub_resource type="Curve" id="Curve_1"]
+_data = [Vector2(0, 1.2), 0.0, 0.0, 0, 0, Vector2(1, 0.2), 0.0, 0.0, 0, 0]
+point_count = 2
+
+[sub_resource type="Gradient" id="Gradient_1"]
+offsets = PackedFloat32Array(0, 0.3, 0.7, 1)
+colors = PackedColorArray(1, 0.9, 0.3, 1, 1, 0.5, 0, 0.8, 0.9, 0.1, 0, 0.5, 0.2, 0.2, 0.2, 0)
+
+[node name="Fireball" type="Area2D"]
+collision_layer = 0
+collision_mask = 7
+script = ExtResource("1_fireball_script")
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="."]
+shape = SubResource("CircleShape2D_1")
+
+[node name="Trail" type="CPUParticles2D" parent="."]
+amount = 50
+lifetime = 0.35
+local_coords = false
+gravity = Vector2(0, 0)
+spread = 20.0
+initial_velocity_min = 10.0
+initial_velocity_max = 30.0
+scale_amount_curve = SubResource("Curve_1")
+color_ramp = SubResource("Gradient_1")

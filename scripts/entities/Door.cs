@@ -19,6 +19,9 @@ public partial class Door : StaticBody2D, IInteractable
 
 	private bool _isActive = false;
 	public bool IsActive => _isActive;
+	private bool _isLocked = true;
+	public bool IsLocked => _isLocked;
+	private bool _shopItemsSpawned = false;
 
 	public override void _Ready()
 	{
@@ -41,7 +44,7 @@ public partial class Door : StaticBody2D, IInteractable
 			_promptLabel = new Label();
 			_promptLabel.Text = "Press E to open";
 			_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_promptLabel.Position = new Vector2(-34, -35);
+			_promptLabel.Position = new Vector2(-50, -35);
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 			
@@ -50,10 +53,11 @@ public partial class Door : StaticBody2D, IInteractable
 				_promptLabel.AddThemeFontOverride("font", font);
 				_promptLabel.AddThemeFontSizeOverride("font_size", 8);
 			}
-			_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
+			_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
 			AddChild(_promptLabel);
 		} else {
-			_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
+			_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
+			_promptLabel.Position = new Vector2(-50, -35);
 		}
 
 		if (_interactArea != null) {
@@ -67,7 +71,7 @@ public partial class Door : StaticBody2D, IInteractable
 			_interactArea.AreaExited += OnAreaExited;
 		}
 
-		HideDoor();
+		ShowLockedDoor();
 	}
 
 	public void Interact(Player player)
@@ -92,6 +96,12 @@ public partial class Door : StaticBody2D, IInteractable
 	{
 		IsOpen = !IsOpen;
 		UpdateDoorState();
+		if (IsOpen && !_shopItemsSpawned)
+		{
+			_shopItemsSpawned = true;
+			var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
+			level?.SpawnShopItems();
+		}
 	}
 
 	private void UpdateDoorState()
@@ -113,13 +123,13 @@ public partial class Door : StaticBody2D, IInteractable
 
 		// Включаем или отключаем физическую преграду
 		if (_collisionShape != null) {
-			_collisionShape.SetDeferred("disabled", IsOpen);
+			_collisionShape.SetDeferred("disabled", _isLocked ? false : IsOpen);
 		}
 
 		if (_interactArea != null) {
 			foreach (var child in _interactArea.GetChildren()) {
 				if (child is CollisionShape2D cs) {
-					cs.SetDeferred("disabled", false);
+					cs.SetDeferred("disabled", _isLocked);
 				}
 			}
 		}
@@ -141,10 +151,11 @@ public partial class Door : StaticBody2D, IInteractable
 		var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
 		if (level != null)
 		{
-			level.SetCellSolid(GlobalPosition + new Vector2(-8, -8), !IsOpen);
-			level.SetCellSolid(GlobalPosition + new Vector2(8, -8), !IsOpen);
-			level.SetCellSolid(GlobalPosition + new Vector2(-8, 8), !IsOpen);
-			level.SetCellSolid(GlobalPosition + new Vector2(8, 8), !IsOpen);
+			bool solid = _isLocked || !IsOpen;
+			level.SetCellSolid(GlobalPosition + new Vector2(-24, -24), solid);
+			level.SetCellSolid(GlobalPosition + new Vector2(24, -24), solid);
+			level.SetCellSolid(GlobalPosition + new Vector2(-24, 24), solid);
+			level.SetCellSolid(GlobalPosition + new Vector2(24, 24), solid);
 		}
 	}
 
@@ -163,23 +174,39 @@ public partial class Door : StaticBody2D, IInteractable
 		if (player != null) {
 			_playerInRange = entered;
 			if (entered) {
-				if (_isActive) player.RegisterInteractable(this);
+				if (_isActive && !_isLocked) player.RegisterInteractable(this);
 			} else {
 				player.UnregisterInteractable(this);
 			}
 		}
 	}
 
+	public void ShowLockedDoor()
+	{
+		_isActive = true;
+		_isLocked = true;
+		IsOpen = false;
+		Visible = true;
+		UpdateDoorState();
+	}
+
 	public void SpawnDoor()
 	{
 		_isActive = true;
+		_isLocked = false;
 		Visible = true;
 		UpdateDoorState();
+		if (_playerInRange)
+		{
+			var player = GetTree().GetFirstNodeInGroup("Player") as Player;
+			player?.RegisterInteractable(this);
+		}
 	}
 
 	public void HideDoor()
 	{
 		_isActive = false;
+		_isLocked = true;
 		Visible = false;
 		UpdateDoorState();
 	}

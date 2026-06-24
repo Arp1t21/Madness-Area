@@ -15,6 +15,12 @@ public partial class WeaponData : Resource
 	[Export] public float OrientationOffset = 0.0f; // Смещение угла (в градусах)
 	[Export] public float FlipOrientationOffset = 0.0f; // Смещение угла при взгляде влево
 
+	[ExportGroup("Sounds")]
+	[Export] public AudioStream AttackSound;
+	[Export] public AudioStream ReloadSound;
+	[Export] public AudioStream EquipSound;
+	[Export] public AudioStream EmptySound;
+
 	[ExportGroup("Visuals")]
 	[Export] public PackedScene WeaponVisualPrefab; // Сцена визуала взмаха (attack_ability.tscn)
 
