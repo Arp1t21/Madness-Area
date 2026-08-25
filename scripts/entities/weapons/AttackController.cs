@@ -292,9 +292,8 @@ public partial class AttackController : Node2D
 			}
 		}
 
-		// Логика анимации (только если это не дальний бой с закончившейся обоймой)
-		if (!(CurrentWeapon.IsRanged && _currentAmmo < 0)) {
-			if (_animPlayer != null) {
+		// Логика анимации
+		if (_animPlayer != null) {
 				_animPlayer.Stop();
 				string animToPlay = ""; 
 				var animList = _animPlayer.GetAnimationList();
@@ -316,7 +315,6 @@ public partial class AttackController : Node2D
 				}
 				_animSpriteNode.Play(animToPlay);
 			}
-		}
 
 		_canAttack = false;
 		_timer.Start();
@@ -338,7 +336,8 @@ public partial class AttackController : Node2D
 			_animPlayer.Play("reload");
 		}
 		
-		var reloadTimer = GetTree().CreateTimer(CurrentWeapon.ReloadTime);
+		// processAlways: false — таймер перезарядки замирает вместе с игрой при паузе
+		var reloadTimer = GetTree().CreateTimer(CurrentWeapon.ReloadTime, processAlways: false);
 		reloadTimer.Timeout += () => {
 			_currentAmmo = CurrentWeapon.MaxAmmo;
 			_isReloading = false;
@@ -374,7 +373,7 @@ public partial class AttackController : Node2D
 
 				bullet.IsPlayerOwned = _isPlayerOwned;
 				bullet.IsPiercing = CurrentWeapon.IsPiercing; // Передаем настройку пробития
-				bullet.Speed = CurrentWeapon.BulletSpeed * 3f; // Устанавливаем скорость пули из настроек оружия (масштабировано 3x)
+				bullet.Speed = CurrentWeapon.BulletSpeed * World.Scale; // Устанавливаем скорость пули из настроек оружия (масштабировано)
 				bullet.KnockbackForce = CurrentWeapon.KnockbackForce;
 				
 				Vector2 dir = (targetPos - spawnPos).Normalized();
@@ -395,7 +394,12 @@ public partial class AttackController : Node2D
 				}
 				
 				if (bulletArea != null) {
-					if (!bulletArea.IsInGroup("PlayerWeapon")) bulletArea.AddToGroup("PlayerWeapon");
+					// Группа должна соответствовать владельцу пули, иначе коллизии
+					// будут считать пули врагов оружием игрока и наоборот
+					string ownerGroup = _isPlayerOwned ? "PlayerWeapon" : "EnemyWeapon";
+					string wrongGroup = _isPlayerOwned ? "EnemyWeapon" : "PlayerWeapon";
+					if (bulletArea.IsInGroup(wrongGroup)) bulletArea.RemoveFromGroup(wrongGroup);
+					if (!bulletArea.IsInGroup(ownerGroup)) bulletArea.AddToGroup(ownerGroup);
 				}
 			}
 			else if (bulletNode is Node2D node2D) {
@@ -427,6 +431,7 @@ public partial class AttackController : Node2D
 			foreach (Node node in enemies) {
 				if (node is Node2D enemy) {
 					if (enemy is OrcWarrior orc && orc.CurrentHealth <= 0) continue;
+					if (enemy is Ghost ghost && ghost.CurrentHealth <= 0) continue;
 					float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
 					if (dist < minDist) {
 						minDist = dist;
@@ -437,34 +442,6 @@ public partial class AttackController : Node2D
 			if (nearest != null) return nearest.GlobalPosition;
 		}
 		return GetGlobalMousePosition();
-	}
-
-	private void DealDamage() {
-		if (CurrentWeapon == null) return;
-		if (_isPlayerOwned) {
-			var enemies = GetTree().GetNodesInGroup("enemy");
-			foreach (Node node in enemies) {
-				if (node is OrcWarrior orc) {
-					float dist = GlobalPosition.DistanceTo(orc.GlobalPosition);
-					if (dist <= CurrentWeapon.AttackRange * 3f) {
-						Vector2 dirToEnemy = (orc.GlobalPosition - GlobalPosition).Normalized();
-						Vector2 faceDir = Vector2.Up.Rotated(Rotation);
-						if (faceDir.Dot(dirToEnemy) > 0.5f) {
-							if (CanHitEnemy(orc.GetInstanceId())) {
-								Vector2 source = _player != null ? _player.GlobalPosition : GlobalPosition;
-								orc.TakeDamage(CurrentWeapon.Damage, source, CurrentWeapon.KnockbackForce, !CurrentWeapon.IsRanged);
-							}
-						}
-					}
-				}
-			}
-		} else {
-			var playerNode = GetTree().GetFirstNodeInGroup("Player") as Player;
-			if (playerNode != null) {
-				float dist = GlobalPosition.DistanceTo(playerNode.GlobalPosition);
-				if (dist <= CurrentWeapon.AttackRange * 3f) playerNode.TakeDamage(CurrentWeapon.Damage);
-			}
-		}
 	}
 
 	public void PlaySound(AudioStream stream)

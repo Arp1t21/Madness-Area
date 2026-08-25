@@ -6,22 +6,25 @@ public enum StatusEffectType { Stun, Slow, Root, Disarm }
 public partial class StatusEffectManager : Node
 {
 	private CharacterBody2D _owner;
-	private Dictionary<StatusEffectType, float> _activeEffects = new Dictionary<StatusEffectType, float>();
+	// Для каждого эффекта храним оставшееся время и силу (например, Slow 0.25 = -25% скорости)
+	private Dictionary<StatusEffectType, (float time, float strength)> _activeEffects =
+		new Dictionary<StatusEffectType, (float, float)>();
 
 	public override void _Ready()
 	{
 		_owner = GetParent() as CharacterBody2D;
 	}
 
-	public void ApplyEffect(StatusEffectType type, float duration)
+	public void ApplyEffect(StatusEffectType type, float duration, float strength = 1.0f)
 	{
 		if (_activeEffects.ContainsKey(type))
 		{
-			_activeEffects[type] = Mathf.Max(_activeEffects[type], duration);
+			var existing = _activeEffects[type];
+			_activeEffects[type] = (Mathf.Max(existing.time, duration), Mathf.Max(existing.strength, strength));
 		}
 		else
 		{
-			_activeEffects[type] = duration;
+			_activeEffects[type] = (duration, strength);
 		}
 	}
 
@@ -32,8 +35,10 @@ public partial class StatusEffectManager : Node
 
 		foreach (var type in keys)
 		{
-			_activeEffects[type] -= (float)delta;
-			if (_activeEffects[type] <= 0)
+			var effect = _activeEffects[type];
+			effect.time -= (float)delta;
+			_activeEffects[type] = effect;
+			if (effect.time <= 0)
 			{
 				toRemove.Add(type);
 			}
@@ -46,9 +51,14 @@ public partial class StatusEffectManager : Node
 	}
 
 	public bool HasEffect(StatusEffectType type) => _activeEffects.ContainsKey(type);
-	
-	public float GetEffectValue(StatusEffectType type) 
+
+	public float GetEffectValue(StatusEffectType type)
 	{
-		return _activeEffects.ContainsKey(type) ? _activeEffects[type] : 0f;
+		return _activeEffects.ContainsKey(type) ? _activeEffects[type].time : 0f;
+	}
+
+	public float GetEffectStrength(StatusEffectType type)
+	{
+		return _activeEffects.ContainsKey(type) ? _activeEffects[type].strength : 0f;
 	}
 }

@@ -27,7 +27,7 @@ public partial class AbilitySlotUI : Control
 		_circle = new AbilityCircle(_abilityId, this);
 		_circle.Size = new Vector2(24, 24);
 		_circle.Position = Vector2.Zero;
-		_circle.Scale = new Vector2(0.7f, 0.7f);
+		_circle.Scale = new Vector2(0.84f, 0.84f); // +20% к прежним 0.7
 		AddChild(_circle);
 
 		// 2. Создаем круглую кнопку "+" для прокачки (размер 16x9, позиция (0, 34))

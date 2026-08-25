@@ -84,9 +84,9 @@ public partial class Ghost : Enemy
 		{
 			float dist = GlobalPosition.DistanceTo(_player.GlobalPosition);
 			Vector2 direction = Vector2.Zero;
-			float currentSpeed = Config.Speed * 3f;
+			float currentSpeed = Config.Speed * World.Scale;
 
-			if (dist > 150.0f * 3f)
+			if (dist > 150.0f * World.Scale)
 			{
 				_pathUpdateTimer -= (float)delta;
 				if (_pathUpdateTimer <= 0)
@@ -101,7 +101,7 @@ public partial class Ghost : Enemy
 
 				if (_navigationPath != null && _navigationPath.Count > 0)
 				{
-					while (_navigationPath.Count > 1 && GlobalPosition.DistanceTo(_navigationPath[0]) < 12.0f * 3f)
+					while (_navigationPath.Count > 1 && GlobalPosition.DistanceTo(_navigationPath[0]) < 12.0f * World.Scale)
 					{
 						_navigationPath.RemoveAt(0);
 					}
@@ -113,11 +113,11 @@ public partial class Ghost : Enemy
 					direction = (_player.GlobalPosition - GlobalPosition).Normalized();
 				}
 			}
-			else if (dist < 110.0f * 3f)
+			else if (dist < 110.0f * World.Scale)
 			{
 				// Retreat away from player
 				direction = (GlobalPosition - _player.GlobalPosition).Normalized();
-				currentSpeed = Config.Speed * 0.6f * 3f;
+				currentSpeed = Config.Speed * 0.6f * World.Scale;
 			}
 			else
 			{
@@ -145,6 +145,10 @@ public partial class Ghost : Enemy
 				separation /= neighborsCount;
 				direction = (direction + separation * 0.15f).Normalized();
 			}
+			if (direction != Vector2.Zero) {
+				// Обход препятствий при застревании
+				direction = ApplyAntiStuck(direction, delta, () => _navigationPath.Clear());
+			}
 
 			Vector2 targetVelocity = direction * currentSpeed;
 			Velocity = Velocity.Lerp(targetVelocity, 0.1f);
@@ -161,7 +165,7 @@ public partial class Ghost : Enemy
 
 			// Проверка на атаку
 			if (_cancelAttackCooldown <= 0 && _attackController != null && _attackController.CanAttack()) {
-				if (dist <= 150.0f * 3f) {
+				if (dist <= 150.0f * World.Scale) {
 					StartAttackPreparation();
 				}
 			}
@@ -188,7 +192,7 @@ public partial class Ghost : Enemy
 
 		if (_periodicCheckTimer <= 0) {
 			_periodicCheckTimer = 0.5f;
-			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > (Config.AttackRange + 15.0f) * 3f) {
+			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > (Config.AttackRange + 15.0f) * World.Scale) {
 				CancelAttack();
 				return;
 			}
@@ -236,9 +240,9 @@ public partial class Ghost : Enemy
 				Vector2 source = player != null ? player.GlobalPosition : GlobalPosition;
 				
 				float dist = GlobalPosition.DistanceTo(source);
-				float weaponRange = controller.CurrentWeapon.AttackRange * 3f;
+				float weaponRange = controller.CurrentWeapon.AttackRange * World.Scale;
 
-				if (dist <= weaponRange + 15.0f * 3f) {
+				if (dist <= weaponRange + 15.0f * World.Scale) {
 					if (controller.CanHitEnemy(GetInstanceId())) {
 						TakeDamage(controller.CurrentWeapon.Damage, source, controller.CurrentWeapon.KnockbackForce, true); 
 					}

@@ -26,6 +26,47 @@ public partial class Projectile : Node2D
 		} else {
 			GD.PushWarning("Projectile: No Area2D found to detect collisions!");
 		}
+
+		SetupTrail();
+	}
+
+	// Добавляет шлейф за пулей, если у сцены нет своих частиц (напр. у ghost_bullet они есть)
+	private void SetupTrail()
+	{
+		foreach (var child in GetChildren())
+		{
+			if (child is CpuParticles2D) return; // трейл уже есть в сцене
+		}
+
+		var trail = new CpuParticles2D();
+		trail.Name = "Trail";
+		trail.Amount = 24;
+		trail.Lifetime = 0.22f;
+		trail.LocalCoords = false; // частицы остаются позади, а не летят вместе с пулей
+		trail.Gravity = Vector2.Zero;
+		trail.Direction = -Direction;
+		trail.Spread = 12f;
+		trail.InitialVelocityMin = 5f;
+		trail.InitialVelocityMax = 15f;
+		trail.ScaleAmountMin = 1.5f;
+		trail.ScaleAmountMax = 3.0f;
+
+		var gradient = new Gradient();
+		if (IsPlayerOwned) {
+			gradient.Colors = new Color[] {
+				new Color(1.0f, 0.85f, 0.4f, 0.55f),
+				new Color(0.9f, 0.6f, 0.1f, 0.0f)
+			};
+		} else {
+			gradient.Colors = new Color[] {
+				new Color(0.7f, 0.9f, 1.0f, 0.5f),
+				new Color(0.3f, 0.5f, 0.9f, 0.0f)
+			};
+		}
+		gradient.Offsets = new float[] { 0.0f, 1.0f };
+		trail.ColorRamp = gradient;
+
+		AddChild(trail);
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -56,16 +97,11 @@ public partial class Projectile : Node2D
 		if (_isDestroyed || hitNode == null || hitNode.IsQueuedForDeletion()) return;
 
 		// Если пуля игрока попала во врага
-		if (IsPlayerOwned && hitNode.IsInGroup("enemy"))
+		// (типизированный вызов: Call() по имени не видит C#-дефолтных значений параметров)
+		if (IsPlayerOwned && hitNode is Enemy enemy && !_hitTargets.Contains(hitNode.GetInstanceId()))
 		{
-			ulong targetId = hitNode.GetInstanceId();
-			if (_hitTargets.Contains(targetId)) return;
-			_hitTargets.Add(targetId);
-
-			if (hitNode.HasMethod("TakeDamage"))
-			{
-				hitNode.Call("TakeDamage", Damage, GlobalPosition, KnockbackForce, false);
-			}
+			_hitTargets.Add(hitNode.GetInstanceId());
+			enemy.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
 
 			if (!IsPiercing) {
 				_isDestroyed = true;
@@ -73,16 +109,10 @@ public partial class Projectile : Node2D
 			}
 		}
 		// Если пуля врага попала в игрока
-		else if (!IsPlayerOwned && hitNode.IsInGroup("Player"))
+		else if (!IsPlayerOwned && hitNode is Player player && !_hitTargets.Contains(hitNode.GetInstanceId()))
 		{
-			ulong targetId = hitNode.GetInstanceId();
-			if (_hitTargets.Contains(targetId)) return;
-			_hitTargets.Add(targetId);
-
-			if (hitNode.HasMethod("TakeDamage"))
-			{
-				hitNode.Call("TakeDamage", Damage, GlobalPosition, KnockbackForce);
-			}
+			_hitTargets.Add(hitNode.GetInstanceId());
+			player.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
 
 			if (!IsPiercing) {
 				_isDestroyed = true;

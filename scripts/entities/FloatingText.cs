@@ -9,7 +9,7 @@ public partial class FloatingText : Node2D
 
 	public void Init(string text, Color color)
 	{
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = new Vector2(2.7f, 2.7f); // было 3.0 — цифры урона чуть компактнее
 		_label = new Label();
 		_label.Text = text;
 		_label.AddThemeColorOverride("font_color", color);

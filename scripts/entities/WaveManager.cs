@@ -33,9 +33,10 @@ public partial class WaveManager : Node2D
 		
 		for (int i = 0; i < enemyCount; i++)
 		{
+			// processAlways: false — таймер (и спавн) замирают вместе с игрой при паузе
+			await ToSignal(GetTree().CreateTimer(0.666f, processAlways: false), "timeout");
+			if (!IsInsideTree()) return; // сцена закрылась во время спавна
 			SpawnEnemy();
-			// Медленное появление: 3 моба за 2 секунды (пауза 0.666с)
-			await ToSignal(GetTree().CreateTimer(0.666f), "timeout");
 		}
 	}
 
@@ -49,8 +50,17 @@ public partial class WaveManager : Node2D
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
-		if (levelIndex >= 2 && GD.Randf() <= 0.10f) {
+		float ghostChance = levelIndex >= 2 ? 0.10f : 0.0f;
+		float archerChance = levelIndex >= 2 ? 0.10f : 0.0f;
+		float quagmireChance = levelIndex >= 3 ? 0.15f : 0.0f;
+		float roll = GD.Randf();
+
+		if (roll < quagmireChance) {
+			selectedPrefab = GD.Load<PackedScene>("res://scene/actors/quagmire.tscn");
+		} else if (roll < quagmireChance + ghostChance) {
 			selectedPrefab = GD.Load<PackedScene>("res://scene/actors/ghost.tscn");
+		} else if (roll < quagmireChance + ghostChance + archerChance) {
+			selectedPrefab = GD.Load<PackedScene>("res://scene/actors/archer.tscn");
 		}
 
 		var enemy = selectedPrefab.Instantiate() as Node2D;
@@ -77,6 +87,10 @@ public partial class WaveManager : Node2D
 
 	private void OnEnemyDied(Node2D enemy)
 	{
+		// TreeExiting срабатывает и при смене сцены/выгрузке дерева.
+		// Убийством считаем только выход мёртвого врага.
+		if (enemy is Enemy e && e.CurrentHealth > 0) return;
+
 		_enemiesAlive--;
 		Vector2 lastEnemyPos = IsInstanceValid(enemy) ? enemy.GlobalPosition : Vector2.Zero;
 		
@@ -90,15 +104,19 @@ public partial class WaveManager : Node2D
 			var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 			if (level != null) {
 				level.OnWaveCleared();
-				
-				// Spawn weapon pickups instead of chests!
-				if (_currentWave == 1)
+
+				// Оружие падает только со второго уровня — на первом игрок
+				// начинает с обычным стартовым набором
+				if (level.CurrentLevelIndex > 1)
 				{
-					level.SpawnWeaponPickupAt(lastEnemyPos, "res://data/waepons/shotgun.tres");
-				}
-				else if (_currentWave == 2)
-				{
-					level.SpawnWeaponPickupAt(lastEnemyPos, "res://data/waepons/revolver.tres");
+					if (_currentWave == 1)
+					{
+						level.SpawnWeaponPickupAt(lastEnemyPos, "res://data/waepons/shotgun.tres");
+					}
+					else if (_currentWave == 2)
+					{
+						level.SpawnWeaponPickupAt(lastEnemyPos, "res://data/waepons/revolver.tres");
+					}
 				}
 			}
 
@@ -115,8 +133,8 @@ public partial class WaveManager : Node2D
 		var rootControl = new Control();
 		var viewportSize = GetViewport().GetVisibleRect().Size;
 		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		rootControl.Size = viewportSize / 3.5f;
-		rootControl.Scale = new Vector2(3.5f, 3.5f);
+		rootControl.Size = viewportSize / World.UiScale;
+		rootControl.Scale = new Vector2(World.UiScale, World.UiScale);
 		canvas.AddChild(rootControl);
 
 		Label label = new Label();

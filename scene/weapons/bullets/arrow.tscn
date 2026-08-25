@@ -1,0 +1,20 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://scripts/entities/weapons/Projectile.cs" id="1_script"]
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_arrow"]
+size = Vector2(14, 4)
+
+[node name="Arrow" type="Node2D"]
+script = ExtResource("1_script")
+
+[node name="Area2D" type="Area2D" parent="."]
+collision_layer = 2
+collision_mask = 1
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+shape = SubResource("RectangleShape2D_arrow")
+
+[node name="Visual" type="Polygon2D" parent="."]
+color = Color(0.55, 0.4, 0.2, 1)
+polygon = PackedVector2Array(-8, -1.5, 6, -1.5, 11, 0, 6, 1.5, -8, 1.5, -11, 0)

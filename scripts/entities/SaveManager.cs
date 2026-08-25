@@ -10,6 +10,7 @@ public class SaveData
 	public string SlotId { get; set; } = "1";
 	public string CharacterName { get; set; } = "Knight";
 	public int CurrentLevelIndex { get; set; } = 1;
+	public ulong LevelSeed { get; set; } = 0;
 	public float PlayedTimeSeconds { get; set; } = 0.0f;
 	public int Coins { get; set; } = 0;
 	public float CurrentHealth { get; set; } = 100f;
@@ -56,11 +57,13 @@ public static class SaveManager
 		data.SaveDateString = DateTime.Now.ToString("dd.MM.yyyy HH:mm");
 		string path = $"user://save_{data.SlotId}.json";
 		using var file = FileAccess.Open(path, FileAccess.ModeFlags.Write);
-		if (file != null)
+		if (file == null)
 		{
-			string json = JsonSerializer.Serialize(data);
-			file.StoreString(json);
+			GD.PrintErr($"Failed to open save file for writing: {path} (error: {FileAccess.GetOpenError()})");
+			return;
 		}
+		string json = JsonSerializer.Serialize(data);
+		file.StoreString(json);
 	}
 
 	public static void DeleteSave(string slotId)

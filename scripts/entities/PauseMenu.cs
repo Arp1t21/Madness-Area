@@ -9,7 +9,9 @@ public partial class PauseMenu : CanvasLayer
 		
 		var rootControl = new Control();
 		AddChild(rootControl);
-		rootControl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		// Явный размер вместо FullRect-якорей: у прямых детей CanvasLayer якоря
+		// растягиваются не сразу, из-за чего меню уезжало в верхний левый угол
+		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
 		rootControl.Size = GetViewport().GetVisibleRect().Size;
 
 		// Semi-transparent overlay
@@ -35,7 +37,12 @@ public partial class PauseMenu : CanvasLayer
 		title.Text = "PAUSED";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 28);
+		title.AddThemeFontSizeOverride("font_size", 40);
+		// Выделение: золотистый цвет + темная обводка
+		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.55f));
+		title.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
+		title.AddThemeConstantOverride("outline_size", 6);
+		title.AddThemeConstantOverride("shadow", 1);
 		vbox.AddChild(title);
 
 		var btnContinue = CreateMenuButton("CONTINUE", titleFont, vbox);
@@ -56,8 +63,13 @@ public partial class PauseMenu : CanvasLayer
 		btn.Text = text;
 		btn.Flat = true;
 		btn.AddThemeFontOverride("font", font);
-		btn.AddThemeFontSizeOverride("font_size", 14);
-		btn.CustomMinimumSize = new Vector2(120, 25);
+		btn.AddThemeFontSizeOverride("font_size", 20);
+		// Выделение кнопок: светлый текст с обводкой
+		btn.AddThemeColorOverride("font_color", new Color(0.95f, 0.95f, 0.95f));
+		btn.AddThemeColorOverride("font_hover_color", new Color(1.0f, 0.9f, 0.6f));
+		btn.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
+		btn.AddThemeConstantOverride("outline_size", 3);
+		btn.CustomMinimumSize = new Vector2(160, 34);
 		parent.AddChild(btn);
 
 		var btnNormal = new StyleBoxEmpty();
@@ -98,7 +110,7 @@ public partial class PauseMenu : CanvasLayer
 			currentSave.SkillPoints = player.SkillPoints;
 			currentSave.Ability1Level = player.Ability1Level;
 			currentSave.Ability2Level = player.Ability2Level;
-			currentSave.PlayedTimeSeconds += level.LevelPlayedTime;
+			currentSave.PlayedTimeSeconds += level.ConsumePlayedTime();
 			
 			// Save weapons
 			currentSave.WeaponResourcePaths.Clear();

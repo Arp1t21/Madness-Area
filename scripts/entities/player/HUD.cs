@@ -40,8 +40,8 @@ public partial class HUD : CanvasLayer
 
 		var viewportSize = GetViewport().GetVisibleRect().Size;
 		_hudRoot.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		_hudRoot.Size = viewportSize / 3.5f;
-		_hudRoot.Scale = new Vector2(3.5f, 3.5f);
+		_hudRoot.Size = viewportSize / World.UiScale;
+		_hudRoot.Scale = new Vector2(World.UiScale, World.UiScale);
 
 		var timerControl = GetNodeOrNull<Control>("TimerControl");
 		if (timerControl != null) {
@@ -57,6 +57,31 @@ public partial class HUD : CanvasLayer
 		if (healthUI != null) {
 			RemoveChild(healthUI);
 			_hudRoot.AddChild(healthUI);
+		}
+
+		// Увеличиваем основные элементы HUD (мир зумится камерой, а интерфейс оставался мелким)
+		const float hudElementScale = 1.5f;
+		if (timerControl != null) timerControl.Scale *= hudElementScale;
+		if (healthUI != null) {
+			healthUI.Scale *= hudElementScale;
+			// Блок HP/MP чуть выше от края экрана
+			healthUI.Position -= new Vector2(0, 8);
+		}
+
+		// Монетка со счетчиком — крупнее остального на 20%
+		if (coinControl != null) {
+			coinControl.Scale *= hudElementScale * 1.2f;
+			if (_coinLabel == null) {
+				_coinLabel = coinControl.GetNodeOrNull<Label>("HBoxContainer/CoinLabel");
+			}
+			// Иконка подросла — опускаем счетчик на те же пиксели, чтобы цифры
+			// стояли на уровне монетки, а не выше нее
+			var coinIcon = coinControl.GetNodeOrNull<TextureRect>("HBoxContainer/TextureRect");
+			if (coinIcon != null) coinIcon.CustomMinimumSize = new Vector2(6, 6);
+			if (_coinLabel != null) {
+				_coinLabel.VerticalAlignment = VerticalAlignment.Top;
+				_coinLabel.Position += new Vector2(0, 2);
+			}
 		}
 
 		_coinLabel = _hudRoot.GetNodeOrNull<Label>("CoinControl/HBoxContainer/CoinLabel");
@@ -120,8 +145,11 @@ public partial class HUD : CanvasLayer
 		// Обновление статов игрока
 		if (IsInstanceValid(_player))
 		{
-			if (IsInstanceValid(_coinLabel))
-				_coinLabel.Text = _player.CoinCount.ToString();
+		if (IsInstanceValid(_coinLabel)) {
+			_coinLabel.Text = _player.CoinCount.ToString();
+			// HBoxContainer пересортировывает детей при смене текста — возвращаем смещение счетчика вниз
+			_coinLabel.Position = new Vector2(_coinLabel.Position.X, 2.0f);
+		}
 
 			if (_player.Config != null && IsInstanceValid(_healthBar) && IsInstanceValid(_hpLabel)) {
 				_healthBar.MaxValue = _player.Config.MaxHealth;
@@ -262,7 +290,7 @@ public partial class HUD : CanvasLayer
 			arrowPos.Y += wave;
 		}
 
-		_arrowIndicator.Position = arrowPos / 3.5f;
+		_arrowIndicator.Position = arrowPos / World.UiScale;
 		if (Math.Abs(_arrowIndicator.Angle - angle) > 0.001f) {
 			_arrowIndicator.Angle = angle;
 			_arrowIndicator.QueueRedraw();

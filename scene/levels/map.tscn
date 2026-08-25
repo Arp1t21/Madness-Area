@@ -121,6 +121,7 @@ sources/1 = SubResource("TileSetAtlasSource_xcmpg")
 
 [sub_resource type="TileSetAtlasSource" id="TileSetAtlasSource_j16kf"]
 texture = ExtResource("2_belxq")
+2:10/next_alternative_id = 2
 2:10/0 = 0
 2:10/0/terrain_set = 0
 2:10/0/terrain = 0
@@ -133,6 +134,19 @@ texture = ExtResource("2_belxq")
 2:10/0/terrains_peering_bit/top_left_corner = 0
 2:10/0/terrains_peering_bit/top_side = 0
 2:10/0/terrains_peering_bit/top_right_corner = 0
+2:10/1 = 1
+2:10/1/flip_h = true
+2:10/1/terrain_set = 0
+2:10/1/terrain = 0
+2:10/1/physics_layer_0/polygon_0/points = PackedVector2Array(-8, -8, 8, -8, 8, 8, -8, 8)
+2:10/1/terrains_peering_bit/right_side = 0
+2:10/1/terrains_peering_bit/bottom_right_corner = 0
+2:10/1/terrains_peering_bit/bottom_side = 0
+2:10/1/terrains_peering_bit/bottom_left_corner = 0
+2:10/1/terrains_peering_bit/left_side = 0
+2:10/1/terrains_peering_bit/top_left_corner = 0
+2:10/1/terrains_peering_bit/top_side = 0
+2:10/1/terrains_peering_bit/top_right_corner = 0
 
 [sub_resource type="TileSet" id="TileSet_tmxlf"]
 physics_layer_0/collision_layer = 1
@@ -230,7 +244,6 @@ tile_set = SubResource("TileSet_c43sm")
 tile_set = SubResource("TileSet_2y4h4")
 
 [node name="Door" type="StaticBody2D" parent="."]
-visible = false
 position = Vector2(0, -288)
 physics_material_override = SubResource("PhysicsMaterial_2y4h4")
 script = ExtResource("4_xcmpg")

@@ -1,0 +1,22 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_bow"]
+[ext_resource type="PackedScene" path="res://scene/weapons/bullets/arrow.tscn" id="2_arrow"]
+
+[resource]
+script = ExtResource("1_bow")
+WeaponName = "Bow"
+Damage = 6
+AttackCooldown = 2.17
+AttackRange = 120.0
+KnockbackForce = 3.0
+Recoil = 5.0
+IsRanged = true
+BulletPrefab = ExtResource("2_arrow")
+BulletSpeed = 130.0
+BulletCount = 1
+Spread = 0.03
+IsPiercing = false
+MaxAmmo = 1
+ReloadTime = 1.2
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

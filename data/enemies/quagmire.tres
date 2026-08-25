@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3 uid="uid://c8kv50vg4ye4e"]
+
+[ext_resource type="Script" uid="uid://bljefiu15ackd" path="res://scripts/resources/EnemyData.cs" id="1_qgm"]
+
+[resource]
+script = ExtResource("1_qgm")
+EnemyName = "Quagmire"
+Speed = 22.0
+MaxHealth = 60
+Damage = 18.0
+AttackRange = 30.0
+PreAttackDelay = 1.2
+StopDuration = 0.6
+CoinDropChance = 0.4
+ManaCrystalDropChance = 0.3
+metadata/_custom_type_script = "uid://bljefiu15ackd"

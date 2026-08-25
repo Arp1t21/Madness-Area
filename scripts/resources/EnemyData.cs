@@ -8,6 +8,7 @@ public partial class EnemyData : Resource
 	[ExportGroup("Base Stats")]
 	[Export] public float Speed = 50.0f;
 	[Export] public int MaxHealth = 30;
+	[Export] public float Damage = 10.0f; // Урон удара (масштабируется на уровне)
 	[Export] public float AttackRange = 35.0f; // Дистанция остановки перед ударом
 	[Export] public float PreAttackDelay = 1.0f; // Сколько стоит и "тупит" ПЕРЕД ударом
 	[Export] public float StopDuration = 1.0f; // На сколько замирает ПРИ атаке (общая пауза)

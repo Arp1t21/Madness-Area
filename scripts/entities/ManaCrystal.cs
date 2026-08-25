@@ -7,6 +7,8 @@ public partial class ManaCrystal : Node2D
 	private bool _isAnimatingSpawn = true;
 	private Node2D _targetPlayer;
 	private float _speed = 600.0f;
+	// Подбор не мгновенный: кристалл "дозревает" 0.6с после появления
+	private float _pickupDelay = 0.6f;
 
 	public override void _Ready()
 	{
@@ -39,6 +41,19 @@ public partial class ManaCrystal : Node2D
 	{
 		if (_isAnimatingSpawn) return;
 
+		if (_pickupDelay > 0)
+		{
+			_pickupDelay -= (float)delta;
+			// Если игрок уже стоит на кристалле — подберём его сразу по истечении задержки
+			if (_pickupDelay <= 0) {
+				var nearby = GetTree().GetFirstNodeInGroup("Player") as Node2D;
+				if (nearby != null && GlobalPosition.DistanceTo(nearby.GlobalPosition) < 15.0f * World.Scale) {
+					StartPickup(nearby);
+				}
+			}
+			return;
+		}
+
 		if (_isBeingPickedUp && IsInstanceValid(_targetPlayer))
 		{
 			// Плавный полет к игроку
@@ -63,14 +78,19 @@ public partial class ManaCrystal : Node2D
 	private void _on_area_2d_area_entered(Area2D area)
 	{
 		// Проверяем, что это Area2D игрока (на 4-м слое / 8 значении маски)
-		if (!_isBeingPickedUp && area.GetParent() is Player player)
+		if (!_isBeingPickedUp && _pickupDelay <= 0 && area.GetParent() is Player player)
 		{
-			_targetPlayer = player;
-			_isBeingPickedUp = true;
-
-			// Эффект уменьшения на 0.8
-			var tween = CreateTween();
-			tween.TweenProperty(this, "scale", Scale * 0.8f, 0.3f);
+			StartPickup(player);
 		}
+	}
+
+	private void StartPickup(Node2D player)
+	{
+		_targetPlayer = player;
+		_isBeingPickedUp = true;
+
+		// Эффект уменьшения на 0.8
+		var tween = CreateTween();
+		tween.TweenProperty(this, "scale", Scale * 0.8f, 0.3f);
 	}
 }

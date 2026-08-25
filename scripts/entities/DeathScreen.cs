@@ -28,7 +28,9 @@ public partial class DeathScreen : CanvasLayer
 		// 1. You Died screen (4 seconds)
 		var rootControl = new Control();
 		AddChild(rootControl);
-		rootControl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		// Явный размер вместо FullRect-якорей: у прямых детей CanvasLayer якоря
+		// растягиваются не сразу, из-за чего экран смерти уезжал в верхний левый угол
+		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
 		rootControl.Size = GetViewport().GetVisibleRect().Size;
 
 		var blackOverlay = new ColorRect();

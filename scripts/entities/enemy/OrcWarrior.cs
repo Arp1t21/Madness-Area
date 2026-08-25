@@ -117,6 +117,8 @@ public partial class OrcWarrior : Enemy
 
 			// Движение к игроку с учетом распределения (разделения) от других врагов и игрока
 			Vector2 direction = (targetPos - GlobalPosition).Normalized();
+			// Обход препятствий при застревании
+			direction = ApplyAntiStuck(direction, delta, () => _navigationPath.Clear());
 			
 			// Вычисляем силу разделения (Separation), чтобы враги не ходили паровозиком
 			Vector2 separation = Vector2.Zero;
@@ -149,7 +151,7 @@ public partial class OrcWarrior : Enemy
 				direction = (direction + pushFromPlayer * 0.35f).Normalized();
 			}
 
-			Vector2 targetVelocity = direction * Config.Speed * 3f;
+			Vector2 targetVelocity = direction * Config.Speed * World.Scale;
 			Velocity = Velocity.Lerp(targetVelocity, 0.1f);
 
 			if (_sprite != null) {
@@ -162,7 +164,7 @@ public partial class OrcWarrior : Enemy
 			// Проверка на начало атаки: должен быть рядом, оружие должно быть готово и кулдаун отмены прошел
 			if (_cancelAttackCooldown <= 0 && _attackController != null && _attackController.CanAttack()) {
 				float dist = GlobalPosition.DistanceTo(_player.GlobalPosition);
-				if (dist < Config.AttackRange * 3f) {
+				if (dist < Config.AttackRange * World.Scale) {
 					StartAttackPreparation();
 				}
 			}
@@ -190,7 +192,7 @@ public partial class OrcWarrior : Enemy
 		// ТРЕБОВАНИЕ: Каждые 0.5 сек проверяем, не убежал ли игрок
 		if (_periodicCheckTimer <= 0) {
 			_periodicCheckTimer = 0.5f;
-			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > (Config.AttackRange + 15.0f) * 3f) {
+			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > (Config.AttackRange + 15.0f) * World.Scale) {
 				CancelAttack();
 				return;
 			}
@@ -231,10 +233,6 @@ public partial class OrcWarrior : Enemy
 		};
 	}
 
-	public override void TakeDamage(float amount, Vector2 knockbackSource, float knockbackForce = 15.0f, bool isMelee = true) {
-		base.TakeDamage(amount, knockbackSource, knockbackForce, isMelee);
-	}
-
 	private void _on_area_2d_area_entered(Area2D area) {
 		if (area.IsInGroup("PlayerWeapon")) {
 			var controller = area.GetParent()?.GetParent() as AttackController;
@@ -244,9 +242,9 @@ public partial class OrcWarrior : Enemy
 				Vector2 source = player != null ? player.GlobalPosition : GlobalPosition;
 				
 				float dist = GlobalPosition.DistanceTo(source);
-				float weaponRange = controller.CurrentWeapon.AttackRange * 3f;
+				float weaponRange = controller.CurrentWeapon.AttackRange * World.Scale;
 
-				if (dist <= weaponRange + 15.0f * 3f) {
+				if (dist <= weaponRange + 15.0f * World.Scale) {
 					if (controller.CanHitEnemy(GetInstanceId())) {
 						TakeDamage(controller.CurrentWeapon.Damage, source, controller.CurrentWeapon.KnockbackForce, true); 
 					}

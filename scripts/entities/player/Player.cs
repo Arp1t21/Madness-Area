@@ -13,6 +13,8 @@ public partial class Player : CharacterBody2D
 	[Export] public float TorchFillToY = 0.8f;
 
 	private PointLight2D _torchLight;
+	private CanvasLayer _damageFlashLayer;
+	private ColorRect _damageFlashRect;
 
 	private AnimatedSprite2D _animatedSprite;
 	private Node2D _abilityManager;
@@ -60,6 +62,10 @@ public partial class Player : CharacterBody2D
 		_animatedSprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
 		_abilityManager = GetNode<Node2D>("AbilityManager");
 		_camera = GetNodeOrNull<Camera2D>("Camera2D") ?? GetNodeOrNull<Camera2D>("../Camera2D");
+		if (_camera != null) {
+			// Приближаем камеру: со стандартным зумом вся арена выглядит крошечной
+			_camera.Zoom = new Vector2(1.8f, 1.8f);
+		}
 
 		// Гарантируем видимость спрайта
 		_animatedSprite.Visible = true;
@@ -166,6 +172,18 @@ public partial class Player : CharacterBody2D
 		AddChild(_torchLight);
 
 		_fireballScene = GD.Load<PackedScene>("res://scene/abilities/fireball.tscn");
+
+		// Слой с красной вспышкой на весь экран при получении урона
+		_damageFlashLayer = new CanvasLayer();
+		_damageFlashLayer.Layer = 50; // поверх HUD
+		_damageFlashRect = new ColorRect();
+		_damageFlashRect.Color = new Color(0.7f, 0.03f, 0.03f);
+		_damageFlashRect.MouseFilter = Control.MouseFilterEnum.Ignore;
+		_damageFlashRect.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		_damageFlashRect.Size = GetViewport().GetVisibleRect().Size;
+		_damageFlashRect.Modulate = new Color(1, 1, 1, 0);
+		_damageFlashLayer.AddChild(_damageFlashRect);
+		AddChild(_damageFlashLayer);
 	}
 
 	public override void _PhysicsProcess(double delta) {
@@ -195,8 +213,10 @@ public partial class Player : CharacterBody2D
 
 		Vector2 direction = Input.GetVector("move_left", "move_right", "move_up", "move_down");
 
-		float speedMod = _statusManager.HasEffect(StatusEffectType.Slow) ? 0.5f : 1.0f;
-		float currentSpeed = Config.WalkSpeed * speedMod * 3f;
+		// Сила Slow задается источником эффекта (например, аура Quagmire = 0.25)
+		float slowStrength = _statusManager.GetEffectStrength(StatusEffectType.Slow);
+		float speedMod = 1.0f - Mathf.Clamp(slowStrength, 0.0f, 0.95f);
+			float currentSpeed = Config.WalkSpeed * speedMod * World.Scale;
 
 		bool isRunningPressed = direction != Vector2.Zero && Input.IsActionPressed("shift");
 		bool hasManaToRun = CurrentMana > 0;
@@ -260,12 +280,19 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0) {
+	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0, bool isMelee = false) {
 		if (CurrentHealth <= 0) return;
 
+		// Сопротивления из конфига персонажа (к ближнему/дальнему бою)
+		if (Config != null) {
+			float res = isMelee ? Config.MeleeResistance : Config.RangedResistance;
+			amount *= (1.0f - Mathf.Clamp(res, 0.0f, 0.95f));
+		}
+
+		// Пассивный щит (способность 2)
 		if (Ability2Level > 0) {
-			float res = 0.05f + (Ability2Level - 1) * 0.05f;
-			amount *= (1.0f - res);
+			float shieldRes = 0.05f + (Ability2Level - 1) * 0.05f;
+			amount *= (1.0f - shieldRes);
 		}
 
 		CurrentHealth -= amount;
@@ -273,6 +300,9 @@ public partial class Player : CharacterBody2D
 		
 		// 1. Тряска камеры
 		ApplyCameraShake(DamageShakeIntensity * SettingsManager.ScreenShake);
+
+		// 2. Красный оттенок экрана примерно на секунду
+		FlashRedScreen();
 
 		// 2. Отброс
 		if (knockForce > 0 && sourcePos != default) {
@@ -282,6 +312,15 @@ public partial class Player : CharacterBody2D
 		if (CurrentHealth <= 0) {
 			Die();
 		}
+	}
+
+	private void FlashRedScreen() {
+		if (_damageFlashRect == null) return;
+
+		// Быстрое проявление и плавный спад в течение ~1 секунды
+		var tween = _damageFlashRect.CreateTween();
+		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.32f, 0.08);
+		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.0f, 0.92);
 	}
 
 	private void ApplyCameraShake(float intensity) {
@@ -329,7 +368,7 @@ public partial class Player : CharacterBody2D
 		var deathScreen = new DeathScreen();
 		
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-		float timePlayed = level != null ? level.LevelPlayedTime : 0.0f;
+		float timePlayed = level != null ? level.ConsumePlayedTime() : 0.0f;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
 		if (SaveManager.CurrentSave != null) {
@@ -364,7 +403,7 @@ public partial class Player : CharacterBody2D
 				if (controller.OwnerNode is Enemy enemy) {
 					damage *= enemy.DamageMultiplier;
 				}
-				TakeDamage(damage, controller.GlobalPosition, controller.CurrentWeapon.KnockbackForce);
+				TakeDamage(damage, controller.GlobalPosition, controller.CurrentWeapon.KnockbackForce, true);
 			}
 		}
 	}
@@ -453,9 +492,10 @@ public partial class Player : CharacterBody2D
 	}
 
 	public void SelectSlot(int slotIndex) {
+		if (slotIndex < 0 || slotIndex >= WeaponSlots.Count) return;
 		if (slotIndex == _currentSlotIndex && WeaponSlots[slotIndex].Visible) return;
 
-		if (slotIndex >= 0 && slotIndex < WeaponSlots.Count) {
+		{
 			// Проверяем, есть ли оружие в этом слоте
 			if (WeaponSlots[slotIndex].CurrentWeapon == null) {
 				GD.Print($"Слот {slotIndex + 1} пуст.");
@@ -484,6 +524,13 @@ public partial class Player : CharacterBody2D
 		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
 			WeaponSlots[_currentSlotIndex].HandleManualAttack();
 		}
+	}
+
+	// Публичный доступ для врагов (ауры и т.п.); EffectResistance сокращает длительность.
+	// strength — сила эффекта (для Slow: доля замедления, 0.25 = -25% скорости)
+	public void ApplyStatusEffect(StatusEffectType type, float duration, float strength = 1.0f) {
+		float resist = Config?.EffectResistance ?? 0.0f;
+		_statusManager.ApplyEffect(type, duration * (1.0f - Mathf.Clamp(resist, 0.0f, 0.95f)), strength);
 	}
 
 	public void UpdateTorchLight() {

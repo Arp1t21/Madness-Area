@@ -20,12 +20,24 @@ public partial class Level : Node2D
 	private int _currentLevelIndex = 1;
 	public int CurrentLevelIndex => _currentLevelIndex;
 	public float LevelPlayedTime { get; private set; } = 0.0f;
+
+	// Возвращает накопленное время уровня и обнуляет его (чтобы время не задваивалось при повторных сейвах)
+	public float ConsumePlayedTime()
+	{
+		float t = LevelPlayedTime;
+		LevelPlayedTime = 0.0f;
+		return t;
+	}
 	private List<Vector2> _enemySpawnPositions = new List<Vector2>();
 	private int _spawnPosIndex = 0;
 	private AStarGrid2D _astarGrid;
 
 	private int _halfW;
 	private int _halfH;
+
+	// Детерминированный генератор: его сид сохраняется в сейв, чтобы при загрузке
+	// сгенерировалась та же самая карта, что была до выхода из игры
+	private readonly RandomNumberGenerator _rng = new RandomNumberGenerator();
 
 	private double _spikesTimer = 0.0;
 	private double _playerSpikeInvulnerabilityTimer = 0.0;
@@ -60,12 +72,12 @@ public partial class Level : Node2D
 	{
 		float total = 0f;
 		foreach (var item in FloorTiles) total += item.prob;
-		float roll = (float)GD.RandRange(0, total);
+		float roll = _rng.Randf() * total;
 		float sum = 0f;
 		foreach (var item in FloorTiles)
 		{
 			sum += item.prob;
-			if (roll <= sum) return item.coords;
+			if (roll < sum) return item.coords;
 		}
 		return new Vector2I(1, 4);
 	}
@@ -176,14 +188,26 @@ public partial class Level : Node2D
 			_stairsLayer.Visible = false;
 		}
 
+		// Загружаем сохраненную сгенерированную карту: тот же сид -> та же самая арена,
+		// что была до выхода из игры
+		if (SaveManager.CurrentSave != null && _currentLevelIndex > 1)
+		{
+			_rng.Seed = SaveManager.CurrentSave.LevelSeed;
+			GenerateRandomLevel(); // сам переместит игрока в центр и пересоберет все слои
+		}
+
 		// 4. Спавним входную лестницу под игроком на старте
 		if (_player != null) {
 			SpawnEntryLadder(_player.GlobalPosition);
 		}
 
 		// 5. Инициализируем спавн-позиции мобов для первого уровня
-		InitializeSpawnPositions();
-		InitializeAStarGrid();
+		//(для сгенерированных уровней это уже сделано внутри GenerateRandomLevel)
+		if (_currentLevelIndex == 1)
+		{
+			InitializeSpawnPositions();
+			InitializeAStarGrid();
+		}
 
 		// Скрываем и отключаем дефолтный сундук
 		var chest = GetNodeOrNull<Node2D>("Map/Chest");
@@ -214,7 +238,10 @@ public partial class Level : Node2D
 		}
 
 		Chest.OpenedChestsCount = 0;
-		GenerateSpikes();
+		if (_currentLevelIndex == 1)
+		{
+			GenerateSpikes();
+		}
 
 		// Скрываем и отключаем дверь полностью
 		var door = GetNodeOrNull<Door>("Map/Door");
@@ -235,8 +262,9 @@ public partial class Level : Node2D
 			}
 		}
 
-		// Заполняем проем двери вертикальной стеной
-		if (_wallsVerticalLayer != null)
+		// Заполняем проем двери вертикальной стеной (только на ручном первом уровне,
+		// на сгенерированных эти координаты — середина арены)
+		if (_wallsVerticalLayer != null && _currentLevelIndex == 1)
 		{
 			_wallsVerticalLayer.SetCell(new Vector2I(0, -6), 0, new Vector2I(2, 1));
 			_wallsVerticalLayer.SetCell(new Vector2I(-1, -6), 0, new Vector2I(2, 1));
@@ -297,11 +325,16 @@ public partial class Level : Node2D
 			_stairsLayer.Visible = false;
 		}
 
-		// 3. Переход на следующий уровень
+		// 3. Переход на следующий уровень (первый уровень сделан вручную, дальше — генерация)
 		_currentLevelIndex++;
-		if (_currentLevelIndex > 1) {
-			GenerateRandomLevel();
+		// Новый сид для новой карты; сохраняем его, чтобы после загрузки сейва
+		// сгенерировалась точно такая же карта
+		_rng.Seed = (ulong)(GD.Randi() << 32) | GD.Randi();
+		if (SaveManager.CurrentSave != null)
+		{
+			SaveManager.CurrentSave.LevelSeed = _rng.Seed;
 		}
+		GenerateRandomLevel();
 
 		// 4. Спавним входную лестницу под игроком
 		if (_player != null) {
@@ -333,9 +366,9 @@ public partial class Level : Node2D
 			}
 		}
 
-		// 2. Выбираем случайные размеры арены (между 22 и 35 тайлами)
-		int width = GD.RandRange(22, 35);
-		int height = GD.RandRange(22, 35);
+		// 2. Выбираем случайные размеры арены (на 15% меньше прежних 22-35)
+		int width = _rng.RandiRange(19, 30);
+		int height = _rng.RandiRange(19, 30);
 
 		_halfW = width / 2;
 		_halfH = height / 2;
@@ -370,7 +403,8 @@ public partial class Level : Node2D
 		if (_wallsVerticalLayer != null)
 		{
 			Vector2I vTile = new Vector2I(2, 1); // Source ID 0 in floor.tres
-			for (int x = -halfW - 1; x <= halfW + 1; x++)
+			// Углы НЕ рисуем здесь — их занимает боковая стена (WallHorizontal)
+			for (int x = -halfW; x <= halfW; x++)
 			{
 				_wallsVerticalLayer.SetCell(new Vector2I(x, -halfH - 1), 0, vTile);
 				_wallsVerticalLayer.SetCell(new Vector2I(x, halfH + 1), 0, vTile);
@@ -381,9 +415,11 @@ public partial class Level : Node2D
 		if (_wallsHorizontalLayer != null)
 		{
 			Vector2I hTile = new Vector2I(2, 10); // Source ID 2
-			for (int y = -halfH; y <= halfH; y++)
+			// Включая углы (y от -halfH-1 до halfH+1), чтобы углы были боковыми стенами, а не квадратами
+			for (int y = -halfH - 1; y <= halfH + 1; y++)
 			{
-				_wallsHorizontalLayer.SetCell(new Vector2I(-halfW - 1, y), 2, hTile);
+				// Левая стена — отзеркаленный тайл (alternative 1, flip_h), чтобы не была "обрезанной"
+				_wallsHorizontalLayer.SetCell(new Vector2I(-halfW - 1, y), 2, hTile, 1);
 				_wallsHorizontalLayer.SetCell(new Vector2I(halfW + 1, y), 2, hTile);
 			}
 		}
@@ -391,7 +427,7 @@ public partial class Level : Node2D
 		// 6. Рисуем внутренние колонны/препятствия
 		if (_columnsLayer != null)
 		{
-			int numPillars = GD.RandRange(2, 4);
+			int numPillars = _rng.RandiRange(2, 4);
 			var pillarPositions = new System.Collections.Generic.List<Vector2I>();
 			for (int i = 0; i < numPillars; i++)
 			{
@@ -402,8 +438,8 @@ public partial class Level : Node2D
 				while (!valid && attempts < 100)
 				{
 					attempts++;
-					px = GD.RandRange(-halfW + 3, halfW - 3);
-					py = GD.RandRange(-halfH + 3, halfH - 5);
+					px = _rng.RandiRange(-halfW + 3, halfW - 3);
+					py = _rng.RandiRange(-halfH + 3, halfH - 5);
 
 					// Не спавним колонны у центра (0,0), где появляется игрок
 					if (Math.Abs(px) < 5 && Math.Abs(py) < 6) continue;
@@ -441,8 +477,8 @@ public partial class Level : Node2D
 
 			while (!validPosition)
 			{
-				sx = GD.RandRange(-halfW + 4, halfW - 4);
-				sy = GD.RandRange(-halfH + 4, halfH - 4);
+				sx = _rng.RandiRange(-halfW + 4, halfW - 4);
+				sy = _rng.RandiRange(-halfH + 4, halfH - 4);
 
 				// Лестница должна быть далеко от игрока
 				if (Math.Abs(sx) > 6 || Math.Abs(sy) > 6)
@@ -466,7 +502,15 @@ public partial class Level : Node2D
 			_stairsLayer.Visible = false;
 		}
 
-		// 8. Генерируем LightOccluder2D для всех стен (удаляем старые, новые не генерируем, чтобы стены были видны)
+		// 8. Удаляем ВСЕ старые LightOccluder2D (в т.ч. на полу) — иначе невидимые
+		// окклюдеры с прошлых уровней продолжают блокировать свет на новых местах
+		if (_floorLayer != null)
+		{
+			foreach (var child in _floorLayer.GetChildren())
+			{
+				if (child is LightOccluder2D) child.QueueFree();
+			}
+		}
 		if (_wallsVerticalLayer != null)
 		{
 			foreach (var child in _wallsVerticalLayer.GetChildren())
@@ -511,7 +555,6 @@ public partial class Level : Node2D
 		if (floorLayer == null) return;
 
 		var floorCells = floorLayer.GetUsedCells();
-		var random = new Random();
 
 		foreach (var cell in floorCells)
 		{
@@ -527,8 +570,12 @@ public partial class Level : Node2D
 			_enemySpawnPositions.Add(globalPos);
 		}
 
-		// Перемешиваем точки
-		_enemySpawnPositions = _enemySpawnPositions.OrderBy(x => random.Next()).ToList();
+		// Перемешиваем точки (Фишер-Йетс на сеяном генераторе — детерминированно при загрузке из сейва)
+		for (int i = _enemySpawnPositions.Count - 1; i > 0; i--)
+		{
+			int j = _rng.RandiRange(0, i);
+			(_enemySpawnPositions[i], _enemySpawnPositions[j]) = (_enemySpawnPositions[j], _enemySpawnPositions[i]);
+		}
 	}
 
 	public Vector2 GetNextEnemySpawnPosition(Vector2 playerPos, float minPlayerDist = 120f)
@@ -620,10 +667,10 @@ public partial class Level : Node2D
 		{
 			if (node is Door door && !door.IsOpen)
 			{
-				SetCellSolid(door.GlobalPosition + new Vector2(-8 * 3f, -8 * 3f), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(8 * 3f, -8 * 3f), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(-8 * 3f, 8 * 3f), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(8 * 3f, 8 * 3f), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(-8 * World.Scale, -8 * World.Scale), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(8 * World.Scale, -8 * World.Scale), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(-8 * World.Scale, 8 * World.Scale), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(8 * World.Scale, 8 * World.Scale), true);
 			}
 		}
 	}
@@ -711,9 +758,9 @@ public partial class Level : Node2D
 			foreach (var cell in spikeCells)
 			{
 				Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
-				if (playerPos.DistanceTo(cellCenter) < 12.0f * 3f)
+				if (playerPos.DistanceTo(cellCenter) < 12.0f * World.Scale)
 				{
-					_player.TakeDamage(5f, cellCenter, 5.0f);
+					_player.TakeDamage(5f, cellCenter, 5.0f, true);
 					_playerSpikeInvulnerabilityTimer = 1.0;
 					break;
 				}
@@ -769,7 +816,7 @@ public partial class Level : Node2D
 			// Не спавним на лестнице
 			if (_stairsLayer != null && _stairsLayer.GetCellSourceId(cell) != -1) continue;
 
-			if (GD.Randf() < spawnChance)
+			if (_rng.Randf() < spawnChance)
 			{
 				_spikesLayer.SetCell(cell, 0, new Vector2I(0, 3));
 			}
@@ -822,48 +869,44 @@ public partial class Level : Node2D
 		{
 			var weaponData = GD.Load<WeaponData>(weaponPath);
 			pickup.WeaponToGive = weaponData;
-			pickup.GlobalPosition = pos;
+			pickup.GlobalPosition = FindNearestFreeSpot(pos);
 			CallDeferred(MethodName.AddChild, pickup);
 		}
 	}
 
-	public void SpawnChestAt(Vector2 pos)
+	// Сдвигает позицию, если она оказалась внутри стены/колонны (враг мог умереть, отброшенный в препятствие)
+	private Vector2 FindNearestFreeSpot(Vector2 pos)
 	{
-		var templateChest = GetNodeOrNull<Node2D>("Map/Chest");
-		if (templateChest != null)
+		if (_floorLayer == null) return pos;
+
+		Vector2I cell = _floorLayer.LocalToMap(_floorLayer.ToLocal(pos));
+		if (IsCellFree(cell)) return pos;
+
+		for (int radius = 1; radius <= 4; radius++)
 		{
-			var newChest = templateChest.Duplicate() as Node2D;
-			if (newChest != null)
+			for (int dx = -radius; dx <= radius; dx++)
 			{
-				newChest.GlobalPosition = pos;
-				newChest.Visible = true;
-				
-				// Enable StaticBody2D collisions and child Area2D collisions
-				if (newChest is StaticBody2D sb)
+				for (int dy = -radius; dy <= radius; dy++)
 				{
-					// Enable primary collision shapes
-					foreach (var child in sb.GetChildren())
+					if (Math.Abs(dx) != radius && Math.Abs(dy) != radius) continue;
+					Vector2I candidate = new Vector2I(cell.X + dx, cell.Y + dy);
+					if (IsCellFree(candidate))
 					{
-						if (child is CollisionShape2D cs)
-						{
-							cs.SetDeferred("disabled", false);
-						}
-						else if (child is Area2D area)
-						{
-							foreach (var areaChild in area.GetChildren())
-							{
-								if (areaChild is CollisionShape2D acs)
-								{
-									acs.SetDeferred("disabled", false);
-								}
-							}
-						}
+						return _floorLayer.ToGlobal(_floorLayer.MapToLocal(candidate));
 					}
 				}
-				
-				CallDeferred(MethodName.AddChild, newChest);
 			}
 		}
+		return pos;
+	}
+
+	private bool IsCellFree(Vector2I cell)
+	{
+		if (_floorLayer.GetCellSourceId(cell) == -1) return false;
+		if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(cell) != -1) return false;
+		if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(cell) != -1) return false;
+		if (_columnsLayer != null && _columnsLayer.GetCellSourceId(cell) != -1) return false;
+		return true;
 	}
 
 	public override void _Input(InputEvent @event)
