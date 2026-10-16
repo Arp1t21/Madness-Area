@@ -22,14 +22,3 @@ script = ExtResource("4_wave")
 
 [node name="HUD" parent="." instance=ExtResource("6_hud")]
 
-[node name="TestDaggerPickup" parent="." instance=ExtResource("7_pickup")]
-position = Vector2(100, 0)
-WeaponToGive = ExtResource("8_dagger_res")
-
-[node name="TestRevolverPickup" parent="." instance=ExtResource("7_pickup")]
-position = Vector2(100, 50)
-WeaponToGive = ExtResource("9_revolver_res")
-
-[node name="TestShotgunPickup" parent="." instance=ExtResource("7_pickup")]
-position = Vector2(100, 100)
-WeaponToGive = ExtResource("10_shotgun_res")

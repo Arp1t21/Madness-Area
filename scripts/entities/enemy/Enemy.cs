@@ -1,48 +1,331 @@
 using Godot;
+using System;
+using System.Collections.Generic;
 
 public partial class Enemy : CharacterBody2D
 {
 	[Export] public EnemyData Config;
+	[Export] public WeaponData AttackConfig;
+
+	public float MaxHealthScaled { get; protected set; } = 30.0f;
 	public float CurrentHealth;
+	public bool IsBoss { get; private set; } = false;
+	public string DisplayName => IsBoss ? $"BOSS: {Config?.EnemyName ?? "Warlord"}" : (Config?.EnemyName ?? "Enemy");
+
 	protected AnimatedSprite2D _sprite;
+	protected Player _player;
+	protected AttackController _attackController;
+	protected Label _warningLabel;
+
+	protected bool _isStopping = false;
+	protected bool _isPreparingAttack = false;
+	protected float _preAttackTimer = 0.0f;
+	protected float _periodicCheckTimer = 0.0f;
+	protected float _cancelAttackCooldown = 0.0f;
+
+	protected List<Vector2> _navigationPath = new List<Vector2>();
+	protected float _pathUpdateTimer = 0.0f;
 
 	public float DamageMultiplier { get; protected set; } = 1.0f;
+
+	protected virtual Color WarningLabelColor => new Color(1.0f, 0.15f, 0.15f);
+
+	protected virtual string IdleAnimationName
+	{
+		get
+		{
+			if (_sprite?.SpriteFrames != null)
+			{
+				if (_sprite.SpriteFrames.HasAnimation("Idle")) return "Idle";
+				if (_sprite.SpriteFrames.HasAnimation("idle")) return "idle";
+			}
+			return "idle";
+		}
+	}
+
+	protected virtual string WalkAnimationName
+	{
+		get
+		{
+			if (_sprite?.SpriteFrames != null)
+			{
+				if (_sprite.SpriteFrames.HasAnimation("Walk")) return "Walk";
+				if (_sprite.SpriteFrames.HasAnimation("walk")) return "walk";
+				if (_sprite.SpriteFrames.HasAnimation("Run")) return "Run";
+				if (_sprite.SpriteFrames.HasAnimation("run")) return "run";
+			}
+			return "walk";
+		}
+	}
 
 	public override void _Ready()
 	{
 		Scale = new Vector2(3.0f, 3.0f);
 		AddToGroup("enemy");
 		_sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		
+		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
 		float healthMultiplier = 1.0f + (levelIndex - 1) * 0.15f;
 		DamageMultiplier = 1.0f + (levelIndex - 1) * 0.15f;
 
-		if (Config != null) {
-			CurrentHealth = Config.MaxHealth * healthMultiplier;
-		} else {
+		if (Config != null)
+		{
+			MaxHealthScaled = Config.MaxHealth * healthMultiplier;
+			CurrentHealth = MaxHealthScaled;
+		}
+		else
+		{
 			GD.PrintErr($"{Name}: EnemyData Config не назначен — враг удаляется");
 			QueueFree();
+			return;
+		}
+
+		// Создаем контроллер оружия для моба, если задан AttackConfig
+		if (AttackConfig != null)
+		{
+			var controllerPrefab = GD.Load<PackedScene>("res://scene/weapons/attack_controller.tscn");
+			if (controllerPrefab != null)
+			{
+				_attackController = controllerPrefab.Instantiate() as AttackController;
+				_attackController.CurrentWeapon = AttackConfig;
+				AddChild(_attackController);
+				_attackController.ApplyWeaponSettings();
+			}
+		}
+
+		SetupWarningLabel(WarningLabelColor);
+
+		// Гарантируем, что хитбокс врага видит оружие игрока на 3-м физическом слое (бит 4)
+		var hitBox = GetNodeOrNull<Area2D>("Area2DHitBox");
+		if (hitBox != null)
+		{
+			hitBox.CollisionMask |= (1 << 2);
+			if (!hitBox.IsConnected(Area2D.SignalName.AreaEntered, new Callable(this, MethodName._on_area_2d_area_entered)))
+			{
+				hitBox.AreaEntered += _on_area_2d_area_entered;
+			}
+		}
+	}
+
+	public void PromoteToBoss(int levelIndex)
+	{
+		if (IsBoss) return;
+		IsBoss = true;
+		AddToGroup("Boss");
+
+		Scale = new Vector2(5.2f, 5.2f);
+		float bossHpFactor = 4.5f + (levelIndex / 5) * 0.8f;
+		MaxHealthScaled *= bossHpFactor;
+		CurrentHealth = MaxHealthScaled;
+		DamageMultiplier *= 1.5f;
+
+		if (_sprite != null)
+		{
+			_sprite.SelfModulate = new Color(1.15f, 0.88f, 0.75f, 1.0f);
+		}
+	}
+
+	protected void SetupWarningLabel(Color color)
+	{
+		if (_warningLabel != null) return;
+
+		_warningLabel = new Label();
+		_warningLabel.Text = "!";
+		_warningLabel.AddThemeColorOverride("font_color", color);
+
+		var font = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+		if (font != null)
+		{
+			_warningLabel.AddThemeFontOverride("font", font);
+		}
+		_warningLabel.AddThemeFontSizeOverride("font_size", 13);
+		_warningLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		_warningLabel.VerticalAlignment = VerticalAlignment.Center;
+		_warningLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.CenterTop);
+		_warningLabel.Size = new Vector2(40, 20);
+		_warningLabel.Position = new Vector2(-20, -35);
+		_warningLabel.Visible = false;
+		AddChild(_warningLabel);
+	}
+
+	protected Vector2 UpdateNavigationDirection(double delta, float waypointReachDist = 36.0f)
+	{
+		if (_player == null || !GodotObject.IsInstanceValid(_player)) return Vector2.Zero;
+
+		_pathUpdateTimer -= (float)delta;
+		if (_pathUpdateTimer <= 0)
+		{
+			_pathUpdateTimer = 0.25f + (float)GD.RandRange(-0.05f, 0.05f);
+			var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+			if (level != null)
+			{
+				_navigationPath = level.GetPathToPlayer(GlobalPosition, _player.GlobalPosition);
+			}
+		}
+
+		Vector2 targetPos = _player.GlobalPosition;
+		if (_navigationPath != null && _navigationPath.Count > 0)
+		{
+			while (_navigationPath.Count > 1 && GlobalPosition.DistanceTo(_navigationPath[0]) < waypointReachDist)
+			{
+				_navigationPath.RemoveAt(0);
+			}
+			if (_navigationPath.Count > 0)
+			{
+				targetPos = _navigationPath[0];
+			}
+		}
+
+		return (targetPos - GlobalPosition).Normalized();
+	}
+
+	protected Vector2 ComputeEnemySeparation(float separationRadius = 18.0f)
+	{
+		Vector2 separation = Vector2.Zero;
+		var enemies = GetTree().GetNodesInGroup("enemy");
+		int neighborsCount = 0;
+
+		foreach (Node node in enemies)
+		{
+			if (node is CharacterBody2D otherEnemy && otherEnemy != this && GodotObject.IsInstanceValid(otherEnemy))
+			{
+				float d = GlobalPosition.DistanceTo(otherEnemy.GlobalPosition);
+				if (d < separationRadius && d > 0.1f)
+				{
+					separation += (GlobalPosition - otherEnemy.GlobalPosition).Normalized() * (separationRadius - d);
+					neighborsCount++;
+				}
+			}
+		}
+
+		if (neighborsCount > 0)
+		{
+			separation /= neighborsCount;
+		}
+		return separation;
+	}
+
+	protected void StartAttackPreparation()
+	{
+		_isPreparingAttack = true;
+		_preAttackTimer = 0.0f;
+		_periodicCheckTimer = 0.5f;
+
+		if (_warningLabel != null) _warningLabel.Visible = true;
+		if (_sprite != null && _player != null && GodotObject.IsInstanceValid(_player))
+		{
+			_sprite.FlipH = _player.GlobalPosition.X < GlobalPosition.X;
+			_sprite.Play(IdleAnimationName);
+		}
+	}
+
+	protected void HandlePreparingState(double delta)
+	{
+		if (Config == null || _player == null || !GodotObject.IsInstanceValid(_player))
+		{
+			CancelAttack();
+			return;
+		}
+
+		_preAttackTimer += (float)delta;
+		_periodicCheckTimer -= (float)delta;
+
+		if (_periodicCheckTimer <= 0)
+		{
+			_periodicCheckTimer = 0.5f;
+			if (GlobalPosition.DistanceTo(_player.GlobalPosition) > (Config.AttackRange + 15.0f) * World.Scale)
+			{
+				CancelAttack();
+				return;
+			}
+		}
+
+		if (_preAttackTimer >= Config.PreAttackDelay)
+		{
+			FinishAttack();
+		}
+	}
+
+	protected void CancelAttack()
+	{
+		_isPreparingAttack = false;
+		_cancelAttackCooldown = 0.6f;
+		if (_warningLabel != null) _warningLabel.Visible = false;
+	}
+
+	protected virtual void FinishAttack()
+	{
+		_isPreparingAttack = false;
+		if (_warningLabel != null) _warningLabel.Visible = false;
+
+		if (_attackController != null)
+		{
+			_attackController.HandleManualAttack();
+		}
+
+		if (Config != null)
+		{
+			TriggerStop(Config.StopDuration);
+		}
+	}
+
+	public void TriggerStop(float duration)
+	{
+		_isStopping = true;
+		var timer = GetTree().CreateTimer(duration, processAlways: false);
+		timer.Timeout += () =>
+		{
+			if (GodotObject.IsInstanceValid(this))
+			{
+				_isStopping = false;
+			}
+		};
+	}
+
+	public void _on_area_2d_area_entered(Area2D area)
+	{
+		if (CurrentHealth <= 0) return;
+
+		if (area.IsInGroup("PlayerWeapon"))
+		{
+			var controller = area.GetParent()?.GetParent() as AttackController;
+			if (controller != null && controller.CurrentWeapon != null)
+			{
+				var player = GetTree().GetFirstNodeInGroup("Player") as Player;
+				Vector2 source = player != null ? player.GlobalPosition : GlobalPosition;
+
+				float dist = GlobalPosition.DistanceTo(source);
+				float weaponRange = controller.CurrentWeapon.AttackRange * World.Scale;
+
+				if (dist <= weaponRange + 18.0f * World.Scale)
+				{
+					if (controller.CanHitEnemy(GetInstanceId()))
+					{
+						float dmg = controller.CurrentWeapon.Damage * (player != null ? player.WeaponDamageMultiplier : 1.0f);
+						TakeDamage(dmg, source, controller.CurrentWeapon.KnockbackForce, true);
+					}
+				}
+			}
 		}
 	}
 
 	// Метод для получения позиции игрока
-	public Vector2 GetPlayerPosition() {
+	public Vector2 GetPlayerPosition()
+	{
 		var player = GetTree().GetFirstNodeInGroup("Player") as Node2D;
 		return player != null ? player.GlobalPosition : GlobalPosition;
 	}
 
 	// --- Анти-застревание ---
-	// Если моб хочет двигаться, но почти не сдвигается (уперся в стену/угол),
-	// временно уходим перпендикулярно исходному направлению и сбрасываем путь.
 	private Vector2 _antiStuckLastPos = Vector2.Zero;
 	private float _antiStuckTimer = 0.0f;
 	private float _detourTimer = 0.0f;
 	private Vector2 _detourDirection = Vector2.Zero;
 
-	protected Vector2 ApplyAntiStuck(Vector2 desiredDir, double delta, System.Action clearPath = null)
+	protected Vector2 ApplyAntiStuck(Vector2 desiredDir, double delta, Action clearPath = null)
 	{
 		if (_detourTimer > 0.0f)
 		{
@@ -76,76 +359,112 @@ public partial class Enemy : CharacterBody2D
 		return desiredDir;
 	}
 
-	public virtual void TakeDamage(float amount, Vector2 knockbackSource, float knockbackForce = 15.0f, bool isMelee = true) {
+	public virtual void TakeDamage(float amount, Vector2 knockbackSource, float knockbackForce = 15.0f, bool isMelee = true)
+	{
 		if (CurrentHealth <= 0) return;
 
 		// Сопротивления из конфига врага (к ближнему/дальнему бою)
-		if (Config != null) {
+		if (Config != null)
+		{
 			float res = isMelee ? Config.MeleeResistance : Config.RangedResistance;
 			amount *= (1.0f - Mathf.Clamp(res, 0.0f, 0.95f));
 		}
 
 		CurrentHealth -= amount;
-		GD.Print($"{Config?.EnemyName} получил урон: {amount}. ХП: {CurrentHealth}");
 
 		FlashRed();
-		ApplyKnockback(knockbackSource, knockbackForce);
+		float effectiveKnockback = IsBoss ? knockbackForce * 0.35f : knockbackForce;
+		ApplyKnockback(knockbackSource, effectiveKnockback);
 		SpawnDamageNumber(amount);
 
-		if (CurrentHealth <= 0) {
+		if (CurrentHealth <= 0)
+		{
 			Die();
 		}
 	}
 
-	protected void FlashRed() {
+	protected void FlashRed()
+	{
 		Color flashColor = Config?.FlashColor ?? new Color(1, 0, 0);
 		Modulate = flashColor;
-		var timer = GetTree().CreateTimer(0.1f);
-		timer.Timeout += () => Modulate = new Color(1, 1, 1);
+		var timer = GetTree().CreateTimer(0.1f, processAlways: false);
+		timer.Timeout += () =>
+		{
+			if (GodotObject.IsInstanceValid(this) && CurrentHealth > 0)
+			{
+				Modulate = new Color(1, 1, 1);
+			}
+		};
 	}
 
-	protected void ApplyKnockback(Vector2 source, float force) {
+	protected void ApplyKnockback(Vector2 source, float force)
+	{
 		Vector2 dir = (GlobalPosition - source).Normalized();
 		Velocity = dir * force * 30.0f;
 		MoveAndSlide();
 	}
 
-	protected void SpawnDamageNumber(float amount) {
+	protected void SpawnDamageNumber(float amount)
+	{
 		var ft = new FloatingText();
 		GetParent().AddChild(ft);
 		float offsetX = (float)GD.RandRange(-15.0f, 15.0f) * World.Scale;
 		float offsetY = (float)GD.RandRange(-5.0f, 5.0f) * World.Scale;
 		ft.GlobalPosition = GlobalPosition + new Vector2(offsetX, -30.0f + offsetY);
 		Color textColor = Config?.DamageNumberColor ?? new Color(1, 1, 0);
-		ft.Init(((int)amount).ToString(), textColor);
+		int displayDmg = Mathf.Max(1, Mathf.RoundToInt(amount));
+		ft.Init(displayDmg.ToString(), textColor);
 	}
 
-	protected virtual void Die() {
-		GD.Print($"{Config?.EnemyName} погиб!");
+	protected virtual void Die()
+	{
+		if (GodotObject.IsInstanceValid(_warningLabel))
+		{
+			_warningLabel.Visible = false;
+		}
 
-		// Дроп появляется ровно в момент, когда заканчивается анимация смерти
 		Vector2 deathPos = GlobalPosition;
 		Node parentNode = GetParent();
 
 		float animDuration = PlayDeathAnimation();
 
-		if (Config != null) {
-			if (GD.Randf() <= Config.CoinDropChance) {
+		if (IsBoss)
+		{
+			// Босс гарантированно роняет горсть монет и кристаллов маны
+			for (int i = 0; i < 6; i++)
+			{
+				Vector2 offset = new Vector2((float)GD.RandRange(-24, 24), (float)GD.RandRange(-24, 24));
+				DelayedDrop(deathPos + offset, parentNode, isMana: false, delay: animDuration);
+			}
+			for (int i = 0; i < 3; i++)
+			{
+				Vector2 offset = new Vector2((float)GD.RandRange(-20, 20), (float)GD.RandRange(-20, 20));
+				DelayedDrop(deathPos + offset, parentNode, isMana: true, delay: animDuration);
+			}
+		}
+		else if (Config != null)
+		{
+			if (GD.Randf() <= Config.CoinDropChance)
+			{
 				DelayedDrop(deathPos, parentNode, isMana: false, delay: animDuration);
 			}
-			if (GD.Randf() <= Config.ManaCrystalDropChance) {
+			if (GD.Randf() <= Config.ManaCrystalDropChance)
+			{
 				DelayedDrop(deathPos, parentNode, isMana: true, delay: animDuration);
 			}
 		}
 	}
 
-	private void DelayedDrop(Vector2 pos, Node parentNode, bool isMana, float delay) {
+	private void DelayedDrop(Vector2 pos, Node parentNode, bool isMana, float delay)
+	{
 		var timer = GetTree().CreateTimer(delay, processAlways: false);
-		timer.Timeout += () => {
+		timer.Timeout += () =>
+		{
 			if (parentNode == null || !GodotObject.IsInstanceValid(parentNode)) return;
 			string path = isMana ? "res://scene/objects/mana_crystal.tscn" : "res://scene/objects/coin.tscn";
 			var prefab = GD.Load<PackedScene>(path);
-			if (prefab != null) {
+			if (prefab != null)
+			{
 				var drop = prefab.Instantiate() as Node2D;
 				drop.GlobalPosition = pos;
 				parentNode.AddChild(drop);
@@ -153,56 +472,51 @@ public partial class Enemy : CharacterBody2D
 		};
 	}
 
-	// Анимация смерти: вспышка -> "хлопок" с частицами пыли -> оседание с затуханием.
-	// Возвращает длительность (в момент конца выпадает лут).
-	protected float PlayDeathAnimation() {
+	protected float PlayDeathAnimation()
+	{
 		const float flashTime = 0.08f;
 		const float popTime = 0.1f;
 		const float fadeTime = 0.5f;
 		float total = flashTime + popTime + fadeTime;
 
-		// Труп не должен никого блокировать и получать удары
 		CollisionLayer = 0;
 		CollisionMask = 0;
 		var hitBox = GetNodeOrNull<Area2D>("Area2DHitBox");
-		if (hitBox != null) {
+		if (hitBox != null)
+		{
 			hitBox.SetDeferred("monitoring", false);
 			hitBox.SetDeferred("monitorable", false);
 		}
 
-		// Облако пыли/крови при смерти
 		var dust = new CpuParticles2D();
 		dust.OneShot = true;
 		dust.Emitting = true;
 		dust.Explosiveness = 1.0f;
-		dust.Amount = 22;
+		dust.Amount = IsBoss ? 45 : 22;
 		dust.Lifetime = 0.5f;
 		dust.LocalCoords = false;
 		dust.Spread = 180.0f;
 		dust.Gravity = new Vector2(0, 260);
 		dust.InitialVelocityMin = 55;
-		dust.InitialVelocityMax = 140;
+		dust.InitialVelocityMax = IsBoss ? 220 : 140;
 		dust.ScaleAmountMin = 1.2f;
-		dust.ScaleAmountMax = 2.6f;
+		dust.ScaleAmountMax = IsBoss ? 4.0f : 2.6f;
 		var gradient = new Gradient();
-		gradient.Colors = new Color[] {
+		gradient.Colors = new Color[]
+		{
 			new Color(0.75f, 0.2f, 0.15f, 0.9f),
 			new Color(0.35f, 0.1f, 0.08f, 0.0f)
 		};
 		gradient.Offsets = new float[] { 0.0f, 1.0f };
 		dust.ColorRamp = gradient;
 		AddChild(dust);
-		// Частицы удалятся сами, а если нода умрет раньше — они уйдут вместе с ней
 
 		Vector2 baseScale = Scale;
 		var tween = CreateTween();
 
-		// 1. Короткая яркая вспышка
 		tween.TweenProperty(this, "modulate", new Color(2.2f, 2.2f, 2.2f), flashTime);
-		// 2. "Хлопок": чуть раздувается
 		tween.TweenProperty(this, "scale", baseScale * 1.15f, popTime)
 			.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
-		// 3. Оседает: сжимается, слегка заваливается и растворяется
 		tween.TweenProperty(this, "scale", baseScale * 0.3f, fadeTime)
 			.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.In);
 		tween.Parallel().TweenProperty(this, "rotation", Rotation + Mathf.DegToRad(22.0f), fadeTime)
@@ -214,8 +528,8 @@ public partial class Enemy : CharacterBody2D
 		return total;
 	}
 
-	// Метод, который заставляет моба двигаться к цели
-	public void MoveTowards(Vector2 target, double delta) {
+	public void MoveTowards(Vector2 target, double delta)
+	{
 		if (Config == null) return;
 		Vector2 direction = GlobalPosition.DirectionTo(target);
 		Velocity = direction * Config.Speed * World.Scale;

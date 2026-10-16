@@ -6,21 +6,18 @@ public partial class PauseMenu : CanvasLayer
 	public override void _Ready()
 	{
 		ProcessMode = ProcessModeEnum.Always;
-		
+		Layer = 15;
+
 		var rootControl = new Control();
 		AddChild(rootControl);
-		// Явный размер вместо FullRect-якорей: у прямых детей CanvasLayer якоря
-		// растягиваются не сразу, из-за чего меню уезжало в верхний левый угол
 		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
 		rootControl.Size = GetViewport().GetVisibleRect().Size;
 
-		// Semi-transparent overlay
 		var bgOverlay = new ColorRect();
 		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.65f);
 		rootControl.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-		// Container for buttons
 		var margin = new MarginContainer();
 		margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		rootControl.AddChild(margin);
@@ -32,13 +29,11 @@ public partial class PauseMenu : CanvasLayer
 
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 
-		// "PAUSED" title
 		var title = new Label();
 		title.Text = "PAUSED";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
 		title.AddThemeFontSizeOverride("font_size", 40);
-		// Выделение: золотистый цвет + темная обводка
 		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.55f));
 		title.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
 		title.AddThemeConstantOverride("outline_size", 6);
@@ -64,7 +59,6 @@ public partial class PauseMenu : CanvasLayer
 		btn.Flat = true;
 		btn.AddThemeFontOverride("font", font);
 		btn.AddThemeFontSizeOverride("font_size", 20);
-		// Выделение кнопок: светлый текст с обводкой
 		btn.AddThemeColorOverride("font_color", new Color(0.95f, 0.95f, 0.95f));
 		btn.AddThemeColorOverride("font_hover_color", new Color(1.0f, 0.9f, 0.6f));
 		btn.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
@@ -91,13 +85,17 @@ public partial class PauseMenu : CanvasLayer
 
 	private void OnSettingsPressed()
 	{
+		foreach (Node child in GetChildren())
+		{
+			if (child is SettingsMenu) return;
+		}
 		var settings = new SettingsMenu();
+		settings.Name = "SettingsMenu";
 		AddChild(settings);
 	}
 
 	private void OnSaveLeavePressed()
 	{
-		// Save game
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		var player = GetTree().GetFirstNodeInGroup("Player") as Player;
 		if (level != null && player != null && SaveManager.CurrentSave != null)
@@ -107,18 +105,24 @@ public partial class PauseMenu : CanvasLayer
 			currentSave.Coins = player.CoinCount;
 			currentSave.CurrentHealth = player.CurrentHealth;
 			currentSave.CurrentMana = player.CurrentMana;
+			currentSave.BonusMaxHealth = player.BonusMaxHealth;
+			currentSave.BonusMaxMana = player.BonusMaxMana;
+			currentSave.WeaponDamageMultiplier = player.WeaponDamageMultiplier;
 			currentSave.SkillPoints = player.SkillPoints;
 			currentSave.Ability1Level = player.Ability1Level;
 			currentSave.Ability2Level = player.Ability2Level;
 			currentSave.PlayedTimeSeconds += level.ConsumePlayedTime();
-			
-			// Save weapons
+
 			currentSave.WeaponResourcePaths.Clear();
 			for (int i = 0; i < player.WeaponSlots.Count; i++)
 			{
 				if (player.WeaponSlots[i].CurrentWeapon != null)
 				{
 					currentSave.WeaponResourcePaths.Add(player.WeaponSlots[i].CurrentWeapon.ResourcePath);
+				}
+				else
+				{
+					currentSave.WeaponResourcePaths.Add("");
 				}
 			}
 			SaveManager.SaveGame(currentSave);
@@ -131,9 +135,17 @@ public partial class PauseMenu : CanvasLayer
 
 	public override void _Input(InputEvent @event)
 	{
+		// Если открыты настройки поверх паузы, пусть Esc обрабатывает SettingsMenu
+		foreach (Node child in GetChildren())
+		{
+			if (child is SettingsMenu && GodotObject.IsInstanceValid(child) && !child.IsQueuedForDeletion())
+			{
+				return;
+			}
+		}
+
 		if (@event.IsActionPressed("ui_cancel"))
 		{
-			// Resume on Escape
 			OnContinuePressed();
 			GetViewport().SetInputAsHandled();
 		}

@@ -1,0 +1,148 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" uid="uid://urw8r61cl70q" path="res://scripts/entities/weapons/MeleeWeaponVisual.cs" id="1_melee"]
+[ext_resource type="Texture2D" uid="uid://bwskwdgc28uc2" path="res://assets/weapons/weapon_double_axe.png" id="2_daxe"]
+[ext_resource type="Texture2D" uid="uid://8k2841rfa68m" path="res://assets/objects/slash_effect.png" id="3_slash"]
+
+[sub_resource type="Animation" id="Animation_daxe"]
+resource_name = "DoubleAxeAnimation"
+length = 0.65
+step = 1.0
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("WeaponSprite:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0, 0.2, 0.44, 0.65),
+"transitions": PackedFloat32Array(1, -3.0, 0.75, 4.0),
+"update": 0,
+"values": [0.0, -0.959931, 2.0944, 0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Area2D/CollisionShape2D:disabled")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0, 0.18, 0.46, 0.65),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 1,
+"values": [true, false, false, true]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("Area2D/CollisionShape2D:rotation")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0, 0.2, 0.35, 0.44),
+"transitions": PackedFloat32Array(1, 2.8, 0.25, 1),
+"update": 0,
+"values": [-1.5708, -2.35619, -0.174533, 0.349066]
+}
+tracks/3/type = "value"
+tracks/3/imported = false
+tracks/3/enabled = true
+tracks/3/path = NodePath("Area2D/CollisionShape2D:position")
+tracks/3/interp = 1
+tracks/3/loop_wrap = true
+tracks/3/keys = {
+"times": PackedFloat32Array(0, 0.2, 0.35, 0.44),
+"transitions": PackedFloat32Array(1, 2.8, 1, 1),
+"update": 0,
+"values": [Vector2(0, -8), Vector2(-4, -7), Vector2(10, -1), Vector2(8, 3)]
+}
+tracks/4/type = "value"
+tracks/4/imported = false
+tracks/4/enabled = true
+tracks/4/path = NodePath("WeaponSlashSprite:visible")
+tracks/4/interp = 1
+tracks/4/loop_wrap = true
+tracks/4/keys = {
+"times": PackedFloat32Array(0, 0.24, 0.4, 0.5),
+"transitions": PackedFloat32Array(1, 1, 1, 1),
+"update": 1,
+"values": [false, true, true, false]
+}
+
+[sub_resource type="Animation" id="Animation_reset"]
+length = 0.4
+tracks/0/type = "value"
+tracks/0/imported = false
+tracks/0/enabled = true
+tracks/0/path = NodePath("WeaponSprite:rotation")
+tracks/0/interp = 1
+tracks/0/loop_wrap = true
+tracks/0/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 0,
+"values": [0.0]
+}
+tracks/1/type = "value"
+tracks/1/imported = false
+tracks/1/enabled = true
+tracks/1/path = NodePath("Area2D/CollisionShape2D:disabled")
+tracks/1/interp = 1
+tracks/1/loop_wrap = true
+tracks/1/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [true]
+}
+tracks/2/type = "value"
+tracks/2/imported = false
+tracks/2/enabled = true
+tracks/2/path = NodePath("WeaponSlashSprite:visible")
+tracks/2/interp = 1
+tracks/2/loop_wrap = true
+tracks/2/keys = {
+"times": PackedFloat32Array(0),
+"transitions": PackedFloat32Array(1),
+"update": 1,
+"values": [false]
+}
+
+[sub_resource type="AnimationLibrary" id="AnimationLibrary_daxe"]
+_data = {
+&"DoubleAxeAnimation": SubResource("Animation_daxe"),
+&"RESET": SubResource("Animation_reset")
+}
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_daxe"]
+size = Vector2(28.0, 12.0)
+
+[node name="DoubleAxe" type="Node2D"]
+script = ExtResource("1_melee")
+OrientationOffset = 0.0
+Mode = 2
+
+[node name="WeaponSlashSprite" type="Sprite2D" parent="."]
+visible = false
+position = Vector2(-7, -14)
+rotation = -0.610865
+texture = ExtResource("3_slash")
+offset = Vector2(12, 10.25)
+
+[node name="WeaponSprite" type="Sprite2D" parent="."]
+texture = ExtResource("2_daxe")
+offset = Vector2(0, -8.5)
+
+[node name="AnimationPlayer" type="AnimationPlayer" parent="."]
+libraries = {
+&"": SubResource("AnimationLibrary_daxe")
+}
+
+[node name="Area2D" type="Area2D" parent="."]
+collision_layer = 4
+collision_mask = 0
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+position = Vector2(6, -7)
+shape = SubResource("RectangleShape2D_daxe")
+disabled = true

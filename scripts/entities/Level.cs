@@ -14,6 +14,7 @@ public partial class Level : Node2D
 	private TileMapLayer _spikesLayer;
 	private Sprite2D _entryLadder;
 	private ExitLadder _exitLadder;
+	private SupplyAltar _supplyAltar;
 	private Vector2 _stairsPosition = Vector2.Zero;
 	private bool _hasStairs = false;
 
@@ -41,6 +42,7 @@ public partial class Level : Node2D
 
 	private double _spikesTimer = 0.0;
 	private double _playerSpikeInvulnerabilityTimer = 0.0;
+	private readonly Dictionary<ulong, double> _enemySpikeCooldowns = new Dictionary<ulong, double>();
 	private SpikePhase _currentSpikePhase = SpikePhase.Retracted;
 
 	private enum SpikePhase
@@ -120,6 +122,19 @@ public partial class Level : Node2D
 		}
 		if (_columnsLayer != null) {
 			_columnsLayer.UseParentMaterial = false;
+		}
+
+		// Удаляем призрачные тайлы с несуществующим source_id в слоях стен (в map.tscn на слое WallHorizontal остались тайлы пола от копирования)
+		foreach (var layer in new[] { _wallsVerticalLayer, _wallsHorizontalLayer, _columnsLayer })
+		{
+			if (layer == null) continue;
+			foreach (var cell in layer.GetUsedCells())
+			{
+				if (layer.GetCellTileData(cell) == null)
+				{
+					layer.EraseCell(cell);
+				}
+			}
 		}
 		
 		_spikesLayer = GetNodeOrNull<TileMapLayer>("Map/Spikes");
@@ -301,7 +316,43 @@ public partial class Level : Node2D
 			SpawnExitLadderTrigger();
 		}
 
-		// 3. Двери убраны, ничего не делаем
+		// 3. Спавним Алтарь снабжения рядом с лестницей/игроком
+		SpawnSupplyAltar();
+	}
+
+	private void SpawnSupplyAltar()
+	{
+		if (GodotObject.IsInstanceValid(_supplyAltar))
+		{
+			_supplyAltar.QueueFree();
+			_supplyAltar = null;
+		}
+
+		Vector2 basePos = _hasStairs ? _stairsPosition : (_player != null ? _player.GlobalPosition : Vector2.Zero);
+		Vector2 altarPos = basePos + new Vector2(0, -48);
+		if (_floorLayer != null)
+		{
+			Vector2I baseCell = _floorLayer.LocalToMap(_floorLayer.ToLocal(basePos));
+			Vector2I[] offsets = new[]
+			{
+				new Vector2I(0, -2), new Vector2I(2, 0), new Vector2I(-2, 0), new Vector2I(0, 2),
+				new Vector2I(1, -1), new Vector2I(-1, -1), new Vector2I(1, 1), new Vector2I(-1, 1)
+			};
+			foreach (var off in offsets)
+			{
+				Vector2I candidate = baseCell + off;
+				if (_floorLayer.GetCellSourceId(candidate) == -1) continue;
+				if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(candidate) != -1) continue;
+				if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(candidate) != -1) continue;
+				if (_columnsLayer != null && _columnsLayer.GetCellSourceId(candidate) != -1) continue;
+				altarPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(candidate));
+				break;
+			}
+		}
+
+		_supplyAltar = new SupplyAltar();
+		_supplyAltar.GlobalPosition = altarPos;
+		CallDeferred("add_child", _supplyAltar);
 	}
 
 	private void SpawnExitLadderTrigger()
@@ -314,10 +365,14 @@ public partial class Level : Node2D
 
 	public void DescendStairs()
 	{
-		// 1. Удаляем триггер взаимодействия
+		// 1. Удаляем триггер взаимодействия и алтарь
 		if (GodotObject.IsInstanceValid(_exitLadder)) {
 			_exitLadder.QueueFree();
 			_exitLadder = null;
+		}
+		if (GodotObject.IsInstanceValid(_supplyAltar)) {
+			_supplyAltar.QueueFree();
+			_supplyAltar = null;
 		}
 
 		// 2. Скрываем лестницу
@@ -345,8 +400,11 @@ public partial class Level : Node2D
 		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
 		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
 		if (hud != null) {
-			int nextWaveNum = (waveManager != null) ? waveManager.CurrentWave + 1 : 1;
-			hud.StartCountdown(5.0f, $"Wave {nextWaveNum} is coming!");
+			int nextWaveNum = _currentLevelIndex;
+			string msg = (nextWaveNum % 5 == 0)
+				? $"BOSS FLOOR {nextWaveNum} IS COMING!"
+				: $"Wave {nextWaveNum} is coming!";
+			hud.StartCountdown(5.0f, msg);
 		}
 		else if (waveManager != null) {
 			waveManager.StartNextWave();
@@ -357,10 +415,10 @@ public partial class Level : Node2D
 	{
 		GD.Print($"Generating Random Level {_currentLevelIndex}...");
 
-		// 1. Очистка старых объектов с Уровня 1 (оставляем дверь)
+		// 1. Очистка старых объектов с предыдущего уровня
 		foreach (var child in GetChildren())
 		{
-			if (child is WeaponPickup)
+			if (child is WeaponPickup || child is Coin || child is ManaCrystal || child is SupplyAltar)
 			{
 				child.QueueFree();
 			}
@@ -735,6 +793,17 @@ public partial class Level : Node2D
 			_playerSpikeInvulnerabilityTimer -= delta;
 		}
 
+		if (_enemySpikeCooldowns.Count > 0)
+		{
+			var keys = _enemySpikeCooldowns.Keys.ToList();
+			foreach (ulong id in keys)
+			{
+				double remaining = _enemySpikeCooldowns[id] - delta;
+				if (remaining <= 0) _enemySpikeCooldowns.Remove(id);
+				else _enemySpikeCooldowns[id] = remaining;
+			}
+		}
+
 		_spikesTimer += delta;
 		double cycleTime = _spikesTimer % 6.0; // 6.0 seconds total cycle
 
@@ -750,19 +819,45 @@ public partial class Level : Node2D
 			UpdateSpikeTiles();
 		}
 
-		// Урон наносим только во время активной фазы
-		if (_currentSpikePhase == SpikePhase.Active && _playerSpikeInvulnerabilityTimer <= 0 && _player != null)
+		// Урон наносим только во время активной фазы (и игроку, и наземным врагам)
+		if (_currentSpikePhase == SpikePhase.Active)
 		{
-			Vector2 playerPos = _player.GlobalPosition;
 			var spikeCells = _spikesLayer.GetUsedCells();
-			foreach (var cell in spikeCells)
+			float spikeRadius = 12.0f * World.Scale;
+
+			if (_playerSpikeInvulnerabilityTimer <= 0 && _player != null)
 			{
-				Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
-				if (playerPos.DistanceTo(cellCenter) < 12.0f * World.Scale)
+				Vector2 playerPos = _player.GlobalPosition;
+				foreach (var cell in spikeCells)
 				{
-					_player.TakeDamage(5f, cellCenter, 5.0f, true);
-					_playerSpikeInvulnerabilityTimer = 1.0;
-					break;
+					Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
+					if (playerPos.DistanceTo(cellCenter) < spikeRadius)
+					{
+						_player.TakeDamage(5f, cellCenter, 5.0f, true);
+						_playerSpikeInvulnerabilityTimer = 1.0;
+						break;
+					}
+				}
+			}
+
+			foreach (Node node in GetTree().GetNodesInGroup("Enemies"))
+			{
+				if (node is Enemy enemy && !(enemy is Ghost) && enemy.CurrentHealth > 0)
+				{
+					ulong id = enemy.GetInstanceId();
+					if (_enemySpikeCooldowns.ContainsKey(id)) continue;
+
+					Vector2 enemyPos = enemy.GlobalPosition;
+					foreach (var cell in spikeCells)
+					{
+						Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
+						if (enemyPos.DistanceTo(cellCenter) < spikeRadius)
+						{
+							enemy.TakeDamage(8f, cellCenter, 4.0f, true);
+							_enemySpikeCooldowns[id] = 1.0;
+							break;
+						}
+					}
 				}
 			}
 		}

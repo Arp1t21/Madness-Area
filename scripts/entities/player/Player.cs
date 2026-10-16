@@ -1,9 +1,10 @@
 using Godot;
 using System;
 using System.Collections.Generic;
+
 public partial class Player : CharacterBody2D
 {
-	[Export] public PlayerData Config; 
+	[Export] public PlayerData Config;
 	[Export] public float DamageShakeIntensity = 5.0f;
 
 	[ExportGroup("Torch Light")]
@@ -24,10 +25,16 @@ public partial class Player : CharacterBody2D
 	private int _currentSlotIndex = 0;
 	public int CurrentSlotIndex => _currentSlotIndex;
 
-	// Текущие показатели
+	// Текущие показатели и бонусы от алтаря снабжения
 	public float CurrentHealth;
 	public float CurrentMana;
+	public float BonusMaxHealth = 0.0f;
+	public float BonusMaxMana = 0.0f;
+	public float WeaponDamageMultiplier = 1.0f;
 	public int CoinCount = 0;
+
+	public float MaxHealthEffective => (Config != null ? Config.MaxHealth : 100.0f) + BonusMaxHealth;
+	public float MaxManaEffective => (Config != null ? Config.MaxMana : 100.0f) + BonusMaxMana;
 
 	private StatusEffectManager _statusManager;
 	private Vector2 _externalVelocity = Vector2.Zero;
@@ -36,17 +43,25 @@ public partial class Player : CharacterBody2D
 	private readonly List<IInteractable> _interactablesInRange = new List<IInteractable>();
 	private bool _eJustPressed = false;
 
-	public int Ability1Level = 0; // Fireball
-	public int Ability2Level = 0; // Passive Shield
+	public int Ability1Level = 0; // Fireball (Q)
+	public int Ability2Level = 0; // Passive Shield + Active Arcane Barrier & Dash (V)
 	public int SkillPoints = 0;
+
 	public float FireballCooldownTimer = 0.0f;
 	public const float FireballCooldownMax = 10.0f;
-	private bool _qWasPressed = false;
+
+	public float ShieldCooldownTimer = 0.0f;
+	public const float ShieldCooldownMax = 8.0f;
+	public float ActiveShieldTimer = 0.0f;
+	public bool IsShieldActive => ActiveShieldTimer > 0.0f;
+	private double _shieldPulseTime = 0.0;
+
 	private PackedScene _fireballScene;
 
 	public void RegisterInteractable(IInteractable interactable)
 	{
-		if (!_interactablesInRange.Contains(interactable)) {
+		if (!_interactablesInRange.Contains(interactable))
+		{
 			_interactablesInRange.Add(interactable);
 		}
 	}
@@ -57,30 +72,50 @@ public partial class Player : CharacterBody2D
 		interactable.ShowPrompt(false);
 	}
 
-	public override void _Ready() {
+	public override void _Ready()
+	{
 		Scale = new Vector2(3.0f, 3.0f);
 		_animatedSprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
 		_abilityManager = GetNode<Node2D>("AbilityManager");
 		_camera = GetNodeOrNull<Camera2D>("Camera2D") ?? GetNodeOrNull<Camera2D>("../Camera2D");
-		if (_camera != null) {
-			// Приближаем камеру: со стандартным зумом вся арена выглядит крошечной
+		if (_camera != null)
+		{
 			_camera.Zoom = new Vector2(1.8f, 1.8f);
 		}
 
-		// Гарантируем видимость спрайта
+		// Гарантируем, что бинды и аудио-шины инициализированы даже при запуске напрямую со сцены уровня
+		SettingsManager.ApplySettings();
+
+		// Подгружаем конфиг выбранного героя из сохранения (Knight или Magician)
+		if (SaveManager.CurrentSave != null && !string.IsNullOrEmpty(SaveManager.CurrentSave.CharacterName))
+		{
+			string charPath = SaveManager.CurrentSave.CharacterName.Equals("Magician", StringComparison.OrdinalIgnoreCase)
+				? "res://data/characters/magician.tres"
+				: "res://data/characters/knight.tres";
+			var loadedConfig = GD.Load<PlayerData>(charPath);
+			if (loadedConfig != null)
+			{
+				Config = loadedConfig;
+			}
+		}
+
 		_animatedSprite.Visible = true;
-		
-		// Если в конфиге есть анимации, применяем их
-		if (Config != null && Config.CharacterAnimations != null) {
+
+		if (Config != null && Config.CharacterAnimations != null)
+		{
 			_animatedSprite.SpriteFrames = Config.CharacterAnimations;
-			
-			// Проверяем наличие анимации перед запуском
-			if (_animatedSprite.SpriteFrames.HasAnimation("idle")) {
+
+			if (_animatedSprite.SpriteFrames.HasAnimation("idle"))
+			{
 				_animatedSprite.Play("idle");
-			} else {
+			}
+			else
+			{
 				GD.PushError("Player error: Animation 'idle' not found in SpriteFrames!");
 			}
-		} else {
+		}
+		else
+		{
 			GD.PushWarning("Player warning: No CharacterAnimations found in Config.");
 		}
 
@@ -89,34 +124,52 @@ public partial class Player : CharacterBody2D
 
 		AddToGroup("Player");
 
-		if (SaveManager.CurrentSave != null) {
+		if (SaveManager.CurrentSave != null)
+		{
 			var save = SaveManager.CurrentSave;
-			CurrentHealth = save.CurrentHealth;
-			CurrentMana = save.CurrentMana;
+			BonusMaxHealth = save.BonusMaxHealth;
+			BonusMaxMana = save.BonusMaxMana;
+			WeaponDamageMultiplier = save.WeaponDamageMultiplier > 0.01f ? save.WeaponDamageMultiplier : 1.0f;
+			CurrentHealth = Mathf.Clamp(save.CurrentHealth, 1.0f, MaxHealthEffective);
+			CurrentMana = Mathf.Clamp(save.CurrentMana, 0.0f, MaxManaEffective);
 			CoinCount = save.Coins;
 			SkillPoints = save.SkillPoints;
 			Ability1Level = save.Ability1Level;
 			Ability2Level = save.Ability2Level;
 
-			// Spawn weapon slots
-			foreach (Node child in _abilityManager.GetChildren()) {
+			foreach (Node child in _abilityManager.GetChildren())
+			{
 				child.QueueFree();
 			}
 			var controllerPrefab = GD.Load<PackedScene>("res://scene/weapons/attack_controller.tscn");
 			WeaponSlots.Clear();
-			for (int i = 0; i < 3; i++) {
+			for (int i = 0; i < 3; i++)
+			{
 				var controllerInstance = controllerPrefab.Instantiate() as AttackController;
 				_abilityManager.AddChild(controllerInstance);
 				WeaponSlots.Add(controllerInstance);
 				controllerInstance.Visible = false;
 			}
 
-			// Load weapons from save
-			if (save.WeaponResourcePaths == null || save.WeaponResourcePaths.Count == 0) {
-				if (Config != null && Config.StartingWeapons != null) {
-					for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++) {
+			bool hasAnySavedWeapon = false;
+			if (save.WeaponResourcePaths != null)
+			{
+				foreach (var p in save.WeaponResourcePaths)
+				{
+					if (!string.IsNullOrEmpty(p)) { hasAnySavedWeapon = true; break; }
+				}
+			}
+
+			if (!hasAnySavedWeapon)
+			{
+				if (Config != null && Config.StartingWeapons != null)
+				{
+					save.WeaponResourcePaths = new List<string>();
+					for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++)
+					{
 						var weaponData = Config.StartingWeapons[i];
-						if (weaponData != null) {
+						if (weaponData != null)
+						{
 							WeaponSlots[i].CurrentWeapon = weaponData;
 							WeaponSlots[i].ApplyWeaponSettings();
 							save.WeaponResourcePaths.Add(weaponData.ResourcePath);
@@ -124,12 +177,17 @@ public partial class Player : CharacterBody2D
 					}
 					SaveManager.SaveGame(save);
 				}
-			} else {
-				for (int i = 0; i < save.WeaponResourcePaths.Count && i < 3; i++) {
+			}
+			else
+			{
+				for (int i = 0; i < save.WeaponResourcePaths.Count && i < 3; i++)
+				{
 					string resPath = save.WeaponResourcePaths[i];
-					if (!string.IsNullOrEmpty(resPath)) {
+					if (!string.IsNullOrEmpty(resPath))
+					{
 						var weaponData = GD.Load<WeaponData>(resPath);
-						if (weaponData != null) {
+						if (weaponData != null)
+						{
 							WeaponSlots[i].CurrentWeapon = weaponData;
 							WeaponSlots[i].ApplyWeaponSettings();
 						}
@@ -137,10 +195,13 @@ public partial class Player : CharacterBody2D
 				}
 			}
 			SelectSlot(0);
-		} else {
-			if (Config != null) {
-				CurrentHealth = Config.MaxHealth;
-				CurrentMana = Config.MaxMana;
+		}
+		else
+		{
+			if (Config != null)
+			{
+				CurrentHealth = MaxHealthEffective;
+				CurrentMana = MaxManaEffective;
 			}
 			SpawnStartingWeapons();
 		}
@@ -148,18 +209,19 @@ public partial class Player : CharacterBody2D
 		// Добавляем факел/свет вокруг игрока
 		_torchLight = new PointLight2D();
 		_torchLight.Name = "TorchLight";
-		_torchLight.ShadowEnabled = true; // Включаем тени от стен!
-		_torchLight.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5; // Мягкие тени
-		_torchLight.Position = new Vector2(0, -9); // Выравниваем источник света по центру коллизии игрока
-		
+		_torchLight.ShadowEnabled = true;
+		_torchLight.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5;
+		_torchLight.Position = new Vector2(0, -9);
+
 		var gradient = new Gradient();
-		gradient.Colors = new Color[] { 
-			new Color(1f, 0.92f, 0.75f, 1f), // Теплый свет факела в центре
+		gradient.Colors = new Color[]
+		{
+			new Color(1f, 0.92f, 0.75f, 1f),
 			new Color(1f, 0.92f, 0.75f, 0.8f),
-			new Color(0f, 0f, 0f, 0f)      // Плавное затухание в темноту
+			new Color(0f, 0f, 0f, 0f)
 		};
 		gradient.Offsets = new float[] { 0.0f, TorchGradientMiddleOffset, 1.0f };
-		
+
 		var gradTex = new GradientTexture2D();
 		gradTex.Gradient = gradient;
 		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
@@ -167,15 +229,14 @@ public partial class Player : CharacterBody2D
 		gradTex.FillTo = new Vector2(TorchFillToX, TorchFillToY);
 		gradTex.Width = TorchRadius;
 		gradTex.Height = TorchRadius;
-		
+
 		_torchLight.Texture = gradTex;
 		AddChild(_torchLight);
 
 		_fireballScene = GD.Load<PackedScene>("res://scene/abilities/fireball.tscn");
 
-		// Слой с красной вспышкой на весь экран при получении урона
 		_damageFlashLayer = new CanvasLayer();
-		_damageFlashLayer.Layer = 50; // поверх HUD
+		_damageFlashLayer.Layer = 50;
 		_damageFlashRect = new ColorRect();
 		_damageFlashRect.Color = new Color(0.7f, 0.03f, 0.03f);
 		_damageFlashRect.MouseFilter = Control.MouseFilterEnum.Ignore;
@@ -186,25 +247,53 @@ public partial class Player : CharacterBody2D
 		AddChild(_damageFlashLayer);
 	}
 
-	public override void _PhysicsProcess(double delta) {
+	public override void _Draw()
+	{
+		if (!IsShieldActive) return;
+
+		float pulse = 1.0f + Mathf.Sin((float)_shieldPulseTime * 8.0f) * 0.08f;
+		Vector2 center = new Vector2(0, -9);
+		float r = 13.5f * pulse;
+
+		DrawCircle(center, r, new Color(0.15f, 0.75f, 1.0f, 0.22f));
+		DrawArc(center, r, 0f, Mathf.Tau, 32, new Color(0.45f, 0.92f, 1.0f, 0.88f), 1.4f, true);
+	}
+
+	public override void _PhysicsProcess(double delta)
+	{
 		if (Config == null) return;
 
-		if (FireballCooldownTimer > 0.0f) {
+		if (FireballCooldownTimer > 0.0f)
+		{
 			FireballCooldownTimer = Mathf.Max(0.0f, FireballCooldownTimer - (float)delta);
 		}
+		if (ShieldCooldownTimer > 0.0f)
+		{
+			ShieldCooldownTimer = Mathf.Max(0.0f, ShieldCooldownTimer - (float)delta);
+		}
+		if (ActiveShieldTimer > 0.0f)
+		{
+			_shieldPulseTime += delta;
+			ActiveShieldTimer = Mathf.Max(0.0f, ActiveShieldTimer - (float)delta);
+			QueueRedraw();
+		}
 
-		bool qPressed = Input.IsKeyPressed(Key.Q);
-		if (qPressed && !_qWasPressed) {
+		if (Input.IsActionJustPressed("ability_1"))
+		{
 			UseFireball();
 		}
-		_qWasPressed = qPressed;
+		if (Input.IsActionJustPressed("ability_2"))
+		{
+			UseArcaneShieldDash();
+		}
 
-		if (_noManaWarningCooldown > 0.0f) {
+		if (_noManaWarningCooldown > 0.0f)
+		{
 			_noManaWarningCooldown -= (float)delta;
 		}
 
-		// Если в стане или оцепенении - не можем двигаться
-		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root)) {
+		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root))
+		{
 			Velocity = Vector2.Zero;
 			MoveAndSlide();
 			UpdateAnimation(Vector2.Zero);
@@ -213,26 +302,31 @@ public partial class Player : CharacterBody2D
 
 		Vector2 direction = Input.GetVector("move_left", "move_right", "move_up", "move_down");
 
-		// Сила Slow задается источником эффекта (например, аура Quagmire = 0.25)
 		float slowStrength = _statusManager.GetEffectStrength(StatusEffectType.Slow);
 		float speedMod = 1.0f - Mathf.Clamp(slowStrength, 0.0f, 0.95f);
-			float currentSpeed = Config.WalkSpeed * speedMod * World.Scale;
+		float currentSpeed = Config.WalkSpeed * speedMod * World.Scale;
 
 		bool isRunningPressed = direction != Vector2.Zero && Input.IsActionPressed("shift");
-		bool hasManaToRun = CurrentMana > 0;
+		bool hasManaToRun = CurrentMana >= Config.ManaCostPerSecondRunning * (float)delta;
 		bool isRunning = isRunningPressed && hasManaToRun;
-		if (isRunning) {
+		if (isRunning)
+		{
 			currentSpeed *= Config.RunMultiplier;
 			CurrentMana = Mathf.Max(0.0f, CurrentMana - Config.ManaCostPerSecondRunning * (float)delta);
-		} else if (isRunningPressed && !hasManaToRun) {
+		}
+		else if (isRunningPressed && !hasManaToRun && Config.ManaCostPerSecondRunning > 0)
+		{
 			ShowNoManaWarning();
 		}
+
 		Velocity = direction * currentSpeed + _externalVelocity;
 		MoveAndSlide();
 
-		if (_externalVelocity.Length() > 0) {
+		if (_externalVelocity.Length() > 0)
+		{
 			_externalVelocity = _externalVelocity.Lerp(Vector2.Zero, 0.15f);
-			if (_externalVelocity.Length() < 1.0f) {
+			if (_externalVelocity.Length() < 1.0f)
+			{
 				_externalVelocity = Vector2.Zero;
 			}
 		}
@@ -241,20 +335,22 @@ public partial class Player : CharacterBody2D
 
 		HandleWeaponSwitching();
 
-		if (Input.IsActionJustPressed("reload")) {
-			if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
+		if (Input.IsActionJustPressed("reload"))
+		{
+			if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count)
+			{
 				WeaponSlots[_currentSlotIndex].StartReload();
 			}
 		}
 
-		if (Input.IsActionPressed("attack") && !_statusManager.HasEffect(StatusEffectType.Disarm) && !_statusManager.HasEffect(StatusEffectType.Stun)) {
+		if (Input.IsActionPressed("attack") && !_statusManager.HasEffect(StatusEffectType.Disarm) && !_statusManager.HasEffect(StatusEffectType.Stun))
+		{
 			ExecuteAttack();
 		}
 
 		ProcessRegen(delta);
 
-		// Centralized interaction check
-		bool isInteractPressed = Input.IsActionPressed("interact") || Input.IsPhysicalKeyPressed(Key.E);
+		bool isInteractPressed = Input.IsActionPressed("interact");
 		bool interactJustPressed = isInteractPressed && !_eJustPressed;
 		_eJustPressed = isInteractPressed;
 
@@ -262,122 +358,138 @@ public partial class Player : CharacterBody2D
 
 		IInteractable closest = null;
 		float minDist = float.MaxValue;
-		foreach (var interactable in _interactablesInRange) {
+		foreach (var interactable in _interactablesInRange)
+		{
 			float dist = GlobalPosition.DistanceTo(interactable.GetInteractionPosition());
-			if (dist < minDist) {
+			if (dist < minDist)
+			{
 				minDist = dist;
 				closest = interactable;
 			}
 		}
 
-		// Update prompt visibility so only the closest one is shown
-		foreach (var interactable in _interactablesInRange) {
+		foreach (var interactable in _interactablesInRange)
+		{
 			interactable.ShowPrompt(interactable == closest);
 		}
 
-		if (interactJustPressed && closest != null) {
+		if (interactJustPressed && closest != null)
+		{
 			closest.Interact(this);
 		}
 	}
 
-	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0, bool isMelee = false) {
+	public void TakeDamage(float amount, Vector2 sourcePos = default, float knockForce = 0, bool isMelee = false)
+	{
 		if (CurrentHealth <= 0) return;
 
-		// Сопротивления из конфига персонажа (к ближнему/дальнему бою)
-		if (Config != null) {
+		if (Config != null)
+		{
 			float res = isMelee ? Config.MeleeResistance : Config.RangedResistance;
 			amount *= (1.0f - Mathf.Clamp(res, 0.0f, 0.95f));
 		}
 
-		// Пассивный щит (способность 2)
-		if (Ability2Level > 0) {
+		// Пассивное снижение урона от Щита (способность 2)
+		if (Ability2Level > 0)
+		{
 			float shieldRes = 0.05f + (Ability2Level - 1) * 0.05f;
 			amount *= (1.0f - shieldRes);
 		}
 
-		CurrentHealth -= amount;
-		GD.Print($"Игрок получил урон: {amount}. ХП: {CurrentHealth}");
-		
-		// 1. Тряска камеры
-		ApplyCameraShake(DamageShakeIntensity * SettingsManager.ScreenShake);
+		// Активный энергетический барьер (по клавише V) поглощает еще 60% урона и блокирует отбрасывание
+		if (IsShieldActive)
+		{
+			amount *= 0.4f;
+			knockForce = 0.0f;
+		}
 
-		// 2. Красный оттенок экрана примерно на секунду
+		CurrentHealth -= amount;
+
+		ApplyCameraShake(DamageShakeIntensity * SettingsManager.ScreenShake);
 		FlashRedScreen();
 
-		// 2. Отброс
-		if (knockForce > 0 && sourcePos != default) {
+		if (knockForce > 0 && sourcePos != default)
+		{
 			ApplyKnockback(sourcePos, knockForce);
 		}
 
-		if (CurrentHealth <= 0) {
+		if (CurrentHealth <= 0)
+		{
 			Die();
 		}
 	}
 
-	private void FlashRedScreen() {
+	private void FlashRedScreen()
+	{
 		if (_damageFlashRect == null) return;
 
-		// Быстрое проявление и плавный спад в течение ~1 секунды
 		var tween = _damageFlashRect.CreateTween();
 		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.32f, 0.08);
 		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.0f, 0.92);
 	}
 
-	private void ApplyCameraShake(float intensity) {
+	private void ApplyCameraShake(float intensity)
+	{
 		if (_camera == null) return;
-		
+
 		var tween = CreateTween();
-		for (int i = 0; i < 4; i++) {
+		for (int i = 0; i < 4; i++)
+		{
 			Vector2 offset = new Vector2(GD.Randf() * 2 - 1, GD.Randf() * 2 - 1) * intensity;
 			tween.TweenProperty(_camera, "offset", offset, 0.05f);
 		}
 		tween.TweenProperty(_camera, "offset", Vector2.Zero, 0.05f);
 	}
 
-	public void ApplyRecoil(Vector2 attackDir, float force) {
+	public void ApplyRecoil(Vector2 attackDir, float force)
+	{
 		_externalVelocity -= attackDir.Normalized() * force * 45.0f;
 	}
 
-	private void ApplyKnockback(Vector2 source, float force) {
+	private void ApplyKnockback(Vector2 source, float force)
+	{
 		Vector2 dir = (GlobalPosition - source).Normalized();
 		_externalVelocity = dir * force * 300.0f;
 	}
 
-	private void Die() {
-		GD.Print("Player died!");
-
-		// Play dead.wav
-		try {
+	private void Die()
+	{
+		try
+		{
 			var deadSound = GD.Load<AudioStream>("res://assets/sounds/dead.wav");
-			if (deadSound != null) {
+			if (deadSound != null)
+			{
 				MainMenu.PlayUISound(deadSound);
 			}
-		} catch (Exception e) {
+		}
+		catch (Exception e)
+		{
 			GD.PrintErr($"Failed to play death sound: {e.Message}");
 		}
 
-		// Delete save slot progress
-		if (!string.IsNullOrEmpty(SaveManager.ActiveSlotId)) {
+		if (!string.IsNullOrEmpty(SaveManager.ActiveSlotId))
+		{
 			SaveManager.DeleteSave(SaveManager.ActiveSlotId);
 		}
 
-		// Pause the game
 		GetTree().Paused = true;
 
-		// Instantiate DeathScreen and setup stats
 		var deathScreen = new DeathScreen();
-		
+
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		float timePlayed = level != null ? level.ConsumePlayedTime() : 0.0f;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
-		if (SaveManager.CurrentSave != null) {
+		if (SaveManager.CurrentSave != null)
+		{
 			timePlayed += SaveManager.CurrentSave.PlayedTimeSeconds;
 		}
 
 		var weaponsList = new List<string>();
-		foreach (var slot in WeaponSlots) {
-			if (slot.CurrentWeapon != null) {
+		foreach (var slot in WeaponSlots)
+		{
+			if (slot.CurrentWeapon != null)
+			{
 				weaponsList.Add(slot.CurrentWeapon.WeaponName);
 			}
 		}
@@ -394,13 +506,16 @@ public partial class Player : CharacterBody2D
 		GetTree().Root.AddChild(deathScreen);
 	}
 
-	private void _on_area_2d_area_entered(Area2D area) {
-		if (area.IsInGroup("EnemyWeapon")) {
-			// Находим контроллер врага, чтобы взять урон
+	private void _on_area_2d_area_entered(Area2D area)
+	{
+		if (area.IsInGroup("EnemyWeapon"))
+		{
 			var controller = area.GetParent()?.GetParent() as AttackController;
-			if (controller != null && controller.CurrentWeapon != null) {
+			if (controller != null && controller.CurrentWeapon != null)
+			{
 				float damage = controller.CurrentWeapon.Damage;
-				if (controller.OwnerNode is Enemy enemy) {
+				if (controller.OwnerNode is Enemy enemy)
+				{
 					damage *= enemy.DamageMultiplier;
 				}
 				TakeDamage(damage, controller.GlobalPosition, controller.CurrentWeapon.KnockbackForce, true);
@@ -408,51 +523,67 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	private void ProcessRegen(double delta) {
+	private void ProcessRegen(double delta)
+	{
 		if (Config == null) return;
 
-		if (CurrentHealth < Config.MaxHealth) {
-			CurrentHealth = Mathf.Min(Config.MaxHealth, CurrentHealth + Config.HealthRegen * (float)delta);
+		float maxHp = MaxHealthEffective;
+		if (CurrentHealth < maxHp)
+		{
+			CurrentHealth = Mathf.Min(maxHp, CurrentHealth + Config.HealthRegen * (float)delta);
 		}
 
-		if (CurrentMana < Config.MaxMana) {
-			CurrentMana = Mathf.Min(Config.MaxMana, CurrentMana + Config.ManaRegen * (float)delta);
+		float maxMp = MaxManaEffective;
+		if (CurrentMana < maxMp)
+		{
+			CurrentMana = Mathf.Min(maxMp, CurrentMana + Config.ManaRegen * (float)delta);
 		}
 	}
 
-	private void UpdateAnimation(Vector2 direction) {
+	private void UpdateAnimation(Vector2 direction)
+	{
 		bool isAttacking = false;
-		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
+		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count)
+		{
 			var currentWeapon = WeaponSlots[_currentSlotIndex];
-			if (currentWeapon != null && currentWeapon.IsAttacking) {
+			if (currentWeapon != null && currentWeapon.IsAttacking)
+			{
 				isAttacking = true;
 			}
 		}
 
-		if (direction != Vector2.Zero) {
-			if (Input.IsActionPressed("shift")) {
+		if (direction != Vector2.Zero)
+		{
+			if (Input.IsActionPressed("shift"))
+			{
 				_animatedSprite.Play("run");
-			} else {
+			}
+			else
+			{
 				_animatedSprite.Play("walk");
 			}
 
-			// Разворачиваем персонажа по направлению движения, ТОЛЬКО если он сейчас не атакует
-			if (direction.X != 0 && !isAttacking) {
+			if (direction.X != 0 && !isAttacking)
+			{
 				_animatedSprite.FlipH = direction.X < 0;
 			}
-		} else {
+		}
+		else
+		{
 			_animatedSprite.Play("idle");
 		}
 	}
 
-	private void SpawnStartingWeapons() {
-		// Создаем 3 пустых контроллера (слота)
-		foreach (Node child in _abilityManager.GetChildren()) {
+	private void SpawnStartingWeapons()
+	{
+		foreach (Node child in _abilityManager.GetChildren())
+		{
 			child.QueueFree();
 		}
 		var controllerPrefab = GD.Load<PackedScene>("res://scene/weapons/attack_controller.tscn");
 		WeaponSlots.Clear();
-		for (int i = 0; i < 3; i++) {
+		for (int i = 0; i < 3; i++)
+		{
 			var controllerInstance = controllerPrefab.Instantiate() as AttackController;
 			_abilityManager.AddChild(controllerInstance);
 			WeaponSlots.Add(controllerInstance);
@@ -461,10 +592,11 @@ public partial class Player : CharacterBody2D
 
 		if (Config == null || Config.StartingWeapons == null) return;
 
-		// Заполняем слоты стартовым оружием
-		for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++) {
+		for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++)
+		{
 			var weaponData = Config.StartingWeapons[i];
-			if (weaponData != null) {
+			if (weaponData != null)
+			{
 				WeaponSlots[i].CurrentWeapon = weaponData;
 				WeaponSlots[i].ApplyWeaponSettings();
 			}
@@ -473,87 +605,107 @@ public partial class Player : CharacterBody2D
 		SelectSlot(0);
 	}
 
-	private void HandleWeaponSwitching() {
-		if (Input.IsActionJustPressed("weapon_1")) SelectSlot(0);
-		if (Input.IsActionJustPressed("weapon_2")) SelectSlot(1);
-		if (Input.IsActionJustPressed("weapon_3")) SelectSlot(2);
-	}
-
-	public override void _Input(InputEvent @event)
+	private void HandleWeaponSwitching()
 	{
-		if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
-		{
-			var key = keyEvent.Keycode;
-			var physKey = keyEvent.PhysicalKeycode;
-			if (key == Key.Key1 || physKey == Key.Key1) SelectSlot(0);
-			else if (key == Key.Key2 || physKey == Key.Key2) SelectSlot(1);
-			else if (key == Key.Key3 || physKey == Key.Key3) SelectSlot(2);
-		}
+		if (Input.IsActionJustPressed("weapon_1")) SelectSlot(0);
+		else if (Input.IsActionJustPressed("weapon_2")) SelectSlot(1);
+		else if (Input.IsActionJustPressed("weapon_3")) SelectSlot(2);
 	}
 
-	public void SelectSlot(int slotIndex) {
-		if (slotIndex < 0 || slotIndex >= WeaponSlots.Count) return;
-		if (slotIndex == _currentSlotIndex && WeaponSlots[slotIndex].Visible) return;
-
+	public override void _UnhandledInput(InputEvent @event)
+	{
+		if (@event is InputEventMouseButton mb && mb.Pressed && WeaponSlots.Count > 0)
 		{
-			// Проверяем, есть ли оружие в этом слоте
-			if (WeaponSlots[slotIndex].CurrentWeapon == null) {
-				GD.Print($"Слот {slotIndex + 1} пуст.");
-				return;
-			}
-
-			// Деактивируем старое оружие (гасим анимации и хитбоксы)
-			if (WeaponSlots[_currentSlotIndex] != null) {
-				WeaponSlots[_currentSlotIndex].Deactivate();
-			}
-
-			_currentSlotIndex = slotIndex;
-
-			if (WeaponSlots[_currentSlotIndex] != null) {
-				WeaponSlots[_currentSlotIndex].Visible = true;
-				WeaponSlots[_currentSlotIndex].ApplyWeaponSettings();
-
-				if (WeaponSlots[_currentSlotIndex].CurrentWeapon.EquipSound != null) {
-					WeaponSlots[_currentSlotIndex].PlaySound(WeaponSlots[_currentSlotIndex].CurrentWeapon.EquipSound);
+			if (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown)
+			{
+				int step = mb.ButtonIndex == MouseButton.WheelDown ? 1 : -1;
+				for (int attempt = 1; attempt <= WeaponSlots.Count; attempt++)
+				{
+					int candidate = (_currentSlotIndex + step * attempt + WeaponSlots.Count) % WeaponSlots.Count;
+					if (WeaponSlots[candidate].CurrentWeapon != null)
+					{
+						SelectSlot(candidate);
+						break;
+					}
 				}
 			}
 		}
 	}
 
-	private void ExecuteAttack() {
-		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) {
+	public void SelectSlot(int slotIndex)
+	{
+		if (slotIndex < 0 || slotIndex >= WeaponSlots.Count) return;
+		if (slotIndex == _currentSlotIndex && WeaponSlots[slotIndex].Visible) return;
+
+		if (WeaponSlots[slotIndex].CurrentWeapon == null)
+		{
+			return;
+		}
+
+		if (WeaponSlots[_currentSlotIndex] != null)
+		{
+			WeaponSlots[_currentSlotIndex].Deactivate();
+		}
+
+		_currentSlotIndex = slotIndex;
+
+		if (WeaponSlots[_currentSlotIndex] != null)
+		{
+			WeaponSlots[_currentSlotIndex].Visible = true;
+			WeaponSlots[_currentSlotIndex].ApplyWeaponSettings();
+
+			if (WeaponSlots[_currentSlotIndex].CurrentWeapon.EquipSound != null)
+			{
+				WeaponSlots[_currentSlotIndex].PlaySound(WeaponSlots[_currentSlotIndex].CurrentWeapon.EquipSound);
+			}
+		}
+	}
+
+	private void ExecuteAttack()
+	{
+		if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count)
+		{
 			WeaponSlots[_currentSlotIndex].HandleManualAttack();
 		}
 	}
 
-	// Публичный доступ для врагов (ауры и т.п.); EffectResistance сокращает длительность.
-	// strength — сила эффекта (для Slow: доля замедления, 0.25 = -25% скорости)
-	public void ApplyStatusEffect(StatusEffectType type, float duration, float strength = 1.0f) {
+	public void ApplyStatusEffect(StatusEffectType type, float duration, float strength = 1.0f)
+	{
 		float resist = Config?.EffectResistance ?? 0.0f;
 		_statusManager.ApplyEffect(type, duration * (1.0f - Mathf.Clamp(resist, 0.0f, 0.95f)), strength);
 	}
 
-	public void UpdateTorchLight() {
+	public void UpdateTorchLight()
+	{
 		if (_torchLight == null) return;
 		var gradTex = _torchLight.Texture as GradientTexture2D;
-		if (gradTex != null) {
+		if (gradTex != null)
+		{
 			gradTex.Width = TorchRadius;
 			gradTex.Height = TorchRadius;
 			gradTex.FillTo = new Vector2(TorchFillToX, TorchFillToY);
-			if (gradTex.Gradient != null) {
+			if (gradTex.Gradient != null)
+			{
 				gradTex.Gradient.Offsets = new float[] { 0.0f, TorchGradientMiddleOffset, 1.0f };
 			}
 		}
 	}
 
-	public void ShowNoManaWarning() {
-		if (_noManaWarningCooldown <= 0.0f) {
-			var ft = new FloatingText();
-			GetParent().AddChild(ft);
-			ft.GlobalPosition = GlobalPosition + new Vector2(0, -25);
-			ft.Init("You dont have enough mana", new Color(0.2f, 0.6f, 1.0f));
+	public void ShowNoManaWarning()
+	{
+		if (_noManaWarningCooldown <= 0.0f)
+		{
+			SpawnFloatingMessage("Not enough mana!", new Color(0.2f, 0.6f, 1.0f));
 			_noManaWarningCooldown = 1.5f;
 		}
+	}
+
+	public void SpawnFloatingMessage(string message, Color color)
+	{
+		var ft = new FloatingText();
+		GetParent().AddChild(ft);
+		ft.GlobalPosition = GlobalPosition + new Vector2(0, -28);
+		ft.Init(message, color);
 	}
 
 	private void UseFireball()
@@ -572,27 +724,63 @@ public partial class Player : CharacterBody2D
 		Vector2 mousePos = GetGlobalMousePosition();
 		Vector2 dir = (mousePos - GlobalPosition).Normalized();
 
-		Fireball fireball;
-		if (_fireballScene != null)
-		{
-			fireball = _fireballScene.Instantiate<Fireball>();
-		}
-		else
-		{
-			fireball = new Fireball();
-		}
-		
+		Fireball fireball = _fireballScene != null ? _fireballScene.Instantiate<Fireball>() : new Fireball();
 		fireball.GlobalPosition = GlobalPosition;
 		fireball.Direction = dir;
-		fireball.Damage = 5.0f + (Ability1Level - 1) * 5.0f;
+		fireball.Damage = (6.0f + (Ability1Level - 1) * 6.0f) * WeaponDamageMultiplier;
 		GetParent().AddChild(fireball);
+	}
+
+	private void UseArcaneShieldDash()
+	{
+		if (Ability2Level <= 0 || ShieldCooldownTimer > 0.0f) return;
+
+		const float manaCost = 15.0f;
+		if (CurrentMana < manaCost)
+		{
+			ShowNoManaWarning();
+			return;
+		}
+
+		CurrentMana -= manaCost;
+		ShieldCooldownTimer = ShieldCooldownMax;
+		ActiveShieldTimer = 2.5f + (Ability2Level - 1) * 0.7f;
+		_shieldPulseTime = 0.0;
+
+		// Рывок по направлению движения (или к курсору мыши, если игрок стоит на месте)
+		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
+		if (moveDir == Vector2.Zero)
+		{
+			moveDir = (GetGlobalMousePosition() - GlobalPosition).Normalized();
+		}
+		_externalVelocity = moveDir.Normalized() * 680.0f;
+
+		// Импульс щита отбрасывает ближайших врагов и наносит магический урон
+		float pulseRadius = 52.0f * World.Scale;
+		float pulseDamage = (4.0f + Ability2Level * 3.0f) * WeaponDamageMultiplier;
+		foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+		{
+			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
+			{
+				if (GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
+				{
+					enemy.TakeDamage(pulseDamage, GlobalPosition, 16.0f, false);
+				}
+			}
+		}
+
+		var buffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
+		if (buffSound != null)
+		{
+			MainMenu.PlayUISound(buffSound);
+		}
+
+		QueueRedraw();
 	}
 
 	public void OnWaveCleared()
 	{
 		SkillPoints++;
-		GD.Print($"Игрок получил очко способностей! Всего очков: {SkillPoints}");
-		
 		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
 		if (hud != null)
 		{

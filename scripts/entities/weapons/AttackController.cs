@@ -4,12 +4,12 @@ using System.Linq;
 
 public partial class AttackController : Node2D
 {
-	[Export] public WeaponData CurrentWeapon; 
+	[Export] public WeaponData CurrentWeapon;
 
 	private Timer _timer;
 	private bool _canAttack = true;
 	private Player _player;
-	
+
 	private Sprite2D _weaponSpriteNode;
 	private AnimatedSprite2D _animSpriteNode;
 	private AnimationPlayer _animPlayer;
@@ -20,43 +20,61 @@ public partial class AttackController : Node2D
 
 	private int _currentAmmo = 0;
 	private bool _isReloading = false;
+	private float _reloadElapsed = 0.0f;
 	private bool _playedEmptySoundThisPress = false;
 	private WeaponData _instantiatedWeapon;
 
-	public bool IsAttacking {
-		get {
+	public int CurrentAmmo => _currentAmmo;
+	public int MaxAmmo => CurrentWeapon?.MaxAmmo ?? 0;
+	public bool IsReloading => _isReloading;
+	public bool UsesAmmo => CurrentWeapon != null && CurrentWeapon.IsRanged && CurrentWeapon.MaxAmmo < 500;
+	public float ReloadProgress => (_isReloading && CurrentWeapon != null && CurrentWeapon.ReloadTime > 0.01f)
+		? Mathf.Clamp(_reloadElapsed / CurrentWeapon.ReloadTime, 0f, 1f)
+		: 0f;
+
+	public bool IsAttacking
+	{
+		get
+		{
 			bool isPlayerPlaying = _animPlayer != null && _animPlayer.IsPlaying() && _animPlayer.CurrentAnimation != "RESET" && _animPlayer.CurrentAnimation != "reload";
 			bool isSpritePlaying = _animSpriteNode != null && _animSpriteNode.IsPlaying() && _animSpriteNode.Animation != "idle" && _animSpriteNode.Animation != "reload";
 			return isPlayerPlaying || isSpritePlaying;
 		}
 	}
 
-	public bool CanAttack() {
+	public bool CanAttack()
+	{
 		if (!_canAttack || IsAttacking || _isReloading) return false;
-		if (_isPlayerOwned && _player != null && CurrentWeapon != null) {
+		if (_isPlayerOwned && _player != null && CurrentWeapon != null)
+		{
 			if (_player.CurrentMana < CurrentWeapon.ManaCost) return false;
 		}
 		return true;
 	}
 
-	public void Deactivate() {
+	public void Deactivate()
+	{
 		Visible = false;
 		if (_animPlayer != null) _animPlayer.Stop();
 		if (_animSpriteNode != null) _animSpriteNode.Stop();
 		_isReloading = false;
-		
-		if (_visualContainer != null) {
-			var area = _visualContainer.GetNodeOrNull<Area2D>("Area2D") ?? 
+		_reloadElapsed = 0.0f;
+
+		if (_visualContainer != null)
+		{
+			var area = _visualContainer.GetNodeOrNull<Area2D>("Area2D") ??
 					   _visualContainer.GetChildren().Cast<Node>().OfType<Area2D>().FirstOrDefault();
-			if (area != null) {
+			if (area != null)
+			{
 				var shape = area.GetNodeOrNull<CollisionShape2D>("CollisionShape2D") ??
 							area.GetChildren().Cast<Node>().OfType<CollisionShape2D>().FirstOrDefault();
-				if (shape != null) {
+				if (shape != null)
+				{
 					shape.SetDeferred("disabled", true);
 				}
 			}
 		}
-		
+
 		_hitEnemies.Clear();
 		_playedEmptySoundThisPress = false;
 	}
@@ -64,14 +82,17 @@ public partial class AttackController : Node2D
 	private Node2D _ownerNode;
 	public Node2D OwnerNode => _ownerNode;
 
-	public override void _Ready() {
+	public override void _Ready()
+	{
 		_timer = GetNode<Timer>("Timer");
 		_timer.Timeout += () => _canAttack = true;
 		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
 
 		Node pNode = GetParent();
-		while (pNode != null) {
-			if (pNode is CharacterBody2D cb) {
+		while (pNode != null)
+		{
+			if (pNode is CharacterBody2D cb)
+			{
 				_ownerNode = cb;
 				break;
 			}
@@ -83,24 +104,35 @@ public partial class AttackController : Node2D
 
 	private bool _isPlayerOwned = false;
 
-	public void ApplyWeaponSettings() {
+	public void ApplyWeaponSettings()
+	{
 		if (CurrentWeapon == null || _timer == null) return;
-		
-		_timer.WaitTime = Mathf.Max(0.01f, CurrentWeapon.AttackCooldown); 
-		
-		if (!_isReloading) _currentAmmo = CurrentWeapon.MaxAmmo;
+
+		_timer.WaitTime = Mathf.Max(0.01f, CurrentWeapon.AttackCooldown);
+
+		if (_instantiatedWeapon != CurrentWeapon && !_isReloading)
+		{
+			_currentAmmo = CurrentWeapon.MaxAmmo;
+		}
+		else if (_currentAmmo <= 0 && !_isReloading)
+		{
+			_currentAmmo = CurrentWeapon.MaxAmmo;
+		}
 
 		_isPlayerOwned = false;
 		Node pNode = GetParent();
-		while (pNode != null) {
-			if (pNode is Player) {
+		while (pNode != null)
+		{
+			if (pNode is Player)
+			{
 				_isPlayerOwned = true;
 				break;
 			}
 			pNode = pNode.GetParent();
 		}
 
-		if (_visualContainer != null && _instantiatedWeapon != CurrentWeapon) {
+		if (_visualContainer != null && _instantiatedWeapon != CurrentWeapon)
+		{
 			_visualContainer.QueueFree();
 			_visualContainer = null;
 			_rangedVisual = null;
@@ -110,113 +142,130 @@ public partial class AttackController : Node2D
 			_animPlayer = null;
 		}
 
-		if (_visualContainer == null && CurrentWeapon.WeaponVisualPrefab != null) {
+		if (_visualContainer == null && CurrentWeapon.WeaponVisualPrefab != null)
+		{
 			_visualContainer = CurrentWeapon.WeaponVisualPrefab.Instantiate() as Node2D;
-			AddChild(_visualContainer); 
+			AddChild(_visualContainer);
 			_instantiatedWeapon = CurrentWeapon;
 
-			// Пытаемся найти специализированный контроллер визуала
 			_rangedVisual = _visualContainer as RangedWeaponVisual ?? _visualContainer.GetNodeOrNull<RangedWeaponVisual>(".");
 			_meleeVisual = _visualContainer as MeleeWeaponVisual ?? _visualContainer.GetNodeOrNull<MeleeWeaponVisual>(".");
-			
-			_weaponSpriteNode = _visualContainer.GetNodeOrNull<Sprite2D>("WeaponSprite") ?? 
-								_visualContainer.GetNodeOrNull<Sprite2D>("SpriteDagger") ?? 
+
+			_weaponSpriteNode = _visualContainer.GetNodeOrNull<Sprite2D>("WeaponSprite") ??
+								_visualContainer.GetNodeOrNull<Sprite2D>("SpriteDagger") ??
 								_visualContainer.GetNodeOrNull<Sprite2D>("SpriteAxe");
 
 			_animSpriteNode = _visualContainer.GetNodeOrNull<AnimatedSprite2D>("WeaponSprite") ??
 							  _visualContainer.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D") ??
 							  _visualContainer.GetChildren().Cast<Node>().OfType<AnimatedSprite2D>().FirstOrDefault();
-								
-			if (_animSpriteNode != null) {
-				_animSpriteNode.AnimationFinished += () => {
-					if (_animSpriteNode.Animation != "idle" && _animSpriteNode.SpriteFrames.HasAnimation("idle")) {
+
+			if (_animSpriteNode != null)
+			{
+				_animSpriteNode.AnimationFinished += () =>
+				{
+					if (_animSpriteNode.Animation != "idle" && _animSpriteNode.SpriteFrames.HasAnimation("idle"))
+					{
 						_animSpriteNode.Play("idle");
 					}
 				};
-				_animSpriteNode.AnimationLooped += () => {
-					if (_animSpriteNode.Animation != "idle" && _animSpriteNode.SpriteFrames.HasAnimation("idle")) {
+				_animSpriteNode.AnimationLooped += () =>
+				{
+					if (_animSpriteNode.Animation != "idle" && _animSpriteNode.SpriteFrames.HasAnimation("idle"))
+					{
 						_animSpriteNode.Play("idle");
 					}
 				};
 			}
 
-			_animPlayer = _visualContainer.GetNodeOrNull<AnimationPlayer>("AnimationPlayer") ?? 
+			_animPlayer = _visualContainer.GetNodeOrNull<AnimationPlayer>("AnimationPlayer") ??
 						  _visualContainer.GetChildren().Cast<Node>().OfType<AnimationPlayer>().FirstOrDefault();
 
-			var area = _visualContainer.GetNodeOrNull<Area2D>("Area2D") ?? 
+			var area = _visualContainer.GetNodeOrNull<Area2D>("Area2D") ??
 					   _visualContainer.GetChildren().Cast<Node>().OfType<Area2D>().FirstOrDefault();
-			if (area != null) {
+			if (area != null)
+			{
 				area.AddToGroup(_isPlayerOwned ? "PlayerWeapon" : "EnemyWeapon");
 			}
 		}
 
 		HideSlashes(_visualContainer);
 
-		// Сбрасываем анимацию визуала в idle/RESET при каждом выборе/подборе оружия
-		if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("idle")) {
+		if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("idle"))
+		{
 			_animSpriteNode.Play("idle");
 		}
-		if (_animPlayer != null && _animPlayer.HasAnimation("RESET")) {
+		if (_animPlayer != null && _animPlayer.HasAnimation("RESET"))
+		{
 			_animPlayer.Play("RESET");
 		}
 	}
 
-	public override void _Process(double delta) {
-		if (!IsAttacking) {
+	public override void _Process(double delta)
+	{
+		if (_isReloading)
+		{
+			_reloadElapsed += (float)delta;
+		}
+
+		if (!IsAttacking)
+		{
 			HideSlashes(_visualContainer);
 		}
 
-		// Если это оружие ближнего боя и оно атакует, не обновляем его ориентацию, 
-		// чтобы анимация удара проигрывалась в фиксированном направлении.
-		if (!(CurrentWeapon != null && !CurrentWeapon.IsRanged && IsAttacking)) {
+		if (!(CurrentWeapon != null && !CurrentWeapon.IsRanged && IsAttacking))
+		{
 			UpdateWeaponOrientation(GetTargetPosition());
 		}
 
 		var ownerSprite = GetParent()?.GetParent()?.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		if (ownerSprite != null) {
+		if (ownerSprite != null)
+		{
 			Vector2 pos = Position;
-			pos.X = ownerSprite.FlipH ? -2.0f : 2.0f; 
-			pos.Y = -4.0f; 
+			pos.X = ownerSprite.FlipH ? -2.0f : 2.0f;
+			pos.Y = -4.0f;
 			Position = pos;
 		}
 
-		if (_isPlayerOwned) {
-			if (!Input.IsActionPressed("attack")) {
+		if (_isPlayerOwned)
+		{
+			if (!Input.IsActionPressed("attack"))
+			{
 				_playedEmptySoundThisPress = false;
 			}
 		}
 	}
 
-	private void UpdateWeaponOrientation(Vector2 targetPos) {
+	private void UpdateWeaponOrientation(Vector2 targetPos)
+	{
 		Vector2 ownerPos = _ownerNode != null ? _ownerNode.GlobalPosition : GlobalPosition;
 		float angleToOwner = (targetPos - ownerPos).Angle();
 		float angle = (targetPos - GlobalPosition).Angle();
-		
-		// 1. БАЗОВОЕ ПРИЦЕЛИВАНИЕ (родитель всегда смотрит на мышь)
+
 		Rotation = angle;
 
-		if (_visualContainer != null) {
-			// 2. ДЕЛЕГИРОВАНИЕ СПЕЦИАЛЬНЫМ СКРИПТАМ
-			if (_rangedVisual != null) {
+		if (_visualContainer != null)
+		{
+			if (_rangedVisual != null)
+			{
 				_rangedVisual.UpdateOrientation(targetPos, IsAttacking);
 				return;
 			}
-			if (_meleeVisual != null) {
+			if (_meleeVisual != null)
+			{
 				_meleeVisual.UpdateOrientation(targetPos, IsAttacking);
 				return;
 			}
 
-			// 3. ФОЛБЭК (Дефолтная логика, если скриптов нет)
 			var ownerSprite = _ownerNode?.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 			bool currentFlip = ownerSprite?.FlipH ?? false;
 			bool isLeft = currentFlip;
 
-			// Гистерезис 10 градусов для предотвращения дребезга
 			float angleDeg = Mathf.Abs(Mathf.RadToDeg(angleToOwner));
 			if (angleDeg > 100) isLeft = true;
 			else if (angleDeg < 80) isLeft = false;
 
-			if (!IsAttacking) {
+			if (!IsAttacking)
+			{
 				_visualContainer.Rotation = Mathf.DegToRad(CurrentWeapon?.OrientationOffset ?? 0);
 			}
 
@@ -228,23 +277,30 @@ public partial class AttackController : Node2D
 		}
 	}
 
-	private void HideSlashes(Node parent) {
+	private void HideSlashes(Node parent)
+	{
 		if (parent == null) return;
-		foreach (Node child in parent.GetChildren()) {
-			if (child is Sprite2D s && s.Name.ToString().Contains("Slash")) {
+		foreach (Node child in parent.GetChildren())
+		{
+			if (child is Sprite2D s && s.Name.ToString().Contains("Slash"))
+			{
 				s.Visible = false;
 			}
 			HideSlashes(child);
 		}
 	}
 
-	public void HandleManualAttack() {
+	public void HandleManualAttack()
+	{
 		if (!_canAttack || CurrentWeapon == null || _isReloading) return;
 
-		// 1. Сначала проверяем патроны (только для игрока)
-		if (_isPlayerOwned && CurrentWeapon.IsRanged && _currentAmmo <= 0) {
-			if (!_playedEmptySoundThisPress) {
-				if (CurrentWeapon.EmptySound != null) {
+		// 1. Проверяем патроны (только для оружия с конечным магазином)
+		if (_isPlayerOwned && UsesAmmo && _currentAmmo <= 0)
+		{
+			if (!_playedEmptySoundThisPress)
+			{
+				if (CurrentWeapon.EmptySound != null)
+				{
 					PlaySound(CurrentWeapon.EmptySound);
 				}
 				_playedEmptySoundThisPress = true;
@@ -252,9 +308,11 @@ public partial class AttackController : Node2D
 			return;
 		}
 
-		// 2. Затем проверяем и тратим ману
-		if (_isPlayerOwned && _player != null) {
-			if (_player.CurrentMana < CurrentWeapon.ManaCost) {
+		// 2. Проверяем и тратим ману
+		if (_isPlayerOwned && _player != null)
+		{
+			if (_player.CurrentMana < CurrentWeapon.ManaCost)
+			{
 				_player.ShowNoManaWarning();
 				return;
 			}
@@ -266,143 +324,166 @@ public partial class AttackController : Node2D
 
 		_hitEnemies.Clear();
 
-		if (CurrentWeapon != null && CurrentWeapon.AttackSound != null) {
+		if (CurrentWeapon != null && CurrentWeapon.AttackSound != null)
+		{
 			PlaySound(CurrentWeapon.AttackSound);
 		}
 
-		if (CurrentWeapon.IsRanged) {
+		if (CurrentWeapon.IsRanged)
+		{
 			Shoot(targetPosition);
-			if (_isPlayerOwned) {
+			if (_isPlayerOwned && UsesAmmo)
+			{
 				_currentAmmo--;
 			}
 		}
 
-		if (CurrentWeapon.Recoil > 0 && _isPlayerOwned && _player != null) {
+		if (CurrentWeapon.Recoil > 0 && _isPlayerOwned && _player != null)
+		{
 			Vector2 dir = (targetPosition - GlobalPosition).Normalized();
 			_player.ApplyRecoil(dir, CurrentWeapon.Recoil);
 		}
 
-		// Вызов CPUParticles2DSleeve, если они есть у оружия
-		if (_visualContainer != null) {
-			var sleeveParticles = _visualContainer.GetNodeOrNull<CpuParticles2D>("CPUParticles2DSleeve") ?? 
+		if (_visualContainer != null)
+		{
+			var sleeveParticles = _visualContainer.GetNodeOrNull<CpuParticles2D>("CPUParticles2DSleeve") ??
 								  _visualContainer.GetNodeOrNull<CpuParticles2D>("CPUParticles2D");
-			if (sleeveParticles != null) {
+			if (sleeveParticles != null)
+			{
 				sleeveParticles.Restart();
 				sleeveParticles.Emitting = true;
 			}
 		}
 
-		// Логика анимации
-		if (_animPlayer != null) {
-				_animPlayer.Stop();
-				string animToPlay = ""; 
-				var animList = _animPlayer.GetAnimationList();
-				foreach (var anim in animList) {
-					if (anim != "RESET") {
-						animToPlay = anim;
-						break;
-					}
+		if (_animPlayer != null)
+		{
+			_animPlayer.Stop();
+			string animToPlay = "";
+			var animList = _animPlayer.GetAnimationList();
+			foreach (var anim in animList)
+			{
+				if (anim != "RESET")
+				{
+					animToPlay = anim;
+					break;
 				}
-				if (!string.IsNullOrEmpty(animToPlay)) _animPlayer.Play(animToPlay); 
 			}
-			else if (_animSpriteNode != null) {
-				_animSpriteNode.Stop();
-				_animSpriteNode.Frame = 0;
-				string animToPlay = CurrentWeapon.IsRanged ? "shoot" : "attack";
-				if (!_animSpriteNode.SpriteFrames.HasAnimation(animToPlay)) {
-					var names = _animSpriteNode.SpriteFrames.GetAnimationNames();
-					if (names.Length > 0) animToPlay = names[0];
-				}
-				_animSpriteNode.Play(animToPlay);
+			if (!string.IsNullOrEmpty(animToPlay)) _animPlayer.Play(animToPlay);
+		}
+		else if (_animSpriteNode != null)
+		{
+			_animSpriteNode.Stop();
+			_animSpriteNode.Frame = 0;
+			string animToPlay = CurrentWeapon.IsRanged ? "shoot" : "attack";
+			if (!_animSpriteNode.SpriteFrames.HasAnimation(animToPlay))
+			{
+				var names = _animSpriteNode.SpriteFrames.GetAnimationNames();
+				if (names.Length > 0) animToPlay = names[0];
 			}
+			_animSpriteNode.Play(animToPlay);
+		}
 
 		_canAttack = false;
 		_timer.Start();
 	}
 
-	public void StartReload() {
-		if (_isReloading || CurrentWeapon == null || !CurrentWeapon.IsRanged || _currentAmmo == CurrentWeapon.MaxAmmo) return;
-		
-		_isReloading = true;
-		GD.Print($"{CurrentWeapon.WeaponName}: Перезарядка...");
+	public void StartReload()
+	{
+		if (_isReloading || CurrentWeapon == null || !UsesAmmo || _currentAmmo == CurrentWeapon.MaxAmmo) return;
 
-		if (CurrentWeapon.ReloadSound != null) {
+		_isReloading = true;
+		_reloadElapsed = 0.0f;
+
+		if (CurrentWeapon.ReloadSound != null)
+		{
 			PlaySound(CurrentWeapon.ReloadSound);
 		}
-		
-		if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("reload")) {
+
+		if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("reload"))
+		{
 			_animSpriteNode.Play("reload");
-		} else if (_animPlayer != null && _animPlayer.HasAnimation("reload")) {
+		}
+		else if (_animPlayer != null && _animPlayer.HasAnimation("reload"))
+		{
 			_animPlayer.Play("reload");
 		}
-		
-		// processAlways: false — таймер перезарядки замирает вместе с игрой при паузе
+
 		var reloadTimer = GetTree().CreateTimer(CurrentWeapon.ReloadTime, processAlways: false);
-		reloadTimer.Timeout += () => {
+		reloadTimer.Timeout += () =>
+		{
+			if (!GodotObject.IsInstanceValid(this) || !_isReloading) return;
 			_currentAmmo = CurrentWeapon.MaxAmmo;
 			_isReloading = false;
-			GD.Print($"{CurrentWeapon.WeaponName}: Перезаряжено!");
-			if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("idle")) {
+			_reloadElapsed = 0.0f;
+			if (_animSpriteNode != null && _animSpriteNode.SpriteFrames.HasAnimation("idle"))
+			{
 				_animSpriteNode.Play("idle");
 			}
 		};
 	}
 
-	private void Shoot(Vector2 targetPos) {
+	private void Shoot(Vector2 targetPos)
+	{
 		if (CurrentWeapon.BulletPrefab == null) return;
 
 		Marker2D muzzle = null;
-		if (_visualContainer != null) {
-			muzzle = _visualContainer.GetNodeOrNull<Marker2D>("Muzzle") ?? 
+		if (_visualContainer != null)
+		{
+			muzzle = _visualContainer.GetNodeOrNull<Marker2D>("Muzzle") ??
 					 _visualContainer.GetChildren().Cast<Node>().OfType<Marker2D>().FirstOrDefault();
 		}
-		
+
 		Vector2 spawnPos = muzzle != null ? muzzle.GlobalPosition : GlobalPosition;
 
-		for (int i = 0; i < CurrentWeapon.BulletCount; i++) {
+		for (int i = 0; i < CurrentWeapon.BulletCount; i++)
+		{
 			var bulletNode = CurrentWeapon.BulletPrefab.Instantiate();
-			
-			if (bulletNode is Projectile bullet) {
+
+			if (bulletNode is Projectile bullet)
+			{
 				bullet.Position = spawnPos;
-				
+
 				float bulletDamage = CurrentWeapon.Damage;
-				if (_ownerNode is Enemy enemy) {
+				if (_ownerNode is Enemy enemy)
+				{
 					bulletDamage *= enemy.DamageMultiplier;
+				}
+				else if (_isPlayerOwned && _player != null)
+				{
+					bulletDamage *= _player.WeaponDamageMultiplier;
 				}
 				bullet.Damage = bulletDamage;
 
 				bullet.IsPlayerOwned = _isPlayerOwned;
-				bullet.IsPiercing = CurrentWeapon.IsPiercing; // Передаем настройку пробития
-				bullet.Speed = CurrentWeapon.BulletSpeed * World.Scale; // Устанавливаем скорость пули из настроек оружия (масштабировано)
+				bullet.IsPiercing = CurrentWeapon.IsPiercing;
+				bullet.Speed = CurrentWeapon.BulletSpeed * World.Scale;
+				bullet.Range = CurrentWeapon.AttackRange > 0 ? CurrentWeapon.AttackRange * 2.5f : 500.0f;
 				bullet.KnockbackForce = CurrentWeapon.KnockbackForce;
-				
+
 				Vector2 dir = (targetPos - spawnPos).Normalized();
-				if (CurrentWeapon.Spread > 0) {
+				if (CurrentWeapon.Spread > 0)
+				{
 					dir = dir.Rotated((float)GD.RandRange(-CurrentWeapon.Spread, CurrentWeapon.Spread));
 				}
 				bullet.Direction = dir;
 				bullet.Rotation = dir.Angle();
 
-				// ГАРАНТИРУЕМ ГРУППУ ДЛЯ РЕГИСТРАЦИИ УРОНА
-				// Сначала ищем дочерний Area2D (как в glock_bullet.tscn)
 				Area2D bulletArea = bullet.GetNodeOrNull<Area2D>("Area2D");
-				
-				// Если не нашли, проверяем саму пулю (на случай если корень - Area2D)
-				// Но так как Projectile : Node2D, мы используем динамическую проверку
-				if (bulletArea == null && bullet is Node bNode && bNode is Area2D rootArea) {
+				if (bulletArea == null && bullet is Node bNode && bNode is Area2D rootArea)
+				{
 					bulletArea = rootArea;
 				}
-				
-				if (bulletArea != null) {
-					// Группа должна соответствовать владельцу пули, иначе коллизии
-					// будут считать пули врагов оружием игрока и наоборот
+
+				if (bulletArea != null)
+				{
 					string ownerGroup = _isPlayerOwned ? "PlayerWeapon" : "EnemyWeapon";
 					string wrongGroup = _isPlayerOwned ? "EnemyWeapon" : "PlayerWeapon";
 					if (bulletArea.IsInGroup(wrongGroup)) bulletArea.RemoveFromGroup(wrongGroup);
 					if (!bulletArea.IsInGroup(ownerGroup)) bulletArea.AddToGroup(ownerGroup);
 				}
 			}
-			else if (bulletNode is Node2D node2D) {
+			else if (bulletNode is Node2D node2D)
+			{
 				node2D.Position = spawnPos;
 			}
 
@@ -410,7 +491,8 @@ public partial class AttackController : Node2D
 		}
 	}
 
-	public bool CanHitEnemy(ulong enemyId) {
+	public bool CanHitEnemy(ulong enemyId)
+	{
 		if (CurrentWeapon == null) return false;
 		if (CurrentWeapon.AllowMultiHit) return true;
 		if (_hitEnemies.Contains(enemyId)) return false;
@@ -418,22 +500,26 @@ public partial class AttackController : Node2D
 		return true;
 	}
 
-	private Vector2 GetTargetPosition() {
-		if (!_isPlayerOwned) {
+	private Vector2 GetTargetPosition()
+	{
+		if (!_isPlayerOwned)
+		{
 			var p = GetTree().GetFirstNodeInGroup("Player") as Node2D;
 			return p != null ? p.GlobalPosition : GlobalPosition;
 		}
 
-		if (CurrentWeapon != null && CurrentWeapon.IsAutoAim) {
+		if (CurrentWeapon != null && CurrentWeapon.IsAutoAim)
+		{
 			var enemies = GetTree().GetNodesInGroup("enemy");
 			Node2D nearest = null;
 			float minDist = float.MaxValue;
-			foreach (Node node in enemies) {
-				if (node is Node2D enemy) {
-					if (enemy is OrcWarrior orc && orc.CurrentHealth <= 0) continue;
-					if (enemy is Ghost ghost && ghost.CurrentHealth <= 0) continue;
+			foreach (Node node in enemies)
+			{
+				if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
+				{
 					float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
-					if (dist < minDist) {
+					if (dist < minDist)
+					{
 						minDist = dist;
 						nearest = enemy;
 					}

@@ -6,11 +6,10 @@ public static class SettingsManager
 {
 	private const string ConfigPath = "user://settings.cfg";
 
-	// Reverb configuration parameters for the SFX bus
-	public static float ReverbRoomSize = 0.35f;  // Room size (0.0 to 1.0)
-	public static float ReverbDampness = 0.4f;   // Dampness (0.0 to 1.0)
-	public static float ReverbWet = 0.2f;        // Wet level (0.0 to 1.0)
-	public static float ReverbDry = 0.8f;        // Dry level (0.0 to 1.0)
+	public static float ReverbRoomSize = 0.35f;
+	public static float ReverbDampness = 0.4f;
+	public static float ReverbWet = 0.2f;
+	public static float ReverbDry = 0.8f;
 
 	public static float Brightness = 1.0f;
 	public static int MaxFps = 60;
@@ -30,7 +29,9 @@ public static class SettingsManager
 		{ "move_up", Key.W },
 		{ "move_down", Key.S },
 		{ "interact", Key.E },
-		{ "reload", Key.R }
+		{ "reload", Key.R },
+		{ "ability_1", Key.Q },
+		{ "ability_2", Key.V }
 	};
 
 	public static void LoadSettings()
@@ -41,7 +42,6 @@ public static class SettingsManager
 		Error err = config.Load(ConfigPath);
 		if (err != Error.Ok)
 		{
-			// Save default config
 			SaveSettings();
 			ApplySettings();
 			return;
@@ -58,7 +58,6 @@ public static class SettingsManager
 
 		MouseSensitivity = (float)config.GetValue("Controllers", "MouseSensitivity", 1.0f);
 
-		// Load binds
 		var actions = new List<string>(KeyBinds.Keys);
 		foreach (var action in actions)
 		{
@@ -99,11 +98,9 @@ public static class SettingsManager
 	{
 		EnsureAudioBuses();
 
-		// Apply Display Settings
 		Engine.MaxFps = MaxFps;
 		DisplayServer.WindowSetVsyncMode(VSync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
 
-		// Apply Audio Settings
 		int masterIdx = AudioServer.GetBusIndex("Master");
 		if (masterIdx != -1) AudioServer.SetBusVolumeDb(masterIdx, Mathf.LinearToDb(MasterVolume / 100f));
 
@@ -113,15 +110,18 @@ public static class SettingsManager
 		int sfxIdx = AudioServer.GetBusIndex("SFX");
 		if (sfxIdx != -1) AudioServer.SetBusVolumeDb(sfxIdx, Mathf.LinearToDb(SFXVolume / 100f));
 
-		// Apply Binds
 		foreach (var pair in KeyBinds)
 		{
 			if (pair.Value == Key.None) continue;
-			if (!InputMap.HasAction(pair.Key)) continue;
+			if (!InputMap.HasAction(pair.Key))
+			{
+				InputMap.AddAction(pair.Key);
+			}
 
 			InputMap.ActionEraseEvents(pair.Key);
 			var keyEvent = new InputEventKey();
 			keyEvent.PhysicalKeycode = pair.Value;
+			keyEvent.Keycode = pair.Value;
 			InputMap.ActionAddEvent(pair.Key, keyEvent);
 		}
 	}

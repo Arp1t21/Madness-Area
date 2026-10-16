@@ -9,6 +9,7 @@
 
 [resource]
 script = ExtResource("1_7nkeh")
+WeaponName = "Shotgun"
 Damage = 2
 AttackCooldown = 1.4
 KnockbackForce = 2.0

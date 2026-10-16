@@ -20,16 +20,13 @@ public partial class Fireball : Area2D
 		Scale = new Vector2(3.0f, 3.0f);
 		_startPos = GlobalPosition;
 
-		// Настройка коллизий: маска коллизий для врагов и стен/преград
-		CollisionLayer = 0; // Огненный шар сам по себе не коллизит с другими вещами напрямую как тело
-		CollisionMask = 1 | 2 | 4; // Слой 1 (стены/земля), слои врагов
+		CollisionLayer = 0;
+		CollisionMask = 1 | 2 | 4;
 
-		// Ищем существующий шлейф в сцене
 		_trail = GetNodeOrNull<CpuParticles2D>("Trail") ?? GetNodeOrNull<CpuParticles2D>("CpuParticles2D");
 
 		if (_trail == null)
 		{
-			// Если его нет в сцене, создаем программно
 			_trail = new CpuParticles2D();
 			_trail.Name = "Trail";
 			_trail.Amount = 50;
@@ -46,7 +43,8 @@ public partial class Fireball : Area2D
 			_trail.ScaleAmountCurve = scaleCurve;
 
 			var gradient = new Gradient();
-			gradient.Colors = new Color[] {
+			gradient.Colors = new Color[]
+			{
 				new Color(1.0f, 0.9f, 0.3f, 1.0f),
 				new Color(1.0f, 0.5f, 0.0f, 0.8f),
 				new Color(0.9f, 0.1f, 0.0f, 0.5f),
@@ -63,7 +61,6 @@ public partial class Fireball : Area2D
 			_trail.Direction = -Direction;
 		}
 
-		// Проверяем наличие CollisionShape2D в сцене
 		bool hasCollisionShape = false;
 		foreach (var child in GetChildren())
 		{
@@ -83,7 +80,6 @@ public partial class Fireball : Area2D
 			AddChild(collisionShape);
 		}
 
-		// Подписываемся на коллизии
 		BodyEntered += OnBodyEntered;
 		AreaEntered += OnAreaEntered;
 	}
@@ -94,7 +90,6 @@ public partial class Fireball : Area2D
 
 		Position += Direction * Speed * (float)delta;
 
-		// Ограничение дистанции
 		if (GlobalPosition.DistanceTo(_startPos) >= Range)
 		{
 			Explode();
@@ -105,10 +100,9 @@ public partial class Fireball : Area2D
 	{
 		if (_isDestroyed) return;
 
-		// Отрисовка светящегося огненного ядра
-		DrawCircle(Vector2.Zero, 8.0f, new Color(1.0f, 0.4f, 0.0f, 0.3f)); // Внешнее свечение
-		DrawCircle(Vector2.Zero, 5.0f, new Color(1.0f, 0.65f, 0.0f, 0.8f)); // Средний слой
-		DrawCircle(Vector2.Zero, 2.5f, new Color(1.0f, 1.0f, 0.8f, 1.0f)); // Яркое ядро
+		DrawCircle(Vector2.Zero, 8.0f, new Color(1.0f, 0.4f, 0.0f, 0.3f));
+		DrawCircle(Vector2.Zero, 5.0f, new Color(1.0f, 0.65f, 0.0f, 0.8f));
+		DrawCircle(Vector2.Zero, 2.5f, new Color(1.0f, 1.0f, 0.8f, 1.0f));
 	}
 
 	private void OnBodyEntered(Node2D body)
@@ -118,35 +112,34 @@ public partial class Fireball : Area2D
 
 	private void OnAreaEntered(Area2D area)
 	{
-		HandleCollision(area.GetParent());
+		if (area.IsInGroup("enemy"))
+		{
+			HandleCollision(area.GetParent());
+		}
 	}
 
 	private void HandleCollision(Node hitNode)
 	{
 		if (_isDestroyed || hitNode == null || hitNode.IsQueuedForDeletion()) return;
 
-		// Не взрываемся о самого игрока
 		if (hitNode.IsInGroup("Player")) return;
 
-		// Пробиваем врагов насквозь, нанося урон один раз
-		if (hitNode.IsInGroup("enemy"))
+		// Пробиваем врагов насквозь, нанося урон ровно один раз за каст
+		if (hitNode is Enemy enemy)
 		{
-			if (_hitTargets.Add(hitNode.GetInstanceId()))
+			if (_hitTargets.Add(enemy.GetInstanceId()))
 			{
-				if (hitNode.HasMethod("TakeDamage"))
-				{
-					hitNode.Call("TakeDamage", Damage, GlobalPosition, 8.0f, false);
-				}
+				enemy.TakeDamage(Damage, GlobalPosition, 8.0f, false);
 			}
-			return; // Летим дальше
+			return;
 		}
 
-		// Взрываемся при контакте с твердыми объектами (стены, преграды, двери)
-		if (hitNode is TileMapLayer || 
+		// Взрываемся только при контакте с твердыми препятствиями (стены, колонны, двери)
+		if (hitNode is TileMapLayer ||
 			hitNode is StaticBody2D ||
 			hitNode is Door ||
 			hitNode.Name.ToString().Contains("Wall") ||
-			hitNode.Name.ToString().Contains("Floor"))
+			hitNode.Name.ToString().Contains("Collumn"))
 		{
 			Explode();
 		}
@@ -157,40 +150,35 @@ public partial class Fireball : Area2D
 		if (_isDestroyed) return;
 		_isDestroyed = true;
 
-		// Скрываем ядро и отключаем коллизии
 		Visible = false;
 		SetDeferred("monitoring", false);
 		SetDeferred("monitorable", false);
 
-		// Создаем взрывные частицы
 		var explosion = new FireballExplosion();
 		explosion.GlobalPosition = GlobalPosition;
 		GetParent().AddChild(explosion);
 
-		// Наносим АОЕ урон всем врагам в радиусе взрыва
+		// Наносим АОЕ урон врагам в радиусе взрыва (избегая двойного полного урона по уже пробитым целям)
 		var enemies = GetTree().GetNodesInGroup("enemy");
 		foreach (Node enemyNode in enemies)
 		{
-			if (enemyNode is CharacterBody2D enemy && GodotObject.IsInstanceValid(enemy))
+			if (enemyNode is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
 			{
 				float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
-				if (dist <= ExplosionRadius * 3f)
+				if (dist <= ExplosionRadius * World.Scale)
 				{
-					if (enemy.HasMethod("TakeDamage"))
+					if (_hitTargets.Add(enemy.GetInstanceId()))
 					{
-						// Направление отскока от центра взрыва
-						Vector2 knockDir = (enemy.GlobalPosition - GlobalPosition).Normalized();
-						enemy.Call("TakeDamage", Damage, GlobalPosition, 12.0f, false);
+						enemy.TakeDamage(Damage, GlobalPosition, 12.0f, false);
 					}
 				}
 			}
 		}
 
-		// Даем шлейфу доиграть частицы, после чего удаляем узел
 		if (_trail != null)
 		{
 			_trail.Emitting = false;
-			var timer = GetTree().CreateTimer(_trail.Lifetime);
+			var timer = GetTree().CreateTimer(_trail.Lifetime, processAlways: false);
 			timer.Timeout += QueueFree;
 		}
 		else
@@ -200,7 +188,6 @@ public partial class Fireball : Area2D
 	}
 }
 
-// Отдельный узел для взрывных частиц огненного шара
 public partial class FireballExplosion : CpuParticles2D
 {
 	public override void _Ready()
@@ -215,16 +202,15 @@ public partial class FireballExplosion : CpuParticles2D
 		Gravity = Vector2.Zero;
 		InitialVelocityMin = 180f;
 		InitialVelocityMax = 330f;
-		
-		// Кривая размера
+
 		var scaleCurve = new Curve();
 		scaleCurve.AddPoint(new Vector2(0f, 1.5f));
 		scaleCurve.AddPoint(new Vector2(1f, 0.1f));
 		ScaleAmountCurve = scaleCurve;
-		
-		// Цветовой градиент вспышки
+
 		var gradient = new Gradient();
-		gradient.Colors = new Color[] {
+		gradient.Colors = new Color[]
+		{
 			new Color(1.0f, 1.0f, 0.7f, 1.0f),
 			new Color(1.0f, 0.6f, 0.0f, 0.9f),
 			new Color(0.9f, 0.1f, 0.0f, 0.6f),
@@ -233,8 +219,7 @@ public partial class FireballExplosion : CpuParticles2D
 		gradient.Offsets = new float[] { 0.0f, 0.2f, 0.6f, 1.0f };
 		ColorRamp = gradient;
 
-		// Автоматически удаляем после окончания анимации
-		var timer = GetTree().CreateTimer(0.55f);
+		var timer = GetTree().CreateTimer(0.55f, processAlways: false);
 		timer.Timeout += QueueFree;
 	}
 }

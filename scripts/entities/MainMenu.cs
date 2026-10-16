@@ -148,6 +148,8 @@ public partial class MainMenu : CanvasLayer
 	private Label _infoLabel = null;
 	private string _selectedSlotId = "";
 	private Button _deleteBtn = null;
+	private string _selectedCharacterName = "Knight";
+	private bool _isLoadSlotMode = false;
 
 	private void OnNewGamePressed()
 	{
@@ -270,8 +272,11 @@ public partial class MainMenu : CanvasLayer
 			else if (currentCardIndex == 1)
 			{
 				cardBtn.Text = "MAGICIAN";
-				cardBtn.Disabled = true;
-				cardBtn.AddThemeStyleboxOverride("disabled", lockStyle);
+				cardBtn.Disabled = false;
+				cardBtn.AddThemeStyleboxOverride("normal", cardStyle);
+				cardBtn.AddThemeStyleboxOverride("hover", cardHover);
+				cardBtn.AddThemeStyleboxOverride("pressed", cardStyle);
+				cardBtn.AddThemeStyleboxOverride("focus", cardStyle);
 				
 				infoText.Text = "MAGICIAN STATS:\nHP: 40\nMANA: 200\nSPEED: 55\nWEAPON: Staff";
 				infoText.HorizontalAlignment = HorizontalAlignment.Left;
@@ -303,8 +308,10 @@ public partial class MainMenu : CanvasLayer
 		};
 
 		cardBtn.Pressed += () => {
-			if (currentCardIndex == 0) {
+			if (currentCardIndex == 0 || currentCardIndex == 1) {
+				_selectedCharacterName = currentCardIndex == 1 ? "Magician" : "Knight";
 				charSelectRoot.QueueFree();
+				_activeOverlay = null;
 				ShowSlotSelection(false);
 			}
 		};
@@ -321,6 +328,7 @@ public partial class MainMenu : CanvasLayer
 
 		backBtn.Pressed += () => {
 			charSelectRoot.QueueFree();
+			_activeOverlay = null;
 			ShowMainMenu();
 		};
 
@@ -329,6 +337,7 @@ public partial class MainMenu : CanvasLayer
 
 	private void ShowSlotSelection(bool isLoadMode)
 	{
+		_isLoadSlotMode = isLoadMode;
 		HideMainMenu();
 
 		var slotSelectRoot = new Control();
@@ -550,13 +559,14 @@ public partial class MainMenu : CanvasLayer
 		else
 		{
 			// Start new game in this slot (overwriting if exists)
+			bool isMagician = _selectedCharacterName == "Magician";
 			SaveManager.ActiveSlotId = slotId;
 			SaveManager.CurrentSave = new SaveData {
 				SlotId = slotId,
-				CharacterName = "Knight",
+				CharacterName = _selectedCharacterName,
 				CurrentLevelIndex = 1,
-				CurrentHealth = 55,
-				CurrentMana = 100,
+				CurrentHealth = isMagician ? 40 : 55,
+				CurrentMana = isMagician ? 200 : 100,
 				Coins = 0
 			};
 			SaveManager.SaveGame(SaveManager.CurrentSave);
@@ -578,6 +588,10 @@ public partial class MainMenu : CanvasLayer
 
 	private void OnSettingsPressed()
 	{
+		foreach (Node child in GetChildren())
+		{
+			if (child is SettingsMenu) return;
+		}
 		var settings = new SettingsMenu();
 		AddChild(settings);
 	}
@@ -585,5 +599,32 @@ public partial class MainMenu : CanvasLayer
 	private void OnExitPressed()
 	{
 		GetTree().Quit();
+	}
+
+	public override void _Input(InputEvent @event)
+	{
+		foreach (Node child in GetChildren())
+		{
+			if (child is SettingsMenu && GodotObject.IsInstanceValid(child) && !child.IsQueuedForDeletion())
+			{
+				return;
+			}
+		}
+
+		if (@event.IsActionPressed("ui_cancel") && _activeOverlay != null && GodotObject.IsInstanceValid(_activeOverlay))
+		{
+			string overlayName = _activeOverlay.Name;
+			_activeOverlay.QueueFree();
+			_activeOverlay = null;
+			if (overlayName == "SlotSelectRoot" && !_isLoadSlotMode)
+			{
+				ShowCharacterSelection();
+			}
+			else
+			{
+				ShowMainMenu();
+			}
+			GetViewport().SetInputAsHandled();
+		}
 	}
 }

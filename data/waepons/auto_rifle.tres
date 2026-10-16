@@ -1,0 +1,29 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=7 format=3]
+
+[ext_resource type="PackedScene" uid="uid://lj0667ylclpd" path="res://scene/weapons/bullets/revolver_bullet.tscn" id="1_bullet"]
+[ext_resource type="AudioStream" uid="uid://2am52okbojh" path="res://assets/sounds/revolver_shot.wav" id="2_shot"]
+[ext_resource type="PackedScene" path="res://scene/weapons/auto_rifle.tscn" id="3_visual"]
+[ext_resource type="AudioStream" uid="uid://cym0q2pai5f31" path="res://assets/sounds/no_ammo_revolver.wav" id="4_empty"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="5_script"]
+[ext_resource type="AudioStream" uid="uid://dc4u6cno1j5bl" path="res://assets/sounds/take_revolver.wav" id="6_reload"]
+
+[resource]
+script = ExtResource("5_script")
+WeaponName = "Auto Rifle"
+Damage = 7
+AttackCooldown = 0.16
+KnockbackForce = 0.4
+Recoil = 1.2
+ManaCost = 1.0
+AttackSound = ExtResource("2_shot")
+ReloadSound = ExtResource("6_reload")
+EquipSound = ExtResource("6_reload")
+EmptySound = ExtResource("4_empty")
+WeaponVisualPrefab = ExtResource("3_visual")
+IsRanged = true
+BulletPrefab = ExtResource("1_bullet")
+BulletSpeed = 680.0
+Spread = 0.08
+MaxAmmo = 24
+ReloadTime = 1.6
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

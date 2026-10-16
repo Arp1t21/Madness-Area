@@ -42,6 +42,8 @@ public partial class SettingsMenu : CanvasLayer
 
 	public override void _Ready()
 	{
+		ProcessMode = ProcessModeEnum.Always;
+		Layer = 25;
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 
 		// 1. Create a root Control node
@@ -530,6 +532,8 @@ public partial class SettingsMenu : CanvasLayer
 
 	private string FormatActionName(string action)
 	{
+		if (action == "ability_1") return "ABILITY 1 (FIREBALL)";
+		if (action == "ability_2") return "ABILITY 2 (SHIELD / DASH)";
 		return action.Replace("_", " ").ToUpper();
 	}
 
@@ -607,7 +611,15 @@ public partial class SettingsMenu : CanvasLayer
 
 	public override void _Input(InputEvent @event)
 	{
-		if (!_isListeningForBind || _actionToBind == null) return;
+		if (!_isListeningForBind || _actionToBind == null)
+		{
+			if (@event.IsActionPressed("ui_cancel"))
+			{
+				OnBackPressed();
+				GetViewport().SetInputAsHandled();
+			}
+			return;
+		}
 
 		if (@event is InputEventKey keyEvent && keyEvent.Pressed)
 		{
@@ -646,6 +658,8 @@ public partial class SettingsMenu : CanvasLayer
 		SettingsManager.KeyBinds["move_down"] = Key.S;
 		SettingsManager.KeyBinds["interact"] = Key.E;
 		SettingsManager.KeyBinds["reload"] = Key.R;
+		SettingsManager.KeyBinds["ability_1"] = Key.Q;
+		SettingsManager.KeyBinds["ability_2"] = Key.V;
 
 		UpdateBindButtonLabels();
 	}

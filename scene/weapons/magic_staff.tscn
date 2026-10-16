@@ -1,0 +1,53 @@
+[gd_scene load_steps=5 format=3]
+
+[ext_resource type="Script" uid="uid://m5n70dsws8w1" path="res://scripts/entities/weapons/RangedWeaponVisual.cs" id="1_ranged"]
+[ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="2_atlas"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_staff"]
+atlas = ExtResource("2_atlas")
+region = Rect2(320, 128, 16, 32)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_staff"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_staff")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_staff")
+}],
+"loop": false,
+"name": &"reload",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_staff")
+}],
+"loop": false,
+"name": &"shoot",
+"speed": 10.0
+}]
+
+[node name="MagicStaff" type="Node2D"]
+script = ExtResource("1_ranged")
+OrientationOffset = 90.0
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(12, 0)
+
+[node name="WeaponSprite" type="Sprite2D" parent="."]
+visible = false
+texture_filter = 1
+texture = SubResource("AtlasTexture_staff")
+offset = Vector2(0, -6)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_staff")
+animation = &"idle"
+offset = Vector2(0, -6)

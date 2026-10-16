@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scene/weapons/double_axe.tscn" id="1_daxe"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+WeaponName = "Battle Axe"
+Damage = 25
+AttackCooldown = 0.85
+AttackRange = 210.0
+KnockbackForce = 9.0
+ManaCost = 3.5
+WeaponVisualPrefab = ExtResource("1_daxe")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

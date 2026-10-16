@@ -1,7 +1,6 @@
 using Godot;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Text.Json;
 using FileAccess = Godot.FileAccess;
 
@@ -15,6 +14,9 @@ public class SaveData
 	public int Coins { get; set; } = 0;
 	public float CurrentHealth { get; set; } = 100f;
 	public float CurrentMana { get; set; } = 100f;
+	public float BonusMaxHealth { get; set; } = 0.0f;
+	public float BonusMaxMana { get; set; } = 0.0f;
+	public float WeaponDamageMultiplier { get; set; } = 1.0f;
 	public int SkillPoints { get; set; } = 0;
 	public int Ability1Level { get; set; } = 0;
 	public int Ability2Level { get; set; } = 0;
@@ -42,6 +44,10 @@ public static class SaveManager
 		try
 		{
 			var data = JsonSerializer.Deserialize<SaveData>(json);
+			if (data != null && data.WeaponDamageMultiplier <= 0.01f)
+			{
+				data.WeaponDamageMultiplier = 1.0f;
+			}
 			return data;
 		}
 		catch (Exception e)

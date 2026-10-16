@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scene/weapons/katana.tscn" id="1_katana"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+WeaponName = "Katana"
+Damage = 18
+AttackCooldown = 0.42
+AttackRange = 180.0
+KnockbackForce = 4.5
+ManaCost = 1.5
+WeaponVisualPrefab = ExtResource("1_katana")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

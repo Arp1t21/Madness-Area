@@ -66,3 +66,14 @@ frame_progress = 0.506472
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
 position = Vector2(0, -10)
 shape = SubResource("RectangleShape2D_32qc2")
+
+[node name="Area2DHitBox" type="Area2D" parent="." groups=["enemy"]]
+collision_layer = 0
+collision_mask = 4
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2DHitBox"]
+position = Vector2(0, -10)
+shape = SubResource("RectangleShape2D_32qc2")
+
+[connection signal="area_entered" from="Area2DHitBox" to="." method="_on_area_2d_area_entered"]
+

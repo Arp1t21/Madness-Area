@@ -31,6 +31,17 @@ public partial class HUD : CanvasLayer
 	private AbilitySlotUI _ability2Slot;
 	private Control _hudRoot;
 
+	// Новые элементы HUD: этаж/враги, слоты оружия/патроны, полоска здоровья Босса
+	private Label _floorEnemiesLabel;
+	private Control _weaponInfoContainer;
+	private readonly Panel[] _weaponSlotPanels = new Panel[3];
+	private readonly Label[] _weaponSlotLabels = new Label[3];
+	private Label _ammoStatusLabel;
+
+	private Control _bossBarContainer;
+	private Label _bossNameLabel;
+	private ProgressBar _bossHealthBar;
+
 	public override void _Ready()
 	{
 		AddToGroup("HUD");
@@ -136,6 +147,9 @@ public partial class HUD : CanvasLayer
 		_hudRoot.AddChild(_arrowIndicator);
 
 		CreateAbilitiesUI();
+		CreateFloorAndEnemiesUI(font);
+		CreateWeaponAndAmmoUI(font);
+		CreateBossBarUI(font);
 	}
 
 	public override void _Process(double delta)
@@ -145,22 +159,24 @@ public partial class HUD : CanvasLayer
 		// Обновление статов игрока
 		if (IsInstanceValid(_player))
 		{
-		if (IsInstanceValid(_coinLabel)) {
-			_coinLabel.Text = _player.CoinCount.ToString();
-			// HBoxContainer пересортировывает детей при смене текста — возвращаем смещение счетчика вниз
-			_coinLabel.Position = new Vector2(_coinLabel.Position.X, 2.0f);
-		}
+			if (IsInstanceValid(_coinLabel)) {
+				_coinLabel.Text = _player.CoinCount.ToString();
+				// HBoxContainer пересортировывает детей при смене текста — возвращаем смещение счетчика вниз
+				_coinLabel.Position = new Vector2(_coinLabel.Position.X, 2.0f);
+			}
 
 			if (_player.Config != null && IsInstanceValid(_healthBar) && IsInstanceValid(_hpLabel)) {
-				_healthBar.MaxValue = _player.Config.MaxHealth;
+				float maxHp = _player.MaxHealthEffective;
+				_healthBar.MaxValue = maxHp;
 				_healthBar.Value = _player.CurrentHealth;
-				_hpLabel.Text = $"{(int)_player.CurrentHealth}/{(int)_player.Config.MaxHealth}";
+				_hpLabel.Text = $"{(int)_player.CurrentHealth}/{(int)maxHp}";
 			}
 
 			if (_player.Config != null && IsInstanceValid(_manaBar) && IsInstanceValid(_mpLabel)) {
-				_manaBar.MaxValue = _player.Config.MaxMana;
+				float maxMp = _player.MaxManaEffective;
+				_manaBar.MaxValue = maxMp;
 				_manaBar.Value = _player.CurrentMana;
-				_mpLabel.Text = $"{(int)_player.CurrentMana}/{(int)_player.Config.MaxMana}";
+				_mpLabel.Text = $"{(int)_player.CurrentMana}/{(int)maxMp}";
 			}
 		}
 
@@ -173,9 +189,13 @@ public partial class HUD : CanvasLayer
 		// Обновление состояния кд и плюсиков способностей
 		if (IsInstanceValid(_ability1Slot)) _ability1Slot.UpdateState();
 		if (IsInstanceValid(_ability2Slot)) _ability2Slot.UpdateState();
+
+		UpdateFloorAndEnemiesUI();
+		UpdateWeaponAndAmmoUI();
+		UpdateBossBarUI();
 	}
 
-		private void ProcessTimer(float delta)
+	private void ProcessTimer(float delta)
 	{
 		if (_isCountingDown)
 		{
@@ -324,6 +344,244 @@ public partial class HUD : CanvasLayer
 		hbox.AddChild(_ability2Slot);
 
 		_hudRoot.AddChild(_abilitiesContainer);
+	}
+
+	private void CreateFloorAndEnemiesUI(Font font)
+	{
+		_floorEnemiesLabel = new Label();
+		_floorEnemiesLabel.Name = "FloorEnemiesLabel";
+		_floorEnemiesLabel.LayoutMode = 1;
+		_floorEnemiesLabel.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
+		_floorEnemiesLabel.OffsetLeft = -90;
+		_floorEnemiesLabel.OffsetRight = 90;
+		_floorEnemiesLabel.OffsetTop = 16;
+		_floorEnemiesLabel.OffsetBottom = 30;
+		_floorEnemiesLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		if (font != null) _floorEnemiesLabel.AddThemeFontOverride("font", font);
+		_floorEnemiesLabel.AddThemeFontSizeOverride("font_size", 10);
+		_floorEnemiesLabel.AddThemeColorOverride("font_color", new Color(0.9f, 0.85f, 0.7f));
+		_hudRoot.AddChild(_floorEnemiesLabel);
+	}
+
+	private void UpdateFloorAndEnemiesUI()
+	{
+		if (!IsInstanceValid(_floorEnemiesLabel)) return;
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		int floor = level != null ? level.CurrentLevelIndex : 1;
+		int enemies = _waveManager != null ? _waveManager.EnemiesRemaining : 0;
+		bool active = _waveManager != null && _waveManager.WaveInProgress;
+
+		if (active || enemies > 0)
+		{
+			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  ENEMIES: {enemies}";
+		}
+		else if (_isCountingDown)
+		{
+			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  PREPARE";
+		}
+		else
+		{
+			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  CLEARED";
+		}
+	}
+
+	private void CreateWeaponAndAmmoUI(Font font)
+	{
+		_weaponInfoContainer = new Control();
+		_weaponInfoContainer.Name = "WeaponInfoContainer";
+		_weaponInfoContainer.LayoutMode = 1;
+		_weaponInfoContainer.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
+		_weaponInfoContainer.OffsetLeft = -150;
+		_weaponInfoContainer.OffsetRight = -6;
+		_weaponInfoContainer.OffsetTop = -44;
+		_weaponInfoContainer.OffsetBottom = -6;
+		_hudRoot.AddChild(_weaponInfoContainer);
+
+		var vbox = new VBoxContainer();
+		vbox.LayoutMode = 1;
+		vbox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		vbox.Alignment = BoxContainer.AlignmentMode.End;
+		vbox.AddThemeConstantOverride("separation", 2);
+		_weaponInfoContainer.AddChild(vbox);
+
+		_ammoStatusLabel = new Label();
+		_ammoStatusLabel.HorizontalAlignment = HorizontalAlignment.Right;
+		if (font != null) _ammoStatusLabel.AddThemeFontOverride("font", font);
+		_ammoStatusLabel.AddThemeFontSizeOverride("font_size", 10);
+		_ammoStatusLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.9f, 0.45f));
+		vbox.AddChild(_ammoStatusLabel);
+
+		var slotsRow = new HBoxContainer();
+		slotsRow.Alignment = BoxContainer.AlignmentMode.End;
+		slotsRow.AddThemeConstantOverride("separation", 3);
+		vbox.AddChild(slotsRow);
+
+		for (int i = 0; i < 3; i++)
+		{
+			var panel = new Panel();
+			panel.CustomMinimumSize = new Vector2(44, 14);
+			slotsRow.AddChild(panel);
+			_weaponSlotPanels[i] = panel;
+
+			var lbl = new Label();
+			lbl.LayoutMode = 1;
+			lbl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+			lbl.HorizontalAlignment = HorizontalAlignment.Center;
+			lbl.VerticalAlignment = VerticalAlignment.Center;
+			if (font != null) lbl.AddThemeFontOverride("font", font);
+			lbl.AddThemeFontSizeOverride("font_size", 10);
+			panel.AddChild(lbl);
+			_weaponSlotLabels[i] = lbl;
+		}
+	}
+
+	private void UpdateWeaponAndAmmoUI()
+	{
+		if (!IsInstanceValid(_player) || !IsInstanceValid(_ammoStatusLabel)) return;
+
+		for (int i = 0; i < 3; i++)
+		{
+			if (!IsInstanceValid(_weaponSlotPanels[i]) || !IsInstanceValid(_weaponSlotLabels[i])) continue;
+
+			bool isActive = _player.CurrentSlotIndex == i;
+			AttackController slotCtrl = (i < _player.WeaponSlots.Count && IsInstanceValid(_player.WeaponSlots[i]))
+				? _player.WeaponSlots[i]
+				: null;
+			WeaponData weapon = slotCtrl?.CurrentWeapon;
+			string shortName = weapon != null && !string.IsNullOrEmpty(weapon.WeaponName)
+				? (weapon.WeaponName.Length > 6 ? weapon.WeaponName.Substring(0, 6) : weapon.WeaponName)
+				: "---";
+
+			_weaponSlotLabels[i].Text = $"{i + 1}:{shortName}";
+			_weaponSlotLabels[i].AddThemeColorOverride("font_color",
+				isActive ? new Color(1f, 0.9f, 0.35f) : new Color(0.75f, 0.72f, 0.78f));
+
+			var style = new StyleBoxFlat
+			{
+				BgColor = isActive ? new Color(0.22f, 0.16f, 0.08f, 0.9f) : new Color(0.08f, 0.07f, 0.10f, 0.75f),
+				BorderColor = isActive ? new Color(0.95f, 0.75f, 0.25f) : new Color(0.35f, 0.32f, 0.40f),
+				BorderWidthLeft = 1,
+				BorderWidthTop = 1,
+				BorderWidthRight = 1,
+				BorderWidthBottom = 1,
+				CornerRadiusTopLeft = 2,
+				CornerRadiusTopRight = 2,
+				CornerRadiusBottomLeft = 2,
+				CornerRadiusBottomRight = 2
+			};
+			_weaponSlotPanels[i].AddThemeStyleboxOverride("panel", style);
+		}
+
+		AttackController controller = (_player.CurrentSlotIndex >= 0 && _player.CurrentSlotIndex < _player.WeaponSlots.Count)
+			? _player.WeaponSlots[_player.CurrentSlotIndex]
+			: null;
+		if (controller == null || !IsInstanceValid(controller) || controller.CurrentWeapon == null)
+		{
+			_ammoStatusLabel.Text = "";
+			return;
+		}
+
+		string dmgMultText = _player.WeaponDamageMultiplier > 1.01f
+			? $" (+{Mathf.RoundToInt((_player.WeaponDamageMultiplier - 1.0f) * 100f)}%)"
+			: "";
+
+		if (!controller.UsesAmmo)
+		{
+			string modeTag = controller.CurrentWeapon.IsRanged ? "MAGIC" : "MELEE";
+			_ammoStatusLabel.Text = $"{controller.CurrentWeapon.WeaponName} [{modeTag}]{dmgMultText}";
+			_ammoStatusLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.9f, 1.0f));
+		}
+		else if (controller.IsReloading)
+		{
+			int pct = Mathf.RoundToInt(controller.ReloadProgress * 100f);
+			_ammoStatusLabel.Text = $"RELOADING... {pct}%";
+			_ammoStatusLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.25f));
+		}
+		else
+		{
+			_ammoStatusLabel.Text = $"AMMO: {controller.CurrentAmmo}/{controller.MaxAmmo}{dmgMultText}";
+			_ammoStatusLabel.AddThemeColorOverride("font_color",
+				controller.CurrentAmmo == 0 ? new Color(1.0f, 0.35f, 0.35f) : new Color(1.0f, 0.9f, 0.45f));
+		}
+	}
+
+	private void CreateBossBarUI(Font font)
+	{
+		_bossBarContainer = new Control();
+		_bossBarContainer.Name = "BossBarContainer";
+		_bossBarContainer.LayoutMode = 1;
+		_bossBarContainer.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
+		_bossBarContainer.OffsetLeft = -85;
+		_bossBarContainer.OffsetRight = 85;
+		_bossBarContainer.OffsetTop = 30;
+		_bossBarContainer.OffsetBottom = 50;
+		_bossBarContainer.Visible = false;
+		_hudRoot.AddChild(_bossBarContainer);
+
+		_bossNameLabel = new Label();
+		_bossNameLabel.LayoutMode = 1;
+		_bossNameLabel.SetAnchorsPreset(Control.LayoutPreset.TopWide);
+		_bossNameLabel.OffsetTop = 0;
+		_bossNameLabel.OffsetBottom = 10;
+		_bossNameLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		if (font != null) _bossNameLabel.AddThemeFontOverride("font", font);
+		_bossNameLabel.AddThemeFontSizeOverride("font_size", 10);
+		_bossNameLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.35f, 0.35f));
+		_bossBarContainer.AddChild(_bossNameLabel);
+
+		_bossHealthBar = new ProgressBar();
+		_bossHealthBar.LayoutMode = 1;
+		_bossHealthBar.SetAnchorsPreset(Control.LayoutPreset.BottomWide);
+		_bossHealthBar.OffsetTop = -8;
+		_bossHealthBar.OffsetBottom = -1;
+		_bossHealthBar.ShowPercentage = false;
+
+		var bgStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.12f, 0.04f, 0.04f, 0.9f),
+			BorderColor = new Color(0.85f, 0.65f, 0.2f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1
+		};
+		var fillStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.85f, 0.15f, 0.18f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthBottom = 1,
+			BorderColor = new Color(1.0f, 0.45f, 0.45f)
+		};
+		_bossHealthBar.AddThemeStyleboxOverride("background", bgStyle);
+		_bossHealthBar.AddThemeStyleboxOverride("fill", fillStyle);
+		_bossBarContainer.AddChild(_bossHealthBar);
+	}
+
+	private void UpdateBossBarUI()
+	{
+		if (!IsInstanceValid(_bossBarContainer)) return;
+
+		Enemy activeBoss = null;
+		foreach (Node node in GetTree().GetNodesInGroup("Boss"))
+		{
+			if (node is Enemy boss && boss.CurrentHealth > 0)
+			{
+				activeBoss = boss;
+				break;
+			}
+		}
+
+		if (activeBoss == null)
+		{
+			_bossBarContainer.Visible = false;
+			return;
+		}
+
+		_bossBarContainer.Visible = true;
+		_bossNameLabel.Text = $"{activeBoss.DisplayName} ({(int)Math.Ceiling(activeBoss.CurrentHealth)}/{(int)activeBoss.MaxHealthScaled})";
+		_bossHealthBar.MaxValue = activeBoss.MaxHealthScaled;
+		_bossHealthBar.Value = activeBoss.CurrentHealth;
 	}
 
 	public void UpdateAbilitiesUI()
