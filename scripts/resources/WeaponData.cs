@@ -33,4 +33,20 @@ public partial class WeaponData : Resource
 	[Export] public bool IsPiercing = false; // Если true, пуля пробивает врагов насквозь
 	[Export] public int MaxAmmo = 10;
 	[Export] public float ReloadTime = 1.5f;
+
+	// Путь к исходному .tres ресурсу при создании уникальной копии оружия для прокачки одного слота
+	public string OriginalResourcePath { get; set; } = "";
+
+	public string GetEffectiveResourcePath()
+	{
+		return !string.IsNullOrEmpty(ResourcePath) ? ResourcePath : OriginalResourcePath;
+	}
+
+	public WeaponData CreateUniqueCopy()
+	{
+		string origPath = GetEffectiveResourcePath();
+		var copy = (WeaponData)Duplicate();
+		copy.OriginalResourcePath = origPath;
+		return copy;
+	}
 }

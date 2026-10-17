@@ -79,8 +79,10 @@ public partial class Enemy : CharacterBody2D
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
-		float healthMultiplier = 1.0f + (levelIndex - 1) * 0.15f;
-		DamageMultiplier = 1.0f + (levelIndex - 1) * 0.15f;
+		// ХП мобов увеличивается на 15% после каждого побежденного босса (каждые 5 этажей)
+		int bossesDefeated = Mathf.Max(0, (levelIndex - 1) / 5);
+		float healthMultiplier = Mathf.Pow(1.15f, bossesDefeated);
+		DamageMultiplier = 1.0f + bossesDefeated * 0.15f;
 
 		if (Config != null)
 		{

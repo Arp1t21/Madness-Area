@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scene/weapons/knight_sword.tscn" id="1_ksword"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+WeaponName = "Knight Broadsword"
+Damage = 15
+AttackCooldown = 0.34
+AttackRange = 175.0
+KnockbackForce = 5.0
+ManaCost = 1.0
+WeaponVisualPrefab = ExtResource("1_ksword")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

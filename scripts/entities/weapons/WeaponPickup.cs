@@ -11,42 +11,20 @@ public partial class WeaponPickup : Node2D, IInteractable
 	private bool _playerInRange = false;
 	private Player _player;
 
+	public bool IsPlayerInRange => _playerInRange;
+
+	public bool IsHoveredByMouse(Vector2 worldMousePos)
+	{
+		return WeaponToGive != null && GlobalPosition.DistanceTo(worldMousePos) <= 28.0f;
+	}
+
 	public override void _Ready()
 	{
 		Scale = new Vector2(3.0f, 3.0f);
+		AddToGroup("WeaponPickup");
 		_pickupArea = GetNode<Area2D>("Area2D");
 		_nameLabel = GetNode<Label>("NameLabel");
-
-		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
-		if (font != null) {
-			_nameLabel.AddThemeFontOverride("font", font);
-		}
-		_nameLabel.AddThemeFontSizeOverride("font_size", 7);
-		_nameLabel.AddThemeConstantOverride("letter_spacing", 1);
-		_nameLabel.AddThemeConstantOverride("line_spacing", -2);
-		_nameLabel.AddThemeColorOverride("font_color", new Color(0.98f, 0.95f, 0.85f));
-		_nameLabel.Position = new Vector2(-56, -42);
-		_nameLabel.Size = new Vector2(112, 27);
-		_nameLabel.ZIndex = 10;
-
-		var boxStyle = new StyleBoxFlat
-		{
-			BgColor = new Color(0.06f, 0.06f, 0.09f, 0.92f),
-			BorderColor = new Color(0.95f, 0.78f, 0.25f, 0.88f),
-			BorderWidthLeft = 1,
-			BorderWidthTop = 1,
-			BorderWidthRight = 1,
-			BorderWidthBottom = 1,
-			CornerRadiusTopLeft = 2,
-			CornerRadiusTopRight = 2,
-			CornerRadiusBottomLeft = 2,
-			CornerRadiusBottomRight = 2,
-			ContentMarginLeft = 3,
-			ContentMarginRight = 3,
-			ContentMarginTop = 1,
-			ContentMarginBottom = 1
-		};
-		_nameLabel.AddThemeStyleboxOverride("normal", boxStyle);
+		_nameLabel.Visible = false;
 
 		// Маска 18: Слой 2 (игрок, значение 2) + Слой 5 (зона подбора, значение 16)
 		_pickupArea.CollisionMask = 18;
@@ -58,8 +36,6 @@ public partial class WeaponPickup : Node2D, IInteractable
 		_pickupArea.BodyExited += OnBodyExited;
 
 		if (WeaponToGive != null) {
-			_nameLabel.Text = WeaponShowcaseSlot.FormatWeaponStatsTooltip(WeaponToGive, 1.0f, true);
-
 			// АВТОМАТИЧЕСКАЯ ИКОНКА: Вытаскиваем текстуру из префаба оружия
 			if (WeaponToGive.WeaponVisualPrefab != null) {
 				var instance = WeaponToGive.WeaponVisualPrefab.Instantiate();
@@ -78,8 +54,6 @@ public partial class WeaponPickup : Node2D, IInteractable
 				instance.QueueFree(); // Удаляем временный экземпляр
 			}
 		}
-
-		_nameLabel.Visible = false;
 	}
 
 			private Sprite2D FindSpriteRecursive(Node parent) {
@@ -165,12 +139,7 @@ public partial class WeaponPickup : Node2D, IInteractable
 	{
 		if (_nameLabel != null)
 		{
-			if (show && WeaponToGive != null)
-			{
-				float mult = (_player != null && GodotObject.IsInstanceValid(_player)) ? _player.WeaponDamageMultiplier : 1.0f;
-				_nameLabel.Text = WeaponShowcaseSlot.FormatWeaponStatsTooltip(WeaponToGive, mult, true);
-			}
-			_nameLabel.Visible = show;
+			_nameLabel.Visible = false;
 		}
 	}
 

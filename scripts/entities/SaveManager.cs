@@ -4,6 +4,16 @@ using System.Collections.Generic;
 using System.Text.Json;
 using FileAccess = Godot.FileAccess;
 
+public class SavedWeaponStats
+{
+	public int Damage { get; set; }
+	public float AttackCooldown { get; set; }
+	public int MaxAmmo { get; set; }
+	public float ReloadTime { get; set; }
+	public float ManaCost { get; set; }
+	public float KnockbackForce { get; set; }
+}
+
 public class SaveData
 {
 	public string SlotId { get; set; } = "1";
@@ -24,6 +34,8 @@ public class SaveData
 	public int Ability1Level { get; set; } = 0;
 	public int Ability2Level { get; set; } = 0;
 	public List<string> WeaponResourcePaths { get; set; } = new List<string>();
+	public List<SavedWeaponStats> WeaponSlotCustomStats { get; set; } = new List<SavedWeaponStats>();
+	public Dictionary<string, int> ShopPurchaseCounts { get; set; } = new Dictionary<string, int>();
 	public string SaveDateString { get; set; } = "";
 }
 

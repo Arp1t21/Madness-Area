@@ -35,6 +35,33 @@ public partial class Player : CharacterBody2D
 	public float BonusMoveSpeed = 0.0f;
 	public float WeaponDamageMultiplier = 1.0f;
 	public int CoinCount = 0;
+	public Dictionary<string, int> ShopPurchaseCounts = new Dictionary<string, int>();
+
+	public int GetShopPurchaseCount(string itemId)
+	{
+		if (string.IsNullOrEmpty(itemId) || ShopPurchaseCounts == null) return 0;
+		return ShopPurchaseCounts.TryGetValue(itemId, out int count) ? count : 0;
+	}
+
+	public void RecordShopPurchase(string itemId)
+	{
+		if (string.IsNullOrEmpty(itemId)) return;
+		ShopPurchaseCounts ??= new Dictionary<string, int>();
+		ShopPurchaseCounts[itemId] = GetShopPurchaseCount(itemId) + 1;
+	}
+
+	public WeaponData EnsureUniqueWeaponInSlot(int slotIndex)
+	{
+		if (slotIndex < 0 || slotIndex >= WeaponSlots.Count) return null;
+		var ctrl = WeaponSlots[slotIndex];
+		if (ctrl == null || ctrl.CurrentWeapon == null) return null;
+
+		if (!string.IsNullOrEmpty(ctrl.CurrentWeapon.ResourcePath))
+		{
+			ctrl.CurrentWeapon = ctrl.CurrentWeapon.CreateUniqueCopy();
+		}
+		return ctrl.CurrentWeapon;
+	}
 
 	public float MaxHealthEffective => (Config != null ? Config.MaxHealth : 100.0f) + BonusMaxHealth;
 	public float MaxManaEffective => (Config != null ? Config.MaxMana : 100.0f) + BonusMaxMana;
@@ -159,6 +186,9 @@ public partial class Player : CharacterBody2D
 			SkillPoints = save.SkillPoints;
 			Ability1Level = save.Ability1Level;
 			Ability2Level = save.Ability2Level;
+			ShopPurchaseCounts = save.ShopPurchaseCounts != null
+				? new Dictionary<string, int>(save.ShopPurchaseCounts)
+				: new Dictionary<string, int>();
 
 			foreach (Node child in _abilityManager.GetChildren())
 			{
@@ -200,7 +230,7 @@ public partial class Player : CharacterBody2D
 						{
 							WeaponSlots[i].CurrentWeapon = weaponData;
 							WeaponSlots[i].ApplyWeaponSettings();
-							save.WeaponResourcePaths.Add(weaponData.ResourcePath);
+							save.WeaponResourcePaths.Add(weaponData.GetEffectiveResourcePath());
 						}
 					}
 					SaveManager.SaveGame(save);
@@ -216,6 +246,17 @@ public partial class Player : CharacterBody2D
 						var weaponData = GD.Load<WeaponData>(resPath);
 						if (weaponData != null)
 						{
+							if (save.WeaponSlotCustomStats != null && i < save.WeaponSlotCustomStats.Count && save.WeaponSlotCustomStats[i] != null)
+							{
+								var st = save.WeaponSlotCustomStats[i];
+								weaponData = weaponData.CreateUniqueCopy();
+								weaponData.Damage = st.Damage;
+								weaponData.AttackCooldown = st.AttackCooldown;
+								weaponData.MaxAmmo = st.MaxAmmo;
+								weaponData.ReloadTime = st.ReloadTime;
+								weaponData.ManaCost = st.ManaCost;
+								weaponData.KnockbackForce = st.KnockbackForce;
+							}
 							WeaponSlots[i].CurrentWeapon = weaponData;
 							WeaponSlots[i].ApplyWeaponSettings();
 						}

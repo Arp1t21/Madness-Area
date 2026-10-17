@@ -4,13 +4,26 @@ using System.Collections.Generic;
 
 public class ShopOffer
 {
+	public string Id;
 	public string Category;
 	public string Title;
 	public string Description;
-	public int Cost;
+	public int BaseCost;
 	public Color AccentColor;
 	public bool IsPurchased = false;
+	public bool RequiresWeaponChoice = false;
+	public Func<WeaponData, bool> IsWeaponCompatible = null;
 	public Func<Player, Level, SupplyAltar, string> OnPurchase;
+	public Func<Player, int, WeaponData, string> OnWeaponPurchase;
+
+	public int GetEffectiveCost(Player player, int levelIndex)
+	{
+		int floorBonus = Mathf.Max(0, levelIndex - 1) * 2;
+		int baseScaled = BaseCost + floorBonus;
+		int boughtCount = player != null ? player.GetShopPurchaseCount(Id) : 0;
+		float mult = Mathf.Pow(1.5f, boughtCount);
+		return Mathf.Max(1, Mathf.RoundToInt(baseScaled * mult));
+	}
 }
 
 public partial class SupplyAltar : Area2D, IInteractable
@@ -29,6 +42,9 @@ public partial class SupplyAltar : Area2D, IInteractable
 	{
 		"res://data/waepons/katana.tres",
 		"res://data/waepons/double_axe.tres",
+		"res://data/waepons/greatsword.tres",
+		"res://data/waepons/knight_sword.tres",
+		"res://data/waepons/hunter_bow.tres",
 		"res://data/waepons/auto_rifle.tres",
 		"res://data/waepons/shotgun.tres",
 		"res://data/waepons/revolver.tres",
@@ -96,38 +112,40 @@ public partial class SupplyAltar : Area2D, IInteractable
 		_promptLabel.Visible = false;
 		AddChild(_promptLabel);
 
-		RollThreeRandomOffers();
+		RollFourRandomOffers();
 
 		AreaEntered += OnAreaEntered;
 		AreaExited += OnAreaExited;
 	}
 
-	private void RollThreeRandomOffers()
+	private void RollFourRandomOffers()
 	{
 		string rolledWeaponPath = AllShopWeapons[GD.Randi() % AllShopWeapons.Length];
 		string weaponDisplayName = System.IO.Path.GetFileNameWithoutExtension(rolledWeaponPath).Replace("_", " ").ToUpper();
 
-		var pool = new List<ShopOffer>
+		var generalPool = new List<ShopOffer>
 		{
 			new ShopOffer
 			{
+				Id = "STAT_HP_REGEN",
 				Category = "PERMANENT STAT",
 				Title = "RING OF REGENERATION",
-				Description = "+1 HP Regen Forever (during waves)",
-				Cost = 5,
+				Description = "+0.25 HP Regen Forever (during waves)",
+				BaseCost = 11,
 				AccentColor = new Color(0.35f, 0.95f, 0.45f),
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.BonusHealthRegen += 1.0f;
-					return $"Permanent +1 HP Regen! (Now {p.HealthRegenEffective:0.#}/s)";
+					p.BonusHealthRegen += 0.25f;
+					return $"Permanent +0.25 HP Regen! (Now {p.HealthRegenEffective:0.##}/s)";
 				}
 			},
 			new ShopOffer
 			{
+				Id = "STAT_MAX_MANA",
 				Category = "PERMANENT STAT",
 				Title = "ARCANE MANA VESSEL",
 				Description = "+50 Max Mana Forever & restores +50 Mana",
-				Cost = 4,
+				BaseCost = 10,
 				AccentColor = new Color(0.35f, 0.72f, 1.0f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -138,10 +156,11 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = "STAT_MAX_HP",
 				Category = "PERMANENT STAT",
 				Title = "TITAN HEARTSTONE",
 				Description = "+25 Max HP Forever & heals +25 HP",
-				Cost = 4,
+				BaseCost = 10,
 				AccentColor = new Color(1.0f, 0.42f, 0.42f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -152,10 +171,11 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = "STAT_MANA_REGEN",
 				Category = "PERMANENT STAT",
 				Title = "AETHER SPRING",
 				Description = "+2 Mana Regen Forever (during waves)",
-				Cost = 5,
+				BaseCost = 11,
 				AccentColor = new Color(0.45f, 0.85f, 1.0f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -165,10 +185,11 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = "STAT_MOVE_SPEED",
 				Category = "PERMANENT STAT",
 				Title = "WINDRUNNER GREAVES",
 				Description = "+10 Move Speed Forever",
-				Cost = 5,
+				BaseCost = 12,
 				AccentColor = new Color(0.55f, 1.0f, 0.8f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -178,23 +199,72 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = "GLOBAL_WEAPON_DMG",
 				Category = "ITEM UPGRADE",
 				Title = "MASTERWORK WHETSTONE",
-				Description = "+25% All Weapon Damage Forever",
-				Cost = 6,
+				Description = "+15% All Weapon Damage Forever",
+				BaseCost = 15,
 				AccentColor = new Color(1.0f, 0.72f, 0.25f),
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.WeaponDamageMultiplier += 0.25f;
-					return $"Weapon Damage increased to {(int)Mathf.Round(p.WeaponDamageMultiplier * 100)}%!";
+					p.WeaponDamageMultiplier += 0.15f;
+					return $"All Weapon Damage increased to {(int)Mathf.Round(p.WeaponDamageMultiplier * 100)}%!";
 				}
 			},
 			new ShopOffer
 			{
+				Id = "STAT_FURY_DRAUGHT",
+				Category = "PERMANENT STAT",
+				Title = "BERSERKER'S DRAUGHT",
+				Description = "+10% All Weapon Damage & +6 Move Speed Forever",
+				BaseCost = 14,
+				AccentColor = new Color(1.0f, 0.48f, 0.28f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.WeaponDamageMultiplier += 0.10f;
+					p.BonusMoveSpeed += 6.0f;
+					return $"All Damage {(int)Mathf.Round(p.WeaponDamageMultiplier * 100)}% & +6 Move Speed!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "CONSUMABLE_HEAL_BOOST",
+				Category = "PERMANENT STAT",
+				Title = "CRIMSON ELIXIR",
+				Description = "Heals 45% Max HP & grants +15 Max HP Forever",
+				BaseCost = 11,
+				AccentColor = new Color(0.95f, 0.30f, 0.45f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusMaxHealth += 15.0f;
+					float heal = p.MaxHealthEffective * 0.45f;
+					p.CurrentHealth = Mathf.Min(p.MaxHealthEffective, p.CurrentHealth + heal);
+					return $"Healed {(int)heal} HP & gained +15 Max HP!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "STAT_MANA_HARMONY",
+				Category = "PERMANENT STAT",
+				Title = "AETHERIC HARMONY",
+				Description = "+30 Max Mana & +1 Mana Regen Forever",
+				BaseCost = 12,
+				AccentColor = new Color(0.42f, 0.78f, 1.0f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusMaxMana += 30.0f;
+					p.BonusManaRegen += 1.0f;
+					p.CurrentMana = Mathf.Min(p.MaxManaEffective, p.CurrentMana + 30.0f);
+					return "+30 Max Mana & +1 Mana Regen Forever!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "ABILITY_SKILL_POINT",
 				Category = "HERO ABILITY",
 				Title = "TOME OF MASTERY",
 				Description = "+1 Skill Point to upgrade any hero ability",
-				Cost = 7,
+				BaseCost = 16,
 				AccentColor = new Color(0.82f, 0.52f, 1.0f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -206,10 +276,11 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = "ABILITY_1_LEVEL",
 				Category = "HERO ABILITY",
 				Title = "GRIMOIRE OF FLAME [Q]",
 				Description = "+1 Level to Ability 1 (Fireball)",
-				Cost = 7,
+				BaseCost = 16,
 				AccentColor = new Color(1.0f, 0.52f, 0.22f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -221,10 +292,11 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = "ABILITY_2_LEVEL",
 				Category = "HERO ABILITY",
 				Title = "RUNE OF THE AEGIS [V]",
 				Description = "+1 Level to Ability 2 (Arcane Shield & Dash)",
-				Cost = 7,
+				BaseCost = 16,
 				AccentColor = new Color(0.35f, 0.88f, 1.0f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -236,10 +308,11 @@ public partial class SupplyAltar : Area2D, IInteractable
 			},
 			new ShopOffer
 			{
+				Id = $"ARMORY_{weaponDisplayName}",
 				Category = "WEAPON",
 				Title = $"ARMORY: {weaponDisplayName}",
 				Description = $"Spawns {weaponDisplayName} next to the shop",
-				Cost = 6,
+				BaseCost = 13,
 				AccentColor = new Color(1.0f, 0.88f, 0.32f),
 				OnPurchase = (p, lvl, alt) =>
 				{
@@ -250,13 +323,192 @@ public partial class SupplyAltar : Area2D, IInteractable
 			}
 		};
 
-		// Перемешиваем пул и выбираем ровно 3 случайных товара на эту волну
-		RolledOffers.Clear();
-		for (int i = 0; i < 3 && pool.Count > 0; i++)
+		var singleWeaponPool = new List<ShopOffer>
 		{
-			int idx = (int)(GD.Randi() % (uint)pool.Count);
-			RolledOffers.Add(pool[idx]);
-			pool.RemoveAt(idx);
+			new ShopOffer
+			{
+				Id = "SINGLE_EXTENDED_MAG",
+				Category = "SINGLE WEAPON",
+				Title = "EXTENDED MAGAZINE",
+				Description = "+5 Max Ammo in Magazine for 1 chosen weapon",
+				BaseCost = 11,
+				AccentColor = new Color(1.0f, 0.78f, 0.32f),
+				RequiresWeaponChoice = true,
+				IsWeaponCompatible = (w) => w != null && w.IsRanged && w.MaxAmmo < 500,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.MaxAmmo += 5;
+					p.WeaponSlots[slotIdx]?.AddBonusAmmo(5);
+					return $"{w.WeaponName.ToUpper()}: +5 Max Ammo (Now {w.MaxAmmo})!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_QUICKLOADER",
+				Category = "SINGLE WEAPON",
+				Title = "QUICKLOADER MECHANISM",
+				Description = "-10% Reload & -10% Cooldown for 1 chosen weapon",
+				BaseCost = 12,
+				AccentColor = new Color(0.45f, 0.95f, 0.75f),
+				RequiresWeaponChoice = true,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.ReloadTime = Mathf.Max(0.15f, w.ReloadTime * 0.90f);
+					w.AttackCooldown = Mathf.Max(0.05f, w.AttackCooldown * 0.90f);
+					p.WeaponSlots[slotIdx]?.ApplyWeaponSettings();
+					return $"{w.WeaponName.ToUpper()}: -10% Reload & Cooldown!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_MANA_REDUCTION",
+				Category = "SINGLE WEAPON",
+				Title = "ARCANE CONDUCTOR",
+				Description = "-20% Mana Cost for 1 chosen weapon",
+				BaseCost = 11,
+				AccentColor = new Color(0.42f, 0.75f, 1.0f),
+				RequiresWeaponChoice = true,
+				IsWeaponCompatible = (w) => w != null && w.ManaCost > 0.01f,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.ManaCost = Mathf.Max(0.0f, w.ManaCost * 0.80f);
+					return $"{w.WeaponName.ToUpper()}: Mana Cost reduced to {w.ManaCost:0.#}!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_SHARPENED_CORE",
+				Category = "SINGLE WEAPON",
+				Title = "SHARPENED WEAPON CORE",
+				Description = "+25% Base Damage for 1 chosen weapon",
+				BaseCost = 13,
+				AccentColor = new Color(1.0f, 0.55f, 0.35f),
+				RequiresWeaponChoice = true,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					int newDmg = Mathf.Max(w.Damage + 2, Mathf.RoundToInt(w.Damage * 1.25f));
+					w.Damage = newDmg;
+					return $"{w.WeaponName.ToUpper()}: Base Damage increased to {w.Damage}!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_IMPACT_CORE",
+				Category = "SINGLE WEAPON",
+				Title = "HEAVY IMPACT CORE",
+				Description = "+30% Knockback & -8% Cooldown for 1 chosen weapon",
+				BaseCost = 11,
+				AccentColor = new Color(0.95f, 0.65f, 0.95f),
+				RequiresWeaponChoice = true,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.KnockbackForce = Mathf.Round(w.KnockbackForce * 1.30f * 10f) / 10f;
+					w.AttackCooldown = Mathf.Max(0.05f, w.AttackCooldown * 0.92f);
+					p.WeaponSlots[slotIdx]?.ApplyWeaponSettings();
+					return $"{w.WeaponName.ToUpper()}: +30% Knockback & -8% Cooldown!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_FEATHER_GRIP",
+				Category = "SINGLE WEAPON",
+				Title = "FEATHERWEIGHT GRIP",
+				Description = "-16% Attack Cooldown (faster attacks) for 1 chosen weapon",
+				BaseCost = 13,
+				AccentColor = new Color(0.55f, 1.0f, 0.85f),
+				RequiresWeaponChoice = true,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.AttackCooldown = Mathf.Max(0.05f, w.AttackCooldown * 0.84f);
+					p.WeaponSlots[slotIdx]?.ApplyWeaponSettings();
+					return $"{w.WeaponName.ToUpper()}: -16% Attack Cooldown!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_PIERCING",
+				Category = "SINGLE WEAPON",
+				Title = "PIERCING ENCHANTMENT",
+				Description = "Projectiles pierce enemies & +15% Damage for 1 ranged weapon",
+				BaseCost = 14,
+				AccentColor = new Color(0.45f, 1.0f, 0.65f),
+				RequiresWeaponChoice = true,
+				IsWeaponCompatible = (w) => w != null && w.IsRanged,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.IsPiercing = true;
+					w.Damage = Mathf.Max(w.Damage + 1, Mathf.RoundToInt(w.Damage * 1.15f));
+					return $"{w.WeaponName.ToUpper()}: Projectiles now Pierce & Damage is {w.Damage}!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_MULTISHOT",
+				Category = "SINGLE WEAPON",
+				Title = "SPLIT-BARREL CHAMBER",
+				Description = "+1 Projectile per shot for 1 chosen ranged weapon",
+				BaseCost = 16,
+				AccentColor = new Color(1.0f, 0.68f, 0.25f),
+				RequiresWeaponChoice = true,
+				IsWeaponCompatible = (w) => w != null && w.IsRanged && w.BulletCount < 10,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.BulletCount += 1;
+					w.Spread = Mathf.Max(w.Spread, 0.08f);
+					return $"{w.WeaponName.ToUpper()}: Now fires {w.BulletCount} projectiles per shot!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_VELOCITY_CORE",
+				Category = "SINGLE WEAPON",
+				Title = "OVERCHARGED CAPACITOR",
+				Description = "+25% Bullet Speed & +15% Base Damage for 1 ranged weapon",
+				BaseCost = 13,
+				AccentColor = new Color(0.45f, 0.88f, 1.0f),
+				RequiresWeaponChoice = true,
+				IsWeaponCompatible = (w) => w != null && w.IsRanged,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.BulletSpeed = Mathf.Round(w.BulletSpeed * 1.25f);
+					w.Damage = Mathf.Max(w.Damage + 1, Mathf.RoundToInt(w.Damage * 1.15f));
+					return $"{w.WeaponName.ToUpper()}: +25% Bullet Speed & Damage is {w.Damage}!";
+				}
+			},
+			new ShopOffer
+			{
+				Id = "SINGLE_CLEAVE_EDGE",
+				Category = "SINGLE WEAPON",
+				Title = "VAMPIRIC CLEAVE RUNES",
+				Description = "Enables Multi-Hit cleave & +20% Damage for 1 melee weapon",
+				BaseCost = 13,
+				AccentColor = new Color(1.0f, 0.38f, 0.48f),
+				RequiresWeaponChoice = true,
+				IsWeaponCompatible = (w) => w != null && !w.IsRanged,
+				OnWeaponPurchase = (p, slotIdx, w) =>
+				{
+					w.AllowMultiHit = true;
+					w.Damage = Mathf.Max(w.Damage + 2, Mathf.RoundToInt(w.Damage * 1.20f));
+					return $"{w.WeaponName.ToUpper()}: Multi-Hit Cleave & Damage increased to {w.Damage}!";
+				}
+			}
+		};
+
+		// Выбираем 4 предмета в магазин (гарантируем минимум 1 улучшение для одиночного оружия, остальные из объединенного пула)
+		RolledOffers.Clear();
+
+		int firstSingleIdx = (int)(GD.Randi() % (uint)singleWeaponPool.Count);
+		RolledOffers.Add(singleWeaponPool[firstSingleIdx]);
+		singleWeaponPool.RemoveAt(firstSingleIdx);
+
+		var combinedPool = new List<ShopOffer>(generalPool);
+		combinedPool.AddRange(singleWeaponPool);
+
+		while (RolledOffers.Count < 4 && combinedPool.Count > 0)
+		{
+			int idx = (int)(GD.Randi() % (uint)combinedPool.Count);
+			RolledOffers.Add(combinedPool[idx]);
+			combinedPool.RemoveAt(idx);
 		}
 	}
 
@@ -326,9 +578,12 @@ public partial class SupplyShopOverlay : CanvasLayer
 	private readonly Player _player;
 	private readonly Level _level;
 	private readonly SupplyAltar _altar;
+	private Control _rootControl;
+	private Font _font;
 	private Label _goldLabel;
 	private Label _statusLabel;
-	private readonly List<(Button btn, ShopOffer offer, StyleBoxFlat normalStyle, StyleBoxFlat purchasedStyle)> _offerButtons = new();
+	private Control _weaponChoiceModal;
+	private readonly List<(Button btn, ShopOffer offer, StyleBoxFlat cantAffordStyle, StyleBoxFlat purchasedStyle)> _offerButtons = new();
 
 	public SupplyShopOverlay(Player player, Level level, SupplyAltar altar)
 	{
@@ -343,24 +598,24 @@ public partial class SupplyShopOverlay : CanvasLayer
 		Layer = 20;
 		SettingsManager.ApplyFontQualityFixes();
 
-		var rootControl = new Control();
-		AddChild(rootControl);
+		_rootControl = new Control();
+		AddChild(_rootControl);
 		var viewportSize = GetViewport().GetVisibleRect().Size;
 		float uiScale = Mathf.Clamp(viewportSize.X / 960.0f, 1.0f, 3.0f);
-		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		rootControl.Size = viewportSize / uiScale;
-		rootControl.Scale = new Vector2(uiScale, uiScale);
+		_rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		_rootControl.Size = viewportSize / uiScale;
+		_rootControl.Scale = new Vector2(uiScale, uiScale);
 
 		var bgOverlay = new ColorRect();
 		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.76f);
-		rootControl.AddChild(bgOverlay);
+		_rootControl.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
 		var panel = new Panel();
-		Vector2 panelSize = new Vector2(540, 360);
+		Vector2 panelSize = new Vector2(560, 416);
 		panel.Size = panelSize;
-		panel.Position = (rootControl.Size - panelSize) / 2.0f;
-		rootControl.AddChild(panel);
+		panel.Position = (_rootControl.Size - panelSize) / 2.0f;
+		_rootControl.AddChild(panel);
 
 		var panelStyle = new StyleBoxFlat();
 		panelStyle.BgColor = new Color(0.08f, 0.08f, 0.11f, 0.97f);
@@ -369,25 +624,25 @@ public partial class SupplyShopOverlay : CanvasLayer
 		panel.AddThemeStyleboxOverride("panel", panelStyle);
 
 		var vbox = new VBoxContainer();
-		vbox.Position = new Vector2(22, 14);
-		vbox.Size = new Vector2(panelSize.X - 44, panelSize.Y - 28);
-		vbox.AddThemeConstantOverride("separation", 10);
+		vbox.Position = new Vector2(22, 12);
+		vbox.Size = new Vector2(panelSize.X - 44, panelSize.Y - 24);
+		vbox.AddThemeConstantOverride("separation", 8);
 		panel.AddChild(vbox);
 
-		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		_font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 
 		var title = new Label();
 		title.Text = "WAVE SHOP";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
-		if (font != null) title.AddThemeFontOverride("font", font);
-		title.AddThemeFontSizeOverride("font_size", 28);
+		if (_font != null) title.AddThemeFontOverride("font", _font);
+		title.AddThemeFontSizeOverride("font_size", 26);
 		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.86f, 0.35f));
 		vbox.AddChild(title);
 
 		_goldLabel = new Label();
 		_goldLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		if (font != null) _goldLabel.AddThemeFontOverride("font", font);
-		_goldLabel.AddThemeFontSizeOverride("font_size", 18);
+		if (_font != null) _goldLabel.AddThemeFontOverride("font", _font);
+		_goldLabel.AddThemeFontSizeOverride("font_size", 17);
 		_goldLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.95f, 0.6f));
 		vbox.AddChild(_goldLabel);
 
@@ -395,22 +650,22 @@ public partial class SupplyShopOverlay : CanvasLayer
 		{
 			foreach (var offer in _altar.RolledOffers)
 			{
-				AddOfferButton(vbox, font, offer);
+				AddOfferButton(vbox, _font, offer);
 			}
 		}
 
 		_statusLabel = new Label();
-		_statusLabel.Text = "Buy items to strengthen your hero. Purchased items stay greyed out.";
+		_statusLabel.Text = "Buy items to strengthen your hero. Repeat purchases cost 1.5x more.";
 		_statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		if (font != null) _statusLabel.AddThemeFontOverride("font", font);
-		_statusLabel.AddThemeFontSizeOverride("font_size", 16);
+		if (_font != null) _statusLabel.AddThemeFontOverride("font", _font);
+		_statusLabel.AddThemeFontSizeOverride("font_size", 15);
 		_statusLabel.AddThemeColorOverride("font_color", new Color(0.55f, 0.95f, 0.55f));
 		vbox.AddChild(_statusLabel);
 
 		var closeBtn = new Button();
 		closeBtn.Text = "CLOSE [ESC]";
-		closeBtn.CustomMinimumSize = new Vector2(150, 32);
-		if (font != null) closeBtn.AddThemeFontOverride("font", font);
+		closeBtn.CustomMinimumSize = new Vector2(150, 30);
+		if (_font != null) closeBtn.AddThemeFontOverride("font", _font);
 		closeBtn.AddThemeFontSizeOverride("font_size", 18);
 		closeBtn.Pressed += CloseShop;
 		vbox.AddChild(closeBtn);
@@ -419,12 +674,17 @@ public partial class SupplyShopOverlay : CanvasLayer
 		MainMenu.ConnectButtonSounds(this);
 	}
 
+	private int GetCurrentLevelIndex()
+	{
+		return _level != null ? _level.CurrentLevelIndex : 1;
+	}
+
 	private void AddOfferButton(Control parent, Font font, ShopOffer offer)
 	{
 		var btn = new Button();
-		btn.CustomMinimumSize = new Vector2(0, 56);
+		btn.CustomMinimumSize = new Vector2(0, 52);
 		if (font != null) btn.AddThemeFontOverride("font", font);
-		btn.AddThemeFontSizeOverride("font_size", 17);
+		btn.AddThemeFontSizeOverride("font_size", 16);
 
 		var normalStyle = new StyleBoxFlat();
 		normalStyle.BgColor = new Color(0.14f, 0.14f, 0.18f, 0.96f);
@@ -451,23 +711,171 @@ public partial class SupplyShopOverlay : CanvasLayer
 		btn.Pressed += () =>
 		{
 			if (_player == null || _altar == null || offer.IsPurchased) return;
-			if (_player.CoinCount < offer.Cost) return;
+			int cost = offer.GetEffectiveCost(_player, GetCurrentLevelIndex());
+			if (_player.CoinCount < cost) return;
 
-			_player.CoinCount -= offer.Cost;
-			offer.IsPurchased = true;
-			_altar.UpdatePromptText();
+			if (offer.RequiresWeaponChoice)
+			{
+				OpenWeaponSelectionModal(offer, cost);
+				return;
+			}
 
-			string msg = offer.OnPurchase != null ? offer.OnPurchase(_player, _level, _altar) : "Purchased!";
-			if (_statusLabel != null) _statusLabel.Text = msg;
-
-			var sound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-			if (sound != null) MainMenu.PlayUISound(sound);
-
-			RefreshUI();
+			CompleteOfferPurchase(offer, cost, -1);
 		};
 
 		parent.AddChild(btn);
 		_offerButtons.Add((btn, offer, cantAffordStyle, purchasedStyle));
+	}
+
+	private void CompleteOfferPurchase(ShopOffer offer, int cost, int weaponSlotIndex)
+	{
+		if (_player == null || _altar == null || offer.IsPurchased) return;
+		if (_player.CoinCount < cost) return;
+
+		string msg;
+		if (offer.RequiresWeaponChoice)
+		{
+			WeaponData uniqueWeapon = _player.EnsureUniqueWeaponInSlot(weaponSlotIndex);
+			if (uniqueWeapon == null) return;
+			msg = offer.OnWeaponPurchase != null
+				? offer.OnWeaponPurchase(_player, weaponSlotIndex, uniqueWeapon)
+				: "Weapon upgraded!";
+		}
+		else
+		{
+			msg = offer.OnPurchase != null ? offer.OnPurchase(_player, _level, _altar) : "Purchased!";
+		}
+
+		_player.CoinCount -= cost;
+		_player.RecordShopPurchase(offer.Id);
+		offer.IsPurchased = true;
+		_altar.UpdatePromptText();
+
+		if (_statusLabel != null) _statusLabel.Text = msg;
+
+		var sound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
+		if (sound != null) MainMenu.PlayUISound(sound);
+
+		RefreshUI();
+	}
+
+	private void OpenWeaponSelectionModal(ShopOffer offer, int cost)
+	{
+		if (_weaponChoiceModal != null && GodotObject.IsInstanceValid(_weaponChoiceModal))
+		{
+			_weaponChoiceModal.QueueFree();
+		}
+
+		_weaponChoiceModal = new Control();
+		_weaponChoiceModal.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		_rootControl.AddChild(_weaponChoiceModal);
+
+		var dim = new ColorRect();
+		dim.Color = new Color(0f, 0f, 0f, 0.72f);
+		dim.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		_weaponChoiceModal.AddChild(dim);
+
+		var modalPanel = new Panel();
+		Vector2 modalSize = new Vector2(440, 290);
+		modalPanel.Size = modalSize;
+		modalPanel.Position = (_rootControl.Size - modalSize) / 2.0f;
+		_weaponChoiceModal.AddChild(modalPanel);
+
+		var style = new StyleBoxFlat
+		{
+			BgColor = new Color(0.09f, 0.09f, 0.13f, 0.99f),
+			BorderColor = offer.AccentColor,
+			BorderWidthLeft = 2,
+			BorderWidthTop = 2,
+			BorderWidthRight = 2,
+			BorderWidthBottom = 2,
+			CornerRadiusTopLeft = 4,
+			CornerRadiusTopRight = 4,
+			CornerRadiusBottomLeft = 4,
+			CornerRadiusBottomRight = 4
+		};
+		modalPanel.AddThemeStyleboxOverride("panel", style);
+
+		var vbox = new VBoxContainer();
+		vbox.Position = new Vector2(18, 14);
+		vbox.Size = new Vector2(modalSize.X - 36, modalSize.Y - 28);
+		vbox.AddThemeConstantOverride("separation", 8);
+		modalPanel.AddChild(vbox);
+
+		var header = new Label();
+		header.Text = $"SELECT WEAPON FOR: {offer.Title}";
+		header.HorizontalAlignment = HorizontalAlignment.Center;
+		if (_font != null) header.AddThemeFontOverride("font", _font);
+		header.AddThemeFontSizeOverride("font_size", 20);
+		header.AddThemeColorOverride("font_color", offer.AccentColor);
+		vbox.AddChild(header);
+
+		var subHeader = new Label();
+		subHeader.Text = offer.Description;
+		subHeader.HorizontalAlignment = HorizontalAlignment.Center;
+		if (_font != null) subHeader.AddThemeFontOverride("font", _font);
+		subHeader.AddThemeFontSizeOverride("font_size", 15);
+		subHeader.AddThemeColorOverride("font_color", new Color(0.88f, 0.88f, 0.92f));
+		vbox.AddChild(subHeader);
+
+		for (int i = 0; i < 3; i++)
+		{
+			int slotIdx = i;
+			WeaponData w = (slotIdx < _player.WeaponSlots.Count) ? _player.WeaponSlots[slotIdx]?.CurrentWeapon : null;
+
+			var slotBtn = new Button();
+			slotBtn.CustomMinimumSize = new Vector2(0, 46);
+			if (_font != null) slotBtn.AddThemeFontOverride("font", _font);
+			slotBtn.AddThemeFontSizeOverride("font_size", 16);
+
+			if (w == null)
+			{
+				slotBtn.Text = $"SLOT {slotIdx + 1}: [EMPTY]";
+				slotBtn.Disabled = true;
+			}
+			else
+			{
+				bool compatible = offer.IsWeaponCompatible == null || offer.IsWeaponCompatible(w);
+				string wName = !string.IsNullOrEmpty(w.WeaponName) && w.WeaponName != "Новое оружие"
+					? w.WeaponName.ToUpper()
+					: System.IO.Path.GetFileNameWithoutExtension(w.GetEffectiveResourcePath()).ToUpper();
+
+				string ammoInfo = (w.IsRanged && w.MaxAmmo < 500) ? $"Ammo {w.MaxAmmo}, Rld {w.ReloadTime:0.##}s" : "Melee / No Mag";
+				string manaInfo = w.ManaCost > 0.01f ? $", Mana {w.ManaCost:0.#}" : "";
+
+				if (compatible)
+				{
+					slotBtn.Text = $"SLOT {slotIdx + 1}: {wName}  (DMG {w.Damage}, CD {w.AttackCooldown:0.##}s, {ammoInfo}{manaInfo})";
+					slotBtn.Pressed += () =>
+					{
+						_weaponChoiceModal.QueueFree();
+						_weaponChoiceModal = null;
+						CompleteOfferPurchase(offer, cost, slotIdx);
+					};
+				}
+				else
+				{
+					slotBtn.Text = $"SLOT {slotIdx + 1}: {wName} — [NOT COMPATIBLE WITH THIS UPGRADE]";
+					slotBtn.Disabled = true;
+				}
+			}
+
+			vbox.AddChild(slotBtn);
+		}
+
+		var cancelBtn = new Button();
+		cancelBtn.Text = "CANCEL";
+		cancelBtn.CustomMinimumSize = new Vector2(120, 30);
+		if (_font != null) cancelBtn.AddThemeFontOverride("font", _font);
+		cancelBtn.AddThemeFontSizeOverride("font_size", 17);
+		cancelBtn.Pressed += () =>
+		{
+			_weaponChoiceModal.QueueFree();
+			_weaponChoiceModal = null;
+		};
+		vbox.AddChild(cancelBtn);
+
+		MainMenu.ConnectButtonSounds(_weaponChoiceModal);
 	}
 
 	private void RefreshUI()
@@ -479,11 +887,11 @@ public partial class SupplyShopOverlay : CanvasLayer
 			_goldLabel.Text = $"GOLD: {_player.CoinCount}   |   HP: {(int)_player.CurrentHealth}/{(int)_player.MaxHealthEffective} (Regen {_player.HealthRegenEffective:0.#}/s)   |   MP: {(int)_player.CurrentMana}/{(int)_player.MaxManaEffective}";
 		}
 
+		int levelIndex = GetCurrentLevelIndex();
 		foreach (var (btn, offer, cantAffordStyle, purchasedStyle) in _offerButtons)
 		{
 			if (offer.IsPurchased)
 			{
-				// Купленный товар становится серым и неактивным, остальные остаются на своих местах
 				btn.Text = $"[SOLD] {offer.Title}\n{offer.Description}";
 				btn.Disabled = true;
 				btn.AddThemeStyleboxOverride("disabled", purchasedStyle);
@@ -491,8 +899,27 @@ public partial class SupplyShopOverlay : CanvasLayer
 			}
 			else
 			{
-				btn.Text = $"[{offer.Category}] {offer.Title}  —  {offer.Cost} GOLD\n{offer.Description}";
-				btn.Disabled = _player.CoinCount < offer.Cost;
+				int cost = offer.GetEffectiveCost(_player, levelIndex);
+				int boughtCount = _player.GetShopPurchaseCount(offer.Id);
+				string repeatTag = boughtCount > 0 ? $" (Bought {boughtCount}x)" : "";
+
+				bool hasCompatibleWeapon = true;
+				if (offer.RequiresWeaponChoice && offer.IsWeaponCompatible != null)
+				{
+					hasCompatibleWeapon = false;
+					foreach (var slot in _player.WeaponSlots)
+					{
+						if (slot?.CurrentWeapon != null && offer.IsWeaponCompatible(slot.CurrentWeapon))
+						{
+							hasCompatibleWeapon = true;
+							break;
+						}
+					}
+				}
+
+				string compatSuffix = hasCompatibleWeapon ? "" : " [NO COMPATIBLE WEAPON EQUIPPED]";
+				btn.Text = $"[{offer.Category}] {offer.Title}{repeatTag}  —  {cost} GOLD\n{offer.Description}{compatSuffix}";
+				btn.Disabled = (_player.CoinCount < cost) || !hasCompatibleWeapon;
 				btn.AddThemeStyleboxOverride("disabled", cantAffordStyle);
 				btn.AddThemeColorOverride("font_disabled_color", new Color(0.62f, 0.62f, 0.66f));
 			}
@@ -509,7 +936,15 @@ public partial class SupplyShopOverlay : CanvasLayer
 	{
 		if (@event.IsActionPressed("ui_cancel"))
 		{
-			CloseShop();
+			if (_weaponChoiceModal != null && GodotObject.IsInstanceValid(_weaponChoiceModal))
+			{
+				_weaponChoiceModal.QueueFree();
+				_weaponChoiceModal = null;
+			}
+			else
+			{
+				CloseShop();
+			}
 			GetViewport().SetInputAsHandled();
 		}
 	}

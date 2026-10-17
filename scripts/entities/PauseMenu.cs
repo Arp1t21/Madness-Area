@@ -116,16 +116,29 @@ public partial class PauseMenu : CanvasLayer
 			currentSave.Ability2Level = player.Ability2Level;
 			currentSave.PlayedTimeSeconds += level.ConsumePlayedTime();
 
+			currentSave.ShopPurchaseCounts = new System.Collections.Generic.Dictionary<string, int>(player.ShopPurchaseCounts);
 			currentSave.WeaponResourcePaths.Clear();
+			currentSave.WeaponSlotCustomStats.Clear();
 			for (int i = 0; i < player.WeaponSlots.Count; i++)
 			{
-				if (player.WeaponSlots[i].CurrentWeapon != null)
+				var w = player.WeaponSlots[i].CurrentWeapon;
+				if (w != null)
 				{
-					currentSave.WeaponResourcePaths.Add(player.WeaponSlots[i].CurrentWeapon.ResourcePath);
+					currentSave.WeaponResourcePaths.Add(w.GetEffectiveResourcePath());
+					currentSave.WeaponSlotCustomStats.Add(new SavedWeaponStats
+					{
+						Damage = w.Damage,
+						AttackCooldown = w.AttackCooldown,
+						MaxAmmo = w.MaxAmmo,
+						ReloadTime = w.ReloadTime,
+						ManaCost = w.ManaCost,
+						KnockbackForce = w.KnockbackForce
+					});
 				}
 				else
 				{
 					currentSave.WeaponResourcePaths.Add("");
+					currentSave.WeaponSlotCustomStats.Add(null);
 				}
 			}
 			SaveManager.SaveGame(currentSave);

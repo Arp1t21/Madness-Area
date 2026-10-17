@@ -104,6 +104,14 @@ public partial class AttackController : Node2D
 
 	private bool _isPlayerOwned = false;
 
+	public void AddBonusAmmo(int amount)
+	{
+		if (CurrentWeapon != null)
+		{
+			_currentAmmo = Mathf.Clamp(_currentAmmo + amount, 0, CurrentWeapon.MaxAmmo);
+		}
+	}
+
 	public void ApplyWeaponSettings()
 	{
 		if (CurrentWeapon == null || _timer == null) return;

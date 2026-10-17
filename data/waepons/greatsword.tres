@@ -1,0 +1,16 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="PackedScene" path="res://scene/weapons/greatsword.tscn" id="1_gsword"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="2_script"]
+
+[resource]
+script = ExtResource("2_script")
+WeaponName = "Dragon Greatsword"
+Damage = 26
+AttackCooldown = 0.62
+AttackRange = 215.0
+KnockbackForce = 8.5
+ManaCost = 3.0
+AllowMultiHit = true
+WeaponVisualPrefab = ExtResource("1_gsword")
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

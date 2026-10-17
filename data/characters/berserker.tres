@@ -1,8 +1,12 @@
-[gd_resource type="Resource" script_class="PlayerData" load_steps=14 format=3]
+[gd_resource type="Resource" script_class="PlayerData" load_steps=14 format=3 uid="uid://cu00jnkvki4uk"]
 
 [ext_resource type="Script" uid="uid://qqaqh6s4vgb4" path="res://scripts/resources/PlayerData.cs" id="1_script"]
 [ext_resource type="Resource" path="res://data/waepons/double_axe.tres" id="2_daxe"]
 [ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="3_atlas"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hit"]
+atlas = ExtResource("3_atlas")
+region = Rect2(256, 292, 16, 28)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle0"]
 atlas = ExtResource("3_atlas")
@@ -35,10 +39,6 @@ region = Rect2(224, 292, 16, 28)
 [sub_resource type="AtlasTexture" id="AtlasTexture_run3"]
 atlas = ExtResource("3_atlas")
 region = Rect2(240, 292, 16, 28)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_hit"]
-atlas = ExtResource("3_atlas")
-region = Rect2(256, 292, 16, 28)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_berserker"]
 animations = [{
@@ -106,7 +106,7 @@ animations = [{
 script = ExtResource("1_script")
 CharacterName = "Berserker"
 MaxHealth = 75
-HealthRegen = 0.6
+HealthRegen = 0.3
 MaxMana = 90
 ManaRegen = 1.5
 ManaCostPerSecondRunning = 0.0

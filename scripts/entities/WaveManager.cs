@@ -49,7 +49,7 @@ public partial class WaveManager : Node2D
 
 		bool isBossWave = (_currentWave % 5 == 0);
 		int w = Mathf.Max(0, _currentWave - 1);
-		int baseCount = InitialEnemyCount * 2 + w * 12 + w * w * 2;
+		int baseCount = 6 + w * 4 + (w * w) / 3;
 		int enemyCount = Mathf.Max(4, Mathf.RoundToInt(baseCount * Level.DifficultyMultiplier));
 		if (isBossWave)
 		{
@@ -58,7 +58,7 @@ public partial class WaveManager : Node2D
 
 		_enemiesToSpawn = enemyCount;
 		_isSpawning = true;
-		float spawnDelay = Mathf.Clamp(0.45f + w * 0.08f, 0.45f, 1.2f);
+		float spawnDelay = Mathf.Clamp(0.45f + w * 0.06f, 0.45f, 1.05f);
 		GD.Print($"Wave {_currentWave} started! Enemies: {enemyCount} (BossWave: {isBossWave}, SpawnDelay: {spawnDelay:0.00}s)");
 
 		for (int i = 0; i < enemyCount; i++)
@@ -121,8 +121,8 @@ public partial class WaveManager : Node2D
 			}
 			else if (roll < bigDemonChance + quagmireChance + chortChance + ghostChance + archerChance + cultistChance)
 			{
-				// На 2-м этаже делаем на 2 ренджовых моба меньше (и ограничиваем максимум 3 ренджовыми)
-				if (levelIndex == 2 && (_rangedSkippedThisWave < 2 || _rangedSpawnedThisWave >= 3))
+				// На каждом этаже ставим на 2 милишных моба больше вместо 2 ренджовых (и на 2-м этаже дополнительно ограничиваем ренджовых до 3)
+				if (_rangedSkippedThisWave < 2 || (levelIndex == 2 && _rangedSpawnedThisWave >= 3))
 				{
 					_rangedSkippedThisWave++;
 				}
@@ -220,6 +220,9 @@ public partial class WaveManager : Node2D
 			case 3: return "res://data/waepons/katana.tres";
 			case 4: return "res://data/waepons/auto_rifle.tres";
 			case 5: return "res://data/waepons/double_axe.tres";
+			case 6: return "res://data/waepons/hunter_bow.tres";
+			case 7: return "res://data/waepons/greatsword.tres";
+			case 8: return "res://data/waepons/knight_sword.tres";
 			default:
 				if (levelIndex % 2 == 1)
 				{
@@ -227,6 +230,9 @@ public partial class WaveManager : Node2D
 					{
 						"res://data/waepons/katana.tres",
 						"res://data/waepons/double_axe.tres",
+						"res://data/waepons/greatsword.tres",
+						"res://data/waepons/knight_sword.tres",
+						"res://data/waepons/hunter_bow.tres",
 						"res://data/waepons/auto_rifle.tres",
 						"res://data/waepons/shotgun.tres",
 						"res://data/waepons/revolver.tres",

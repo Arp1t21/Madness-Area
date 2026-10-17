@@ -433,49 +433,48 @@ public partial class HUD : CanvasLayer
 			_weaponSlots[i] = slot;
 		}
 
-		// Панель подсказки характеристик оружия при наведении курсора на слот в инвентаре
+		// Панель подсказки характеристик оружия при наведении курсора (в инвентаре или на земле)
+		// Добавляем напрямую в CanvasLayer (в экранных координатах 1:1), чтобы рамка была тонкой в 1px, а карточка выходила прямо из курсора
 		_weaponTooltipPanel = new Panel();
 		_weaponTooltipPanel.Name = "WeaponTooltipPanel";
-		_weaponTooltipPanel.LayoutMode = 1;
-		_weaponTooltipPanel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-		_weaponTooltipPanel.OffsetLeft = -168;
-		_weaponTooltipPanel.OffsetRight = 0;
-		_weaponTooltipPanel.OffsetTop = -44;
-		_weaponTooltipPanel.OffsetBottom = -3;
+		_weaponTooltipPanel.Size = new Vector2(168, 74);
 		_weaponTooltipPanel.MouseFilter = Control.MouseFilterEnum.Ignore;
 		_weaponTooltipPanel.Visible = false;
 
 		var tipStyle = new StyleBoxFlat
 		{
-			BgColor = new Color(0.06f, 0.06f, 0.09f, 0.94f),
-			BorderColor = new Color(0.95f, 0.78f, 0.25f, 0.9f),
+			BgColor = new Color(0.06f, 0.06f, 0.09f, 0.88f),
+			BorderColor = new Color(0.58f, 0.54f, 0.44f, 0.40f),
 			BorderWidthLeft = 1,
 			BorderWidthTop = 1,
 			BorderWidthRight = 1,
 			BorderWidthBottom = 1,
-			CornerRadiusTopLeft = 3,
-			CornerRadiusTopRight = 3,
-			CornerRadiusBottomLeft = 3,
-			CornerRadiusBottomRight = 3
+			CornerRadiusTopLeft = 2,
+			CornerRadiusTopRight = 2,
+			CornerRadiusBottomLeft = 2,
+			CornerRadiusBottomRight = 2
 		};
 		_weaponTooltipPanel.AddThemeStyleboxOverride("panel", tipStyle);
-		_weaponsContainer.AddChild(_weaponTooltipPanel);
+		AddChild(_weaponTooltipPanel);
 
 		_weaponTooltipLabel = new Label();
 		_weaponTooltipLabel.LayoutMode = 1;
 		_weaponTooltipLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		_weaponTooltipLabel.OffsetLeft = 4;
-		_weaponTooltipLabel.OffsetRight = -4;
-		_weaponTooltipLabel.OffsetTop = 2;
-		_weaponTooltipLabel.OffsetBottom = -2;
+		_weaponTooltipLabel.OffsetLeft = 5;
+		_weaponTooltipLabel.OffsetRight = -5;
+		_weaponTooltipLabel.OffsetTop = 3;
+		_weaponTooltipLabel.OffsetBottom = -3;
 		_weaponTooltipLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		_weaponTooltipLabel.VerticalAlignment = VerticalAlignment.Center;
 		if (font != null) _weaponTooltipLabel.AddThemeFontOverride("font", font);
-		_weaponTooltipLabel.AddThemeFontSizeOverride("font_size", 10);
-		_weaponTooltipLabel.AddThemeConstantOverride("line_spacing", -2);
-		_weaponTooltipLabel.AddThemeColorOverride("font_color", new Color(0.96f, 0.94f, 0.86f));
+		_weaponTooltipLabel.AddThemeFontSizeOverride("font_size", 20);
+		_weaponTooltipLabel.AddThemeConstantOverride("line_spacing", -4);
+		_weaponTooltipLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.93f, 0.86f));
 		_weaponTooltipPanel.AddChild(_weaponTooltipLabel);
 	}
+
+	private WeaponData _lastHoveredWeapon = null;
+	private float _tooltipScaleAnim = 1.0f;
 
 	private void UpdateWeaponsUI()
 	{
@@ -511,6 +510,7 @@ public partial class HUD : CanvasLayer
 		}
 
 		WeaponData hoveredWeapon = null;
+		bool isGroundHover = false;
 		Vector2 mouseScreenPos = GetViewport().GetMousePosition();
 
 		for (int i = 0; i < 3; i++)
@@ -527,18 +527,60 @@ public partial class HUD : CanvasLayer
 			}
 		}
 
+		// Если мышка не на слоте в HUD — проверяем наведение курсора на оружие на земле
+		if (hoveredWeapon == null)
+		{
+			Vector2 worldMousePos = _player.GetGlobalMousePosition();
+			float bestDist = float.MaxValue;
+			foreach (Node node in GetTree().GetNodesInGroup("WeaponPickup"))
+			{
+				if (node is WeaponPickup pickup && pickup.IsHoveredByMouse(worldMousePos))
+				{
+					float d = pickup.GlobalPosition.DistanceTo(worldMousePos);
+					if (d < bestDist)
+					{
+						bestDist = d;
+						hoveredWeapon = pickup.WeaponToGive;
+						isGroundHover = pickup.IsPlayerInRange;
+					}
+				}
+			}
+		}
+
 		if (IsInstanceValid(_weaponTooltipPanel) && IsInstanceValid(_weaponTooltipLabel))
 		{
 			if (hoveredWeapon != null)
 			{
+				if (_lastHoveredWeapon != hoveredWeapon || !_weaponTooltipPanel.Visible)
+				{
+					_tooltipScaleAnim = 0.82f;
+					_lastHoveredWeapon = hoveredWeapon;
+				}
+				_tooltipScaleAnim = Mathf.MoveToward(_tooltipScaleAnim, 1.0f, (float)GetProcessDeltaTime() * 4.5f);
+
 				_weaponTooltipLabel.Text = WeaponShowcaseSlot.FormatWeaponStatsTooltip(
 					hoveredWeapon,
 					_player.WeaponDamageMultiplier,
-					false);
+					isGroundHover);
+
+				Vector2 cardSize = new Vector2(168, hoveredWeapon.ManaCost > 0.01f ? 88 : 72);
+				_weaponTooltipPanel.Size = cardSize;
+
+				Vector2 viewSize = GetViewport().GetVisibleRect().Size;
+				bool openLeft = (mouseScreenPos.X + cardSize.X > viewSize.X - 6.0f);
+				bool openUp = (mouseScreenPos.Y - cardSize.Y >= 6.0f);
+
+				float posX = openLeft ? (mouseScreenPos.X - cardSize.X) : mouseScreenPos.X;
+				float posY = openUp ? (mouseScreenPos.Y - cardSize.Y) : mouseScreenPos.Y;
+
+				_weaponTooltipPanel.Position = new Vector2(posX, posY);
+				_weaponTooltipPanel.PivotOffset = mouseScreenPos - _weaponTooltipPanel.Position;
+				_weaponTooltipPanel.Scale = new Vector2(_tooltipScaleAnim, _tooltipScaleAnim);
 				_weaponTooltipPanel.Visible = true;
 			}
 			else
 			{
+				_lastHoveredWeapon = null;
 				_weaponTooltipPanel.Visible = false;
 			}
 		}
@@ -740,7 +782,8 @@ public partial class WeaponShowcaseSlot : Control
 		string displayName = weapon.WeaponName;
 		if (string.IsNullOrEmpty(displayName) || displayName == "Новое оружие")
 		{
-			displayName = System.IO.Path.GetFileNameWithoutExtension(weapon.ResourcePath);
+			string path = !string.IsNullOrEmpty(weapon.ResourcePath) ? weapon.ResourcePath : weapon.OriginalResourcePath;
+			displayName = !string.IsNullOrEmpty(path) ? System.IO.Path.GetFileNameWithoutExtension(path) : "WEAPON";
 		}
 
 		float effectiveDmg = weapon.Damage * damageMultiplier;
@@ -749,16 +792,18 @@ public partial class WeaponShowcaseSlot : Control
 			: (weapon.IsRanged ? "INF" : "-");
 
 		string header = isGroundPickup ? $"{displayName.ToUpper()} [E]" : displayName.ToUpper();
+		string manaLine = weapon.ManaCost > 0.01f ? $"\nMANA: {weapon.ManaCost:0.#}  RLD: {weapon.ReloadTime:0.##}s" : "";
 		return $"{header}\n" +
-			   $"DMG: {effectiveDmg:0.#}  |  CD: {weapon.AttackCooldown:0.##}s\n" +
-			   $"MAX AMMO: {ammoText}  |  KNOCK: {weapon.KnockbackForce:0.#}";
+			   $"DMG: {effectiveDmg:0.#}   CD: {weapon.AttackCooldown:0.##}s\n" +
+			   $"AMMO: {ammoText}   KNCK: {weapon.KnockbackForce:0.#}{manaLine}";
 	}
 
 	private static Texture2D GetWeaponTexture(WeaponData weapon)
 	{
 		if (weapon == null || weapon.WeaponVisualPrefab == null) return null;
 
-		string key = !string.IsNullOrEmpty(weapon.ResourcePath) ? weapon.ResourcePath : (weapon.WeaponName ?? "default");
+		string effPath = weapon.GetEffectiveResourcePath();
+		string key = !string.IsNullOrEmpty(effPath) ? effPath : (weapon.WeaponName ?? "default");
 		if (s_weaponTexCache.TryGetValue(key, out var cached) && cached != null)
 		{
 			return cached;

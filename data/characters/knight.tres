@@ -78,6 +78,7 @@ animations = [{
 script = ExtResource("1_5owmk")
 CharacterName = "Knight"
 MaxHealth = 55
+HealthRegen = 0.2
 ManaRegen = 1.5
 ManaCostPerSecondRunning = 0.0
 WalkSpeed = 60.0

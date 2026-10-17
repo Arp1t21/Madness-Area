@@ -1,0 +1,45 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" uid="uid://m5n70dsws8w1" path="res://scripts/entities/weapons/RangedWeaponVisual.cs" id="1_ranged"]
+[ext_resource type="Texture2D" uid="uid://cgtyx6uue80u4" path="res://assets/weapons/weapon_bow_2.png" id="2_bow"]
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_hbow"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_bow")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [],
+"loop": true,
+"name": &"reload",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("2_bow")
+}],
+"loop": false,
+"name": &"shoot",
+"speed": 10.0
+}]
+
+[node name="HunterBow" type="Node2D"]
+script = ExtResource("1_ranged")
+
+[node name="Muzzle" type="Marker2D" parent="."]
+position = Vector2(9, 0)
+
+[node name="WeaponSprite" type="Sprite2D" parent="."]
+visible = false
+texture_filter = 1
+texture = ExtResource("2_bow")
+offset = Vector2(3, 0)
+
+[node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
+sprite_frames = SubResource("SpriteFrames_hbow")
+animation = &"idle"
+offset = Vector2(3, 0)

@@ -422,9 +422,9 @@ public partial class Level : Node2D
 	public int GetExpectedMonsterCount()
 	{
 		int w = Mathf.Max(0, _currentLevelIndex - 1);
-		int baseCount = 8 + w * 12 + w * w * 2;
+		int baseCount = 6 + w * 4 + (w * w) / 3;
 		if (_currentLevelIndex % 5 == 0) baseCount += 1;
-		return Mathf.Max(8, Mathf.RoundToInt(baseCount * DifficultyMultiplier));
+		return Mathf.Max(6, Mathf.RoundToInt(baseCount * DifficultyMultiplier));
 	}
 
 	private void GenerateRandomLevel()
@@ -459,14 +459,14 @@ public partial class Level : Node2D
 		// и примыкающих к нему дополнительных квадратов (меньшего или такого же размера) в зависимости от числа монстров
 		var rooms = new List<Rect2I>();
 
-		int mainHalfW = _rng.RandiRange(11, 14) + Mathf.Clamp(expectedMonsters / 32, 0, 5);
-		int mainHalfH = _rng.RandiRange(11, 14) + Mathf.Clamp(expectedMonsters / 32, 0, 5);
+		int mainHalfW = _rng.RandiRange(10, 12) + Mathf.Clamp(expectedMonsters / 25, 0, 3);
+		int mainHalfH = _rng.RandiRange(9, 11) + Mathf.Clamp(expectedMonsters / 25, 0, 3);
 		Rect2I mainRoom = new Rect2I(-mainHalfW, -mainHalfH, mainHalfW * 2 + 1, mainHalfH * 2 + 1);
 		rooms.Add(mainRoom);
 
-		// Количество примыкающих квадратов растет с числом монстров и этажом (от 2-3 на 2 этаже до 5-8 на высоких волнах)
-		int minExtraSquares = Mathf.Clamp(2 + (_currentLevelIndex - 2) / 2 + expectedMonsters / 28, 2, 6);
-		int maxExtraSquares = Mathf.Clamp(minExtraSquares + 2, 3, 8);
+		// Количество примыкающих квадратов умеренное, чтобы арена была компактнее
+		int minExtraSquares = Mathf.Clamp(1 + (_currentLevelIndex - 2) / 3 + expectedMonsters / 26, 1, 4);
+		int maxExtraSquares = Mathf.Clamp(minExtraSquares + 1, 2, 5);
 		int extraSquaresCount = _rng.RandiRange(minExtraSquares, maxExtraSquares);
 
 		// Перемешиваем 4 направления (0=Север, 1=Юг, 2=Восток, 3=Запад), чтобы первые секции росли в разные стороны
@@ -478,7 +478,7 @@ public partial class Level : Node2D
 		}
 
 		// Шанс того, что примыкающий квадрат будет такого же размера (а не поменьше), растет с числом монстров
-		float equalSizeChance = Mathf.Clamp(0.32f + expectedMonsters * 0.006f, 0.35f, 0.75f);
+		float equalSizeChance = Mathf.Clamp(0.28f + expectedMonsters * 0.005f, 0.30f, 0.65f);
 
 		for (int i = 0; i < extraSquaresCount; i++)
 		{
@@ -490,16 +490,16 @@ public partial class Level : Node2D
 			bool isEqualSize = _rng.Randf() < equalSizeChance;
 
 			float scaleFactor = isEqualSize
-				? _rng.RandfRange(0.88f, 1.05f)
-				: _rng.RandfRange(0.55f, 0.80f);
+				? _rng.RandfRange(0.82f, 0.98f)
+				: _rng.RandfRange(0.52f, 0.75f);
 
 			int baseSpan = Math.Max(parentRoom.Size.X, parentRoom.Size.Y);
-			int newW = Mathf.Clamp(Mathf.RoundToInt(baseSpan * scaleFactor) + _rng.RandiRange(-2, 2), 12, 30);
-			int newH = Mathf.Clamp(Mathf.RoundToInt(baseSpan * scaleFactor) + _rng.RandiRange(-2, 2), 12, 30);
+			int newW = Mathf.Clamp(Mathf.RoundToInt(baseSpan * scaleFactor) + _rng.RandiRange(-2, 2), 9, 20);
+			int newH = Mathf.Clamp(Mathf.RoundToInt(baseSpan * scaleFactor) + _rng.RandiRange(-2, 2), 9, 20);
 
 			// Перекрытие в 3 тайла внутрь родительского квадрата гарантирует широкий проход без узких затыков
 			const int overlap = 3;
-			const int minSharedPassage = 8;
+			const int minSharedPassage = 7;
 			int nx = 0;
 			int ny = 0;
 
@@ -590,7 +590,6 @@ public partial class Level : Node2D
 		}
 
 		// 5. Выстраиваем контур внешних стен вокруг всей составной фигуры
-		Vector2I vTile = new Vector2I(2, 1);  // Source ID 0 in floor.tres (горизонтальная стена)
 		Vector2I hTile = new Vector2I(2, 10); // Source ID 2 (боковая стена)
 
 		for (int x = boundMinX - 2; x <= boundMaxX + 2; x++)
@@ -620,11 +619,57 @@ public partial class Level : Node2D
 				bool floorWest = floorSet.Contains(new Vector2I(x - 1, y));
 				bool floorEast = floorSet.Contains(new Vector2I(x + 1, y));
 
-				if (floorNorth || floorSouth || (floorWest && floorEast))
+				if (floorNorth && !floorSouth)
+				{
+					// На внутреннем углу (где снизу-сбоку продолжается комната) приоритет у вертикального бортика боковой стены,
+					// чтобы кирпичная стена не прерывала боковой бортик и не оставляла черную дыру
+					if ((floorEast || floorWest) && !(floorWest && floorEast))
+					{
+						_floorLayer.SetCell(pos, 1, GetRandomFloorTile());
+						if (_wallsHorizontalLayer != null)
+						{
+							_wallsHorizontalLayer.SetCell(pos, 2, hTile, floorEast ? 1 : 0);
+						}
+					}
+					else
+					{
+						// Нижняя стена в точности как на первой карте (y=19 и y=20 в map.tscn):
+						// На верхнем ряду pos ОБЯЗАТЕЛЬНО рисуется тайл пола под полупрозрачной шапкой (variantX, 0),
+						// чтобы между полом и нижней стеной не было черной полосы!
+						_floorLayer.SetCell(pos, 1, GetRandomFloorTile());
+						if (_wallsVerticalLayer != null)
+						{
+							int variantX = (((x % 3) + 3) % 3) + 1;
+							_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 0));
+
+							Vector2I posBelow = new Vector2I(x, y + 1);
+							bool belowBordersFloorSide = floorSet.Contains(new Vector2I(x - 1, y + 1)) || floorSet.Contains(new Vector2I(x + 1, y + 1));
+							if (!floorSet.Contains(posBelow) && !belowBordersFloorSide)
+							{
+								_wallsVerticalLayer.SetCell(posBelow, 0, new Vector2I(variantX, 1));
+							}
+						}
+					}
+				}
+				else if (floorSouth || (floorWest && floorEast))
 				{
 					if (_wallsVerticalLayer != null)
 					{
-						_wallsVerticalLayer.SetCell(pos, 0, vTile);
+						int variantX = (((x % 3) + 3) % 3) + 1;
+						_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 1));
+						if (floorSouth && !floorNorth)
+						{
+							Vector2I posAbove = new Vector2I(x, y - 1);
+							if (!floorSet.Contains(posAbove) && _wallsVerticalLayer.GetCellSourceId(posAbove) == -1)
+							{
+								_wallsVerticalLayer.SetCell(posAbove, 0, new Vector2I(variantX, 0));
+							}
+						}
+					}
+
+					if (_wallsHorizontalLayer != null && (floorEast || floorWest) && !(floorWest && floorEast))
+					{
+						_wallsHorizontalLayer.SetCell(pos, 2, hTile, floorEast ? 1 : 0);
 					}
 				}
 				else if (floorEast)
@@ -643,11 +688,20 @@ public partial class Level : Node2D
 				}
 				else
 				{
-					// Внешний диагональный угол
+					// Внешний диагональный угол (в т.ч. нижние углы карты на уровне двухрядной нижней стены)
 					bool diagEast = floorSet.Contains(new Vector2I(x + 1, y - 1)) || floorSet.Contains(new Vector2I(x + 1, y + 1));
+					bool diagBottomCorner = floorSet.Contains(new Vector2I(x + 1, y - 1)) || floorSet.Contains(new Vector2I(x - 1, y - 1));
 					if (_wallsHorizontalLayer != null)
 					{
 						_wallsHorizontalLayer.SetCell(pos, 2, hTile, diagEast ? 1 : 0);
+						if (diagBottomCorner)
+						{
+							Vector2I posBelow = new Vector2I(x, y + 1);
+							if (!floorSet.Contains(posBelow))
+							{
+								_wallsHorizontalLayer.SetCell(posBelow, 2, hTile, diagEast ? 1 : 0);
+							}
+						}
 					}
 				}
 			}
@@ -658,7 +712,7 @@ public partial class Level : Node2D
 		// 6. Рисуем внутренние колонны/препятствия пропорционально площади всей составной карты
 		if (_columnsLayer != null && floorList.Count > 0)
 		{
-			int numPillars = Mathf.Clamp(floorList.Count / 165, 3, 9);
+			int numPillars = Mathf.Clamp(floorList.Count / 165, 2, 6);
 			var pillarPositions = new List<Vector2I>();
 
 			for (int i = 0; i < numPillars; i++)
@@ -910,8 +964,7 @@ public partial class Level : Node2D
 
 		foreach (var cell in floorCells)
 		{
-			// Exclude shop room
-			if (cell.Y <= -_halfH - 2) continue;
+			if (_halfH > 0 && cell.Y <= -_halfH - 2) continue;
 
 			// Не спавним врагов внутри стен
 			if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(cell) != -1) continue;
@@ -932,23 +985,47 @@ public partial class Level : Node2D
 
 	private int _spawnQuadrant = 0;
 
+	private Rect2 GetCameraWorldRect(Vector2 fallbackCenter, float margin = 24.0f)
+	{
+		var viewport = GetViewport();
+		if (viewport != null)
+		{
+			Transform2D invCanvas = viewport.GetCanvasTransform().AffineInverse();
+			Rect2 visibleRect = viewport.GetVisibleRect();
+			Vector2 topLeft = invCanvas * visibleRect.Position;
+			Vector2 bottomRight = invCanvas * visibleRect.End;
+			Rect2 worldRect = new Rect2(topLeft, bottomRight - topLeft).Abs();
+			if (worldRect.Size.X > 10.0f && worldRect.Size.Y > 10.0f)
+			{
+				return worldRect.Grow(margin);
+			}
+		}
+
+		Vector2 halfSize = new Vector2(550.0f + margin, 300.0f + margin);
+		return new Rect2(fallbackCenter - halfSize, halfSize * 2.0f);
+	}
+
 	public Vector2 GetNextEnemySpawnPosition(Vector2 playerPos, float minPlayerDist = 140f)
 	{
 		int targetQuad = _spawnQuadrant;
 		_spawnQuadrant = (_spawnQuadrant + 1) % 4;
 
+		Rect2 cameraRect = GetCameraWorldRect(playerPos, 24.0f);
+		Rect2 strictCameraRect = GetCameraWorldRect(playerPos, 0.0f);
+
 		if (_enemySpawnPositions == null || _enemySpawnPositions.Count == 0)
 		{
 			float baseAngle = targetQuad * (Mathf.Pi * 0.5f) + (float)GD.RandRange(0.15f, 1.4f);
-			return playerPos + new Vector2(Mathf.Cos(baseAngle), Mathf.Sin(baseAngle)) * 220.0f;
+			float offscreenDist = Mathf.Max(cameraRect.Size.X, cameraRect.Size.Y) * 0.58f;
+			return playerPos + new Vector2(Mathf.Cos(baseAngle), Mathf.Sin(baseAngle)) * offscreenDist;
 		}
 
-		// Сначала ищем точку в целевом квадранте вокруг игрока, чтобы мобы спавнились со всех 4 сторон
+		// 1. Сначала ищем точку строго вне камеры игрока (с запасом) в целевом квадранте
 		for (int i = 0; i < _enemySpawnPositions.Count; i++)
 		{
 			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
 			Vector2 pos = _enemySpawnPositions[idx];
-			if (pos.DistanceTo(playerPos) < minPlayerDist) continue;
+			if (cameraRect.HasPoint(pos) || pos.DistanceTo(playerPos) < minPlayerDist) continue;
 
 			Vector2 rel = pos - playerPos;
 			int quad = (rel.X >= 0 ? 0 : 1) + (rel.Y >= 0 ? 0 : 2);
@@ -959,21 +1036,47 @@ public partial class Level : Node2D
 			}
 		}
 
-		// Если в нужном квадранте точки не нашлось, берем любую достаточно далекую точку
+		// 2. Если в целевом квадранте вне камеры точек нет (например, игрок стоит у стены), берем любую точку вне камеры
 		for (int i = 0; i < _enemySpawnPositions.Count; i++)
 		{
-			Vector2 pos = _enemySpawnPositions[_spawnPosIndex];
-			_spawnPosIndex = (_spawnPosIndex + 1) % _enemySpawnPositions.Count;
-
-			if (pos.DistanceTo(playerPos) >= minPlayerDist)
+			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
+			Vector2 pos = _enemySpawnPositions[idx];
+			if (!cameraRect.HasPoint(pos) && pos.DistanceTo(playerPos) >= minPlayerDist)
 			{
+				_spawnPosIndex = (idx + 1) % _enemySpawnPositions.Count;
 				return pos;
 			}
 		}
 
-		Vector2 fallbackPos = _enemySpawnPositions[_spawnPosIndex];
-		_spawnPosIndex = (_spawnPosIndex + 1) % _enemySpawnPositions.Count;
-		return fallbackPos;
+		// 3. Проверяем без дополнительного отступа на случай маленькой первой карты
+		for (int i = 0; i < _enemySpawnPositions.Count; i++)
+		{
+			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
+			Vector2 pos = _enemySpawnPositions[idx];
+			if (!strictCameraRect.HasPoint(pos) && pos.DistanceTo(playerPos) >= minPlayerDist)
+			{
+				_spawnPosIndex = (idx + 1) % _enemySpawnPositions.Count;
+				return pos;
+			}
+		}
+
+		// 4. Fallback (только если вся маленькая первая карта целиком поместилась в экран): берем самую дальнюю от центра камеры точку
+		Vector2 bestPos = _enemySpawnPositions[_spawnPosIndex];
+		float bestDist = -1.0f;
+		Vector2 camCenter = strictCameraRect.GetCenter();
+		for (int i = 0; i < _enemySpawnPositions.Count; i++)
+		{
+			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
+			Vector2 pos = _enemySpawnPositions[idx];
+			float d = pos.DistanceTo(camCenter);
+			if (d > bestDist)
+			{
+				bestDist = d;
+				bestPos = pos;
+				_spawnPosIndex = (idx + 1) % _enemySpawnPositions.Count;
+			}
+		}
+		return bestPos;
 	}
 
 	public Vector2 GetWalkableFlankTarget(Vector2 playerPos, Vector2 desiredFlankPos)
@@ -1194,7 +1297,7 @@ public partial class Level : Node2D
 					Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
 					if (playerPos.DistanceTo(cellCenter) < spikeRadius)
 					{
-						_player.TakeDamage(5f, cellCenter, 5.0f, true);
+						_player.TakeDamage(5f, cellCenter, 2.5f, true);
 						_playerSpikeInvulnerabilityTimer = 1.0;
 						break;
 					}
@@ -1214,7 +1317,7 @@ public partial class Level : Node2D
 						Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
 						if (enemyPos.DistanceTo(cellCenter) < spikeRadius)
 						{
-							enemy.TakeDamage(8f, cellCenter, 4.0f, true);
+							enemy.TakeDamage(8f, cellCenter, 2.0f, true);
 							_enemySpikeCooldowns[id] = 1.0;
 							break;
 						}

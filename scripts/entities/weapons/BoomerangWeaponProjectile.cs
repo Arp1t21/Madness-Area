@@ -47,12 +47,12 @@ public partial class BoomerangWeaponProjectile : Node2D
 		_forwardDir = direction == Vector2.Zero ? Vector2.Right : direction.Normalized();
 		// Перпендикулярный вектор для дугового отклонения бумеранга
 		_sideDir = new Vector2(-_forwardDir.Y, _forwardDir.X);
-		_maxDistance = Mathf.Max(40.0f, maxDistance);
-		_curveWidth = _maxDistance * 0.28f;
+		_maxDistance = Mathf.Max(15.0f, maxDistance);
+		_curveWidth = _maxDistance * 0.20f;
 
-		float effectiveSpeed = Mathf.Max(250.0f, speed);
-		_outboundDuration = Mathf.Clamp(_maxDistance / effectiveSpeed, 0.16f, 0.85f);
-		_returnDuration = Mathf.Clamp(_outboundDuration * 0.92f, 0.15f, 0.80f);
+		float effectiveSpeed = Mathf.Max(80.0f, speed);
+		_outboundDuration = Mathf.Clamp(_maxDistance / effectiveSpeed, 0.12f, 2.0f);
+		_returnDuration = Mathf.Clamp(_outboundDuration * 0.95f, 0.12f, 2.0f);
 
 		_damage = damage;
 		_knockback = knockback;
@@ -81,7 +81,7 @@ public partial class BoomerangWeaponProjectile : Node2D
 	public override void _PhysicsProcess(double delta)
 	{
 		float dt = (float)delta;
-		_spinAngle += 25.0f * dt;
+		_spinAngle += 28.0f * dt;
 		QueueRedraw();
 
 		if (_ownerPlayer == null || !GodotObject.IsInstanceValid(_ownerPlayer))

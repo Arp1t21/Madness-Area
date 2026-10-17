@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=7 format=3]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=7 format=3 uid="uid://bkqlqaa65yh1o"]
 
 [ext_resource type="PackedScene" uid="uid://lj0667ylclpd" path="res://scene/weapons/bullets/revolver_bullet.tscn" id="1_bullet"]
 [ext_resource type="AudioStream" uid="uid://2am52okbojh" path="res://assets/sounds/revolver_shot.wav" id="2_shot"]
@@ -10,11 +10,11 @@
 [resource]
 script = ExtResource("5_script")
 WeaponName = "Auto Rifle"
-Damage = 7
-AttackCooldown = 0.16
-KnockbackForce = 0.4
-Recoil = 1.2
-ManaCost = 1.0
+Damage = 6
+AttackCooldown = 0.17
+KnockbackForce = 0.2
+Recoil = 0.7
+ManaCost = 2.0
 AttackSound = ExtResource("2_shot")
 ReloadSound = ExtResource("6_reload")
 EquipSound = ExtResource("6_reload")

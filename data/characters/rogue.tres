@@ -1,9 +1,13 @@
-[gd_resource type="Resource" script_class="PlayerData" load_steps=15 format=3]
+[gd_resource type="Resource" script_class="PlayerData" load_steps=15 format=3 uid="uid://oaho5t6bm0p"]
 
 [ext_resource type="Script" uid="uid://qqaqh6s4vgb4" path="res://scripts/resources/PlayerData.cs" id="1_script"]
-[ext_resource type="Resource" path="res://data/waepons/dagger.tres" id="2_dagger"]
-[ext_resource type="Resource" path="res://data/waepons/revolver.tres" id="3_revolver"]
+[ext_resource type="Resource" uid="uid://bn6km80t4oi27" path="res://data/waepons/dagger.tres" id="2_dagger"]
+[ext_resource type="Resource" uid="uid://bna55p0vfoiby" path="res://data/waepons/revolver.tres" id="3_revolver"]
 [ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="4_atlas"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hit"]
+atlas = ExtResource("4_atlas")
+region = Rect2(256, 36, 16, 28)
 
 [sub_resource type="AtlasTexture" id="AtlasTexture_idle0"]
 atlas = ExtResource("4_atlas")
@@ -36,10 +40,6 @@ region = Rect2(224, 36, 16, 28)
 [sub_resource type="AtlasTexture" id="AtlasTexture_run3"]
 atlas = ExtResource("4_atlas")
 region = Rect2(240, 36, 16, 28)
-
-[sub_resource type="AtlasTexture" id="AtlasTexture_hit"]
-atlas = ExtResource("4_atlas")
-region = Rect2(256, 36, 16, 28)
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_rogue"]
 animations = [{
@@ -107,7 +107,7 @@ animations = [{
 script = ExtResource("1_script")
 CharacterName = "Rogue"
 MaxHealth = 45
-HealthRegen = 0.3
+HealthRegen = 0.15
 MaxMana = 120
 ManaRegen = 2.5
 ManaCostPerSecondRunning = 0.0

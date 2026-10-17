@@ -427,9 +427,9 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 			activeSlot.Visible = false;
 		}
 
-		// Максимальная дистанция уменьшена в 1.2 раза (320 / 1.2 = 266.67, минимальная при коротком нажатии 85 / 1.2 = 70.8)
-		float minDist = (85.0f / 1.2f) * World.Scale;
-		float maxDist = (320.0f / 1.2f) * World.Scale;
+		// Дистанция полета уменьшена на 0.7 раз, скорость полета и возврата увеличена в 2 раза
+		float minDist = (85.0f / 1.2f) * 0.7f * World.Scale;
+		float maxDist = (320.0f / 1.2f) * 0.7f * World.Scale;
 		float throwDistance = Mathf.Lerp(minDist, maxDist, chargeRatio);
 		float speed = Mathf.Lerp(430.0f, 600.0f, chargeRatio);
 
@@ -476,7 +476,7 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 		const float gap = 1.15f;
 		float totalWidth = totalSquares * sqSize + (totalSquares - 1) * gap;
 		float startX = -totalWidth * 0.5f;
-		float y = -21.0f;
+		float y = -26.5f; // Расположены чуть выше над головой героя
 
 		// Гарантируем, что с первой же доли секунды зажатия 1-й квадрат уже начинает светиться
 		float rawRatio = Mathf.Clamp(_chargeSeconds / MaxChargeSeconds, 0.0f, 1.0f);
