@@ -7,6 +7,7 @@ public partial class PauseMenu : CanvasLayer
 	{
 		ProcessMode = ProcessModeEnum.Always;
 		Layer = 15;
+		SettingsManager.ApplyFontQualityFixes();
 
 		var rootControl = new Control();
 		AddChild(rootControl);
@@ -14,7 +15,7 @@ public partial class PauseMenu : CanvasLayer
 		rootControl.Size = GetViewport().GetVisibleRect().Size;
 
 		var bgOverlay = new ColorRect();
-		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.65f);
+		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.72f);
 		rootControl.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
@@ -24,7 +25,7 @@ public partial class PauseMenu : CanvasLayer
 
 		var vbox = new VBoxContainer();
 		vbox.Alignment = BoxContainer.AlignmentMode.Center;
-		vbox.AddThemeConstantOverride("separation", 15);
+		vbox.AddThemeConstantOverride("separation", 24);
 		margin.AddChild(vbox);
 
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
@@ -33,11 +34,10 @@ public partial class PauseMenu : CanvasLayer
 		title.Text = "PAUSED";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 40);
+		title.AddThemeFontSizeOverride("font_size", 96);
 		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.55f));
 		title.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
-		title.AddThemeConstantOverride("outline_size", 6);
-		title.AddThemeConstantOverride("shadow", 1);
+		title.AddThemeConstantOverride("outline_size", 4);
 		vbox.AddChild(title);
 
 		var btnContinue = CreateMenuButton("CONTINUE", titleFont, vbox);
@@ -58,12 +58,12 @@ public partial class PauseMenu : CanvasLayer
 		btn.Text = text;
 		btn.Flat = true;
 		btn.AddThemeFontOverride("font", font);
-		btn.AddThemeFontSizeOverride("font_size", 20);
+		btn.AddThemeFontSizeOverride("font_size", 48);
 		btn.AddThemeColorOverride("font_color", new Color(0.95f, 0.95f, 0.95f));
 		btn.AddThemeColorOverride("font_hover_color", new Color(1.0f, 0.9f, 0.6f));
 		btn.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
-		btn.AddThemeConstantOverride("outline_size", 3);
-		btn.CustomMinimumSize = new Vector2(160, 34);
+		btn.AddThemeConstantOverride("outline_size", 2);
+		btn.CustomMinimumSize = new Vector2(360, 62);
 		parent.AddChild(btn);
 
 		var btnNormal = new StyleBoxEmpty();

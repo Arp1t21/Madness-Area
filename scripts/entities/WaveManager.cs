@@ -10,6 +10,8 @@ public partial class WaveManager : Node2D
 	private int _currentWave = 0;
 	private int _enemiesAlive = 0;
 	private int _enemiesToSpawn = 0;
+	private int _rangedSkippedThisWave = 0;
+	private int _rangedSpawnedThisWave = 0;
 	private bool _isSpawning = false;
 	private bool _waveInProgress = false;
 
@@ -30,6 +32,8 @@ public partial class WaveManager : Node2D
 	{
 		if (_waveInProgress || Engine.TimeScale == 0) return;
 		_waveInProgress = true;
+		_rangedSkippedThisWave = 0;
+		_rangedSpawnedThisWave = 0;
 
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		if (level != null)
@@ -44,20 +48,21 @@ public partial class WaveManager : Node2D
 		MusicManager.Instance?.PlayMusic("res://assets/sounds/doom_22. Damnation.mp3");
 
 		bool isBossWave = (_currentWave % 5 == 0);
-		int enemyCount = (InitialEnemyCount + (_currentWave - 1) * 3) * 2;
+		int w = Mathf.Max(0, _currentWave - 1);
+		int enemyCount = InitialEnemyCount * 2 + w * 12 + w * w * 2;
 		if (isBossWave)
 		{
-			// На босс-уровне чуть меньше обычных мобов + 1 большой Босс
-			enemyCount = Mathf.Max(6, enemyCount - 4) + 1;
+			enemyCount += 1; // +1 большой Босс поверх волны
 		}
 
 		_enemiesToSpawn = enemyCount;
 		_isSpawning = true;
+		float spawnDelay = Mathf.Clamp(0.45f - w * 0.04f, 0.16f, 0.45f);
 		GD.Print($"Wave {_currentWave} started! Enemies: {enemyCount} (BossWave: {isBossWave})");
 
 		for (int i = 0; i < enemyCount; i++)
 		{
-			await ToSignal(GetTree().CreateTimer(0.666f, processAlways: false), "timeout");
+			await ToSignal(GetTree().CreateTimer(spawnDelay, processAlways: false), "timeout");
 			if (!IsInsideTree()) return;
 
 			bool spawnAsBoss = isBossWave && (i == enemyCount - 1);
@@ -97,13 +102,25 @@ public partial class WaveManager : Node2D
 			{
 				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/quagmire.tscn");
 			}
-			else if (roll < quagmireChance + ghostChance)
-			{
-				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/ghost.tscn");
-			}
 			else if (roll < quagmireChance + ghostChance + archerChance)
 			{
-				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/archer.tscn");
+				// На 2-м этаже делаем на 2 ренджовых моба меньше (и ограничиваем максимум 3 ренджовыми)
+				if (levelIndex == 2 && (_rangedSkippedThisWave < 2 || _rangedSpawnedThisWave >= 3))
+				{
+					_rangedSkippedThisWave++;
+				}
+				else
+				{
+					_rangedSpawnedThisWave++;
+					if (roll < quagmireChance + ghostChance)
+					{
+						selectedPrefab = GD.Load<PackedScene>("res://scene/actors/ghost.tscn");
+					}
+					else
+					{
+						selectedPrefab = GD.Load<PackedScene>("res://scene/actors/archer.tscn");
+					}
+				}
 			}
 		}
 

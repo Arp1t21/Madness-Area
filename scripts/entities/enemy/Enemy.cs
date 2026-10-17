@@ -26,6 +26,10 @@ public partial class Enemy : CharacterBody2D
 	protected List<Vector2> _navigationPath = new List<Vector2>();
 	protected float _pathUpdateTimer = 0.0f;
 
+	private static int s_flankCounter = 0;
+	protected float _flankAngle = 0.0f;
+	protected float _flankSign = 1.0f;
+
 	public float DamageMultiplier { get; protected set; } = 1.0f;
 
 	protected virtual Color WarningLabelColor => new Color(1.0f, 0.15f, 0.15f);
@@ -62,6 +66,13 @@ public partial class Enemy : CharacterBody2D
 	{
 		Scale = new Vector2(3.0f, 3.0f);
 		AddToGroup("enemy");
+		AddToGroup("Enemies");
+
+		int flankIdx = s_flankCounter++;
+		// Золотой угол (~137.5°) равномерно распределяет каждого нового моба по кругу вокруг игрока
+		_flankAngle = (flankIdx * 2.3999632f) % Mathf.Tau;
+		_flankSign = (flankIdx % 2 == 0) ? 1.0f : -1.0f;
+
 		_sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
 
@@ -155,6 +166,9 @@ public partial class Enemy : CharacterBody2D
 	{
 		if (_player == null || !GodotObject.IsInstanceValid(_player)) return Vector2.Zero;
 
+		_flankAngle = (_flankAngle + _flankSign * 0.22f * (float)delta) % Mathf.Tau;
+		float distToPlayer = GlobalPosition.DistanceTo(_player.GlobalPosition);
+
 		_pathUpdateTimer -= (float)delta;
 		if (_pathUpdateTimer <= 0)
 		{
@@ -162,7 +176,15 @@ public partial class Enemy : CharacterBody2D
 			var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 			if (level != null)
 			{
-				_navigationPath = level.GetPathToPlayer(GlobalPosition, _player.GlobalPosition);
+				Vector2 navGoal = _player.GlobalPosition;
+				// Если моб далеко, он строит маршрут к своей точке окружения вокруг игрока, а не идет в одну линию со всеми
+				if (distToPlayer > 70.0f * World.Scale)
+				{
+					float flankRadius = Mathf.Clamp((distToPlayer - 35.0f * World.Scale) * 0.65f, 42.0f * World.Scale, 125.0f * World.Scale);
+					Vector2 desiredFlank = _player.GlobalPosition + new Vector2(Mathf.Cos(_flankAngle), Mathf.Sin(_flankAngle)) * flankRadius;
+					navGoal = level.GetWalkableFlankTarget(_player.GlobalPosition, desiredFlank);
+				}
+				_navigationPath = level.GetPathToPlayer(GlobalPosition, navGoal);
 			}
 		}
 
@@ -179,14 +201,41 @@ public partial class Enemy : CharacterBody2D
 			}
 		}
 
-		return (targetPos - GlobalPosition).Normalized();
+		Vector2 baseDir = (targetPos - GlobalPosition).Normalized();
+
+		// Добавляем боковое смещение для обхода игрока с назначенного фланга на средней дистанции
+		if (distToPlayer > 38.0f * World.Scale && distToPlayer < 140.0f * World.Scale)
+		{
+			Vector2 desiredPosAroundPlayer = _player.GlobalPosition + new Vector2(Mathf.Cos(_flankAngle), Mathf.Sin(_flankAngle)) * (45.0f * World.Scale);
+			Vector2 toFlankSlot = (desiredPosAroundPlayer - GlobalPosition).Normalized();
+			float blend = Mathf.Clamp((distToPlayer - 38.0f * World.Scale) / (100.0f * World.Scale), 0.0f, 0.55f);
+			baseDir = (baseDir * (1.0f - blend) + toFlankSlot * blend).Normalized();
+		}
+
+		return baseDir;
 	}
 
-	protected Vector2 ComputeEnemySeparation(float separationRadius = 18.0f)
+	protected Vector2 GetStrafeDirectionAroundPlayer()
+	{
+		if (_player == null || !GodotObject.IsInstanceValid(_player)) return Vector2.Zero;
+		Vector2 desiredRingPos = _player.GlobalPosition + new Vector2(Mathf.Cos(_flankAngle), Mathf.Sin(_flankAngle)) * (110.0f * World.Scale);
+		if (GlobalPosition.DistanceTo(desiredRingPos) > 24.0f * World.Scale)
+		{
+			return (desiredRingPos - GlobalPosition).Normalized();
+		}
+		Vector2 radial = (GlobalPosition - _player.GlobalPosition).Normalized();
+		return new Vector2(-radial.Y * _flankSign, radial.X * _flankSign);
+	}
+
+	protected Vector2 ComputeEnemySeparation(float separationRadius = 80.0f)
 	{
 		Vector2 separation = Vector2.Zero;
-		var enemies = GetTree().GetNodesInGroup("enemy");
+		var enemies = GetTree().GetNodesInGroup("Enemies");
 		int neighborsCount = 0;
+
+		Vector2 toPlayer = (_player != null && GodotObject.IsInstanceValid(_player))
+			? (_player.GlobalPosition - GlobalPosition).Normalized()
+			: Vector2.Zero;
 
 		foreach (Node node in enemies)
 		{
@@ -195,7 +244,18 @@ public partial class Enemy : CharacterBody2D
 				float d = GlobalPosition.DistanceTo(otherEnemy.GlobalPosition);
 				if (d < separationRadius && d > 0.1f)
 				{
-					separation += (GlobalPosition - otherEnemy.GlobalPosition).Normalized() * (separationRadius - d);
+					Vector2 away = (GlobalPosition - otherEnemy.GlobalPosition).Normalized();
+					float weight = (separationRadius - d) / separationRadius;
+					separation += away * (weight * 1.4f);
+
+					// Если другой моб идет перед нами или рядом в сторону игрока — расталкиваемся вбок по дуге, чтобы не идти поездом
+					if (toPlayer != Vector2.Zero)
+					{
+						Vector2 tangent = new Vector2(-toPlayer.Y, toPlayer.X);
+						float side = Mathf.Sign(away.Dot(tangent));
+						if (Mathf.Abs(side) < 0.01f) side = _flankSign;
+						separation += tangent * (side * weight * 1.1f);
+					}
 					neighborsCount++;
 				}
 			}

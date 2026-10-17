@@ -37,16 +37,21 @@ public partial class Ghost : Enemy
 			{
 				direction = UpdateNavigationDirection(delta, 12.0f * World.Scale);
 			}
-			else if (dist < 110.0f * World.Scale)
+			else if (dist < 105.0f * World.Scale)
 			{
 				direction = (GlobalPosition - _player.GlobalPosition).Normalized();
-				currentSpeed = Config.Speed * 0.6f * World.Scale;
+				currentSpeed = Config.Speed * 0.65f * World.Scale;
+			}
+			else
+			{
+				direction = GetStrafeDirectionAroundPlayer();
+				currentSpeed = Config.Speed * 0.55f * World.Scale;
 			}
 
-			Vector2 separation = ComputeEnemySeparation(18.0f);
+			Vector2 separation = ComputeEnemySeparation(90.0f);
 			if (separation != Vector2.Zero)
 			{
-				direction = (direction + separation * 0.15f).Normalized();
+				direction = (direction + separation * 0.75f).Normalized();
 			}
 
 			if (direction != Vector2.Zero)

@@ -30,15 +30,12 @@ public partial class RangedWeaponVisual : Node2D
 		// Рассчитываем направление от стабильного центра игрока, чтобы избежать осцилляции
 		Vector2 ownerPos = _ownerNode != null ? _ownerNode.GlobalPosition : GlobalPosition;
 		float angleToOwner = (targetPos - ownerPos).Angle();
-		
-		// ПОВОРОТ: Теперь только локальный офсет. 
-		// Родитель (AttackController) уже повернут на нужный угол.
-		Rotation = Mathf.DegToRad(OrientationOffset);
+
+		bool currentFlip = _ownerSprite?.FlipH ?? false;
+		bool isLeft = currentFlip;
 
 		if (UseSmartFlip) {
 			// ГИСТЕРЕЗИС (Предотвращение дребезга)
-			bool currentFlip = _ownerSprite?.FlipH ?? false;
-			bool isLeft = currentFlip;
 			float absAngleDeg = Mathf.Abs(Mathf.RadToDeg(angleToOwner));
 			
 			if (absAngleDeg > 100) isLeft = true;
@@ -51,5 +48,9 @@ public partial class RangedWeaponVisual : Node2D
 
 			if (_ownerSprite != null) _ownerSprite.FlipH = isLeft;
 		}
+
+		// ПОВОРОТ: локальный офсет с учетом отзеркаливания
+		float finalOffset = (UseSmartFlip && isLeft) ? -OrientationOffset : OrientationOffset;
+		Rotation = Mathf.DegToRad(finalOffset);
 	}
 }

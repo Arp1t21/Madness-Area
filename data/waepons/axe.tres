@@ -6,10 +6,10 @@
 [resource]
 script = ExtResource("2_3t5i8")
 WeaponName = "Axe"
-Damage = 13
-AttackCooldown = 0.7
+Damage = 20
+AttackCooldown = 0.6
 AttackRange = 200.0
 KnockbackForce = 4.0
-ManaCost = 2.0
+ManaCost = 1.0
 WeaponVisualPrefab = ExtResource("1_ws4yc")
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

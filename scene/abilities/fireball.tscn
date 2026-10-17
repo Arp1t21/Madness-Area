@@ -22,12 +22,11 @@ script = ExtResource("1_fireball_script")
 shape = SubResource("CircleShape2D_1")
 
 [node name="Trail" type="CPUParticles2D" parent="."]
-amount = 50
+amount = 185
 lifetime = 0.35
-local_coords = false
-gravity = Vector2(0, 0)
 spread = 20.0
+gravity = Vector2(0, 0)
 initial_velocity_min = 10.0
-initial_velocity_max = 30.0
+initial_velocity_max = 234.25
 scale_amount_curve = SubResource("Curve_1")
 color_ramp = SubResource("Gradient_1")

@@ -168,169 +168,376 @@ public partial class MainMenu : CanvasLayer
 		var charSelectRoot = new Control();
 		charSelectRoot.Name = "CharSelectRoot";
 		charSelectRoot.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		charSelectRoot.Size = _menuRoot.Size;
 		_menuRoot.AddChild(charSelectRoot);
 		_activeOverlay = charSelectRoot;
 
-		// Solid dark background overlay (matching settings!)
+		float W = _menuRoot.Size.X;
+		float H = _menuRoot.Size.Y;
+
+		// Solid dark background overlay
 		var bgOverlay = new ColorRect();
-		bgOverlay.Color = new Color(0.02f, 0.02f, 0.02f, 1.0f);
+		bgOverlay.Color = new Color(0.04f, 0.04f, 0.06f, 0.98f);
 		charSelectRoot.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		var knightData = GD.Load<PlayerData>("res://data/characters/knight.tres");
+		var magicianData = GD.Load<PlayerData>("res://data/characters/magician.tres");
 
 		// Title
 		var title = new Label();
-		title.Text = "SELECT CHARACTER";
+		title.Text = "CHOOSE YOUR HERO";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 32);
-		title.AddThemeColorOverride("font_color", new Color(1.0f, 1.0f, 1.0f));
+		title.AddThemeFontSizeOverride("font_size", 28);
+		title.AddThemeColorOverride("font_color", new Color(0.98f, 0.84f, 0.32f));
 		title.Position = new Vector2(0, 10);
-		title.Size = new Vector2(_menuRoot.Size.X, 25);
+		title.Size = new Vector2(W, 24);
 		charSelectRoot.AddChild(title);
 
-		// Style Card
-		var cardStyle = new StyleBoxFlat();
-		cardStyle.BgColor = new Color(0.15f, 0.15f, 0.15f, 0.9f);
-		cardStyle.BorderWidthBottom = cardStyle.BorderWidthLeft = cardStyle.BorderWidthRight = cardStyle.BorderWidthTop = 1;
-		cardStyle.BorderColor = new Color(0.85f, 0.65f, 0.15f); // Gold border
+		var subTitle = new Label();
+		subTitle.Text = "Select a character card to view stats, then press CONFIRM HERO";
+		subTitle.HorizontalAlignment = HorizontalAlignment.Center;
+		subTitle.AddThemeFontOverride("font", titleFont);
+		subTitle.AddThemeFontSizeOverride("font_size", 13);
+		subTitle.AddThemeColorOverride("font_color", new Color(0.7f, 0.72f, 0.78f));
+		subTitle.Position = new Vector2(0, 34);
+		subTitle.Size = new Vector2(W, 18);
+		charSelectRoot.AddChild(subTitle);
 
-		var cardHover = cardStyle.Duplicate() as StyleBoxFlat;
-		cardHover.BgColor = new Color(0.25f, 0.25f, 0.25f, 0.9f);
+		// Card styles
+		var cardNormalStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.10f, 0.10f, 0.13f, 0.95f),
+			BorderColor = new Color(0.35f, 0.35f, 0.42f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1,
+			CornerRadiusTopLeft = 4,
+			CornerRadiusTopRight = 4,
+			CornerRadiusBottomLeft = 4,
+			CornerRadiusBottomRight = 4
+		};
 
-		var lockStyle = new StyleBoxFlat();
-		lockStyle.BgColor = new Color(0.08f, 0.08f, 0.08f, 0.8f);
-		lockStyle.BorderWidthBottom = lockStyle.BorderWidthLeft = lockStyle.BorderWidthRight = lockStyle.BorderWidthTop = 1;
-		lockStyle.BorderColor = new Color(0.3f, 0.3f, 0.3f);
+		var cardSelectedStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.18f, 0.15f, 0.10f, 0.98f),
+			BorderColor = new Color(0.98f, 0.80f, 0.22f),
+			BorderWidthLeft = 2,
+			BorderWidthTop = 2,
+			BorderWidthRight = 2,
+			BorderWidthBottom = 2,
+			CornerRadiusTopLeft = 4,
+			CornerRadiusTopRight = 4,
+			CornerRadiusBottomLeft = 4,
+			CornerRadiusBottomRight = 4
+		};
 
-		// Single card button in the center (shifted left, font size 22)
-		var cardBtn = new Button();
-		cardBtn.CustomMinimumSize = new Vector2(60, 80);
-		cardBtn.Position = new Vector2(35, 52);
-		cardBtn.AddThemeFontOverride("font", titleFont);
-		cardBtn.AddThemeFontSizeOverride("font_size", 22);
-		charSelectRoot.AddChild(cardBtn);
+		var cardHoverStyle = cardSelectedStyle.Duplicate() as StyleBoxFlat;
+		cardHoverStyle.BgColor = new Color(0.22f, 0.19f, 0.13f, 0.98f);
 
-		// Info panel on the right (increased height to 105, Y=40)
-		var infoPanel = new Panel();
-		infoPanel.Position = new Vector2(_menuRoot.Size.X - 145, 40);
-		infoPanel.Size = new Vector2(130, 105);
-		charSelectRoot.AddChild(infoPanel);
+		var lockStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.06f, 0.06f, 0.08f, 0.85f),
+			BorderColor = new Color(0.22f, 0.22f, 0.26f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1,
+			CornerRadiusTopLeft = 4,
+			CornerRadiusTopRight = 4,
+			CornerRadiusBottomLeft = 4,
+			CornerRadiusBottomRight = 4
+		};
 
-		var infoStyle = new StyleBoxFlat();
-		infoStyle.BgColor = new Color(0.05f, 0.05f, 0.05f, 0.95f);
-		infoStyle.BorderWidthBottom = infoStyle.BorderWidthLeft = infoStyle.BorderWidthRight = infoStyle.BorderWidthTop = 1;
-		infoStyle.BorderColor = new Color(1, 1, 1, 0.2f);
-		infoPanel.AddThemeStyleboxOverride("panel", infoStyle);
+		float cardsStartX = 22.0f;
+		float cardsY = 56.0f;
+		float cardW = 92.0f;
+		float cardH = 196.0f;
+		float cardGap = 9.0f;
 
-		var infoText = new Label();
-		infoText.Text = "";
-		infoText.HorizontalAlignment = HorizontalAlignment.Center;
-		infoText.VerticalAlignment = VerticalAlignment.Top;
-		infoText.AddThemeFontOverride("font", titleFont);
-		infoText.AddThemeFontSizeOverride("font_size", 18);
-		infoText.AddThemeConstantOverride("line_spacing", -2); // Reduce vertical margin/line spacing
-		infoText.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		infoPanel.AddChild(infoText);
+		Button[] cardButtons = new Button[3];
+		Label[] statusLabels = new Label[3];
+		string[] cardNames = { "KNIGHT", "MAGICIAN", "LOCKED" };
+		string[] cardRoles = { "WARRIOR", "ARCANE MAGE", "COMING SOON" };
+		SpriteFrames[] cardAnims = { knightData?.CharacterAnimations, magicianData?.CharacterAnimations, null };
 
-		// Horizontal navigation buttons (shifted left, halved size, font size 12)
-		var prevBtn = new Button();
-		prevBtn.Text = "<";
-		prevBtn.Flat = true;
-		prevBtn.AddThemeFontOverride("font", titleFont);
-		prevBtn.AddThemeFontSizeOverride("font_size", 12);
-		prevBtn.Position = new Vector2(15, 87);
-		prevBtn.CustomMinimumSize = new Vector2(10, 10);
-		charSelectRoot.AddChild(prevBtn);
+		for (int i = 0; i < 3; i++)
+		{
+			var btn = new Button();
+			btn.Position = new Vector2(cardsStartX + i * (cardW + cardGap), cardsY);
+			btn.Size = new Vector2(cardW, cardH);
+			btn.CustomMinimumSize = new Vector2(cardW, cardH);
+			btn.ClipContents = true;
+			charSelectRoot.AddChild(btn);
+			cardButtons[i] = btn;
 
-		var nextBtn = new Button();
-		nextBtn.Text = ">";
-		nextBtn.Flat = true;
-		nextBtn.AddThemeFontOverride("font", titleFont);
-		nextBtn.AddThemeFontSizeOverride("font_size", 12);
-		nextBtn.Position = new Vector2(105, 87);
-		nextBtn.CustomMinimumSize = new Vector2(10, 10);
-		charSelectRoot.AddChild(nextBtn);
+			var roleLbl = new Label();
+			roleLbl.Text = cardRoles[i];
+			roleLbl.HorizontalAlignment = HorizontalAlignment.Center;
+			roleLbl.AddThemeFontOverride("font", titleFont);
+			roleLbl.AddThemeFontSizeOverride("font_size", 11);
+			roleLbl.AddThemeColorOverride("font_color", i < 2 ? new Color(0.75f, 0.82f, 0.95f) : new Color(0.45f, 0.45f, 0.5f));
+			roleLbl.Position = new Vector2(0, 8);
+			roleLbl.Size = new Vector2(cardW, 14);
+			btn.AddChild(roleLbl);
 
-		int currentCardIndex = 0;
-
-		Action updateCardUI = () => {
-			if (currentCardIndex == 0)
+			// Pedestal backdrop inside card
+			var portraitBg = new Panel();
+			portraitBg.MouseFilter = Control.MouseFilterEnum.Ignore;
+			portraitBg.Position = new Vector2(12, 26);
+			portraitBg.Size = new Vector2(cardW - 24, 98);
+			var pBgStyle = new StyleBoxFlat
 			{
-				cardBtn.Text = "KNIGHT";
-				cardBtn.Disabled = false;
-				cardBtn.AddThemeStyleboxOverride("normal", cardStyle);
-				cardBtn.AddThemeStyleboxOverride("hover", cardHover);
-				cardBtn.AddThemeStyleboxOverride("pressed", cardStyle);
-				cardBtn.AddThemeStyleboxOverride("focus", cardStyle);
-				
-				infoText.Text = "KNIGHT STATS:\nHP: 55\nMANA: 100\nSPEED: 60\nWEAPON: Axe";
-				infoText.HorizontalAlignment = HorizontalAlignment.Left;
-				infoText.Position = new Vector2(8, 3); // Shift up
-			}
-			else if (currentCardIndex == 1)
+				BgColor = new Color(0.05f, 0.05f, 0.07f, 0.9f),
+				BorderColor = new Color(1, 1, 1, 0.08f),
+				BorderWidthLeft = 1,
+				BorderWidthTop = 1,
+				BorderWidthRight = 1,
+				BorderWidthBottom = 1,
+				CornerRadiusTopLeft = 3,
+				CornerRadiusTopRight = 3,
+				CornerRadiusBottomLeft = 3,
+				CornerRadiusBottomRight = 3
+			};
+			portraitBg.AddThemeStyleboxOverride("panel", pBgStyle);
+			btn.AddChild(portraitBg);
+
+			if (cardAnims[i] != null)
 			{
-				cardBtn.Text = "MAGICIAN";
-				cardBtn.Disabled = false;
-				cardBtn.AddThemeStyleboxOverride("normal", cardStyle);
-				cardBtn.AddThemeStyleboxOverride("hover", cardHover);
-				cardBtn.AddThemeStyleboxOverride("pressed", cardStyle);
-				cardBtn.AddThemeStyleboxOverride("focus", cardStyle);
-				
-				infoText.Text = "MAGICIAN STATS:\nHP: 40\nMANA: 200\nSPEED: 55\nWEAPON: Staff";
-				infoText.HorizontalAlignment = HorizontalAlignment.Left;
-				infoText.Position = new Vector2(8, 3); // Shift up
+				var animSprite = new AnimatedSprite2D();
+				animSprite.SpriteFrames = cardAnims[i];
+				animSprite.Position = new Vector2(cardW * 0.5f, 82);
+				animSprite.Scale = new Vector2(2.6f, 2.6f);
+				animSprite.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;
+				btn.AddChild(animSprite);
+				if (animSprite.SpriteFrames.HasAnimation("idle"))
+				{
+					animSprite.Play("idle");
+				}
 			}
 			else
 			{
-				cardBtn.Text = "LOCKED";
-				cardBtn.Disabled = true;
-				cardBtn.AddThemeStyleboxOverride("disabled", lockStyle);
-				
-				infoText.Text = "CHARACTER LOCKED";
-				infoText.HorizontalAlignment = HorizontalAlignment.Center;
-				infoText.Position = Vector2.Zero;
+				var lockIcon = new Label();
+				lockIcon.Text = "?";
+				lockIcon.HorizontalAlignment = HorizontalAlignment.Center;
+				lockIcon.VerticalAlignment = VerticalAlignment.Center;
+				lockIcon.AddThemeFontOverride("font", titleFont);
+				lockIcon.AddThemeFontSizeOverride("font_size", 36);
+				lockIcon.AddThemeColorOverride("font_color", new Color(0.35f, 0.35f, 0.4f));
+				lockIcon.Position = new Vector2(0, 42);
+				lockIcon.Size = new Vector2(cardW, 65);
+				btn.AddChild(lockIcon);
+			}
+
+			var nameLbl = new Label();
+			nameLbl.Text = cardNames[i];
+			nameLbl.HorizontalAlignment = HorizontalAlignment.Center;
+			nameLbl.AddThemeFontOverride("font", titleFont);
+			nameLbl.AddThemeFontSizeOverride("font_size", 18);
+			nameLbl.AddThemeColorOverride("font_color", i < 2 ? new Color(1f, 0.96f, 0.85f) : new Color(0.45f, 0.45f, 0.5f));
+			nameLbl.Position = new Vector2(0, 132);
+			nameLbl.Size = new Vector2(cardW, 22);
+			btn.AddChild(nameLbl);
+
+			var statusLbl = new Label();
+			statusLbl.HorizontalAlignment = HorizontalAlignment.Center;
+			statusLbl.AddThemeFontOverride("font", titleFont);
+			statusLbl.AddThemeFontSizeOverride("font_size", 12);
+			statusLbl.Position = new Vector2(0, 162);
+			statusLbl.Size = new Vector2(cardW, 18);
+			btn.AddChild(statusLbl);
+			statusLabels[i] = statusLbl;
+
+			if (i == 2)
+			{
+				btn.Disabled = true;
+				btn.AddThemeStyleboxOverride("disabled", lockStyle);
+				statusLbl.Text = "LOCKED";
+				statusLbl.AddThemeColorOverride("font_color", new Color(0.45f, 0.45f, 0.5f));
+			}
+		}
+
+		// Right-side Hero Info Panel
+		float infoX = cardsStartX + 3 * cardW + 2 * cardGap + 12.0f;
+		var infoPanel = new Panel();
+		infoPanel.Position = new Vector2(infoX, cardsY);
+		infoPanel.Size = new Vector2(W - infoX - 22.0f, cardH);
+		charSelectRoot.AddChild(infoPanel);
+
+		var infoStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.08f, 0.08f, 0.11f, 0.96f),
+			BorderColor = new Color(0.85f, 0.68f, 0.22f, 0.65f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1,
+			CornerRadiusTopLeft = 4,
+			CornerRadiusTopRight = 4,
+			CornerRadiusBottomLeft = 4,
+			CornerRadiusBottomRight = 4
+		};
+		infoPanel.AddThemeStyleboxOverride("panel", infoStyle);
+
+		var infoHeader = new Label();
+		infoHeader.AddThemeFontOverride("font", titleFont);
+		infoHeader.AddThemeFontSizeOverride("font_size", 20);
+		infoHeader.AddThemeColorOverride("font_color", new Color(1.0f, 0.84f, 0.28f));
+		infoHeader.Position = new Vector2(12, 8);
+		infoHeader.Size = new Vector2(infoPanel.Size.X - 24, 22);
+		infoPanel.AddChild(infoHeader);
+
+		var infoText = new Label();
+		infoText.HorizontalAlignment = HorizontalAlignment.Left;
+		infoText.VerticalAlignment = VerticalAlignment.Top;
+		infoText.AddThemeFontOverride("font", titleFont);
+		infoText.AddThemeFontSizeOverride("font_size", 14);
+		infoText.AddThemeColorOverride("font_color", new Color(0.92f, 0.92f, 0.95f));
+		infoText.AddThemeConstantOverride("line_spacing", -1);
+		infoText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+		infoText.Position = new Vector2(12, 34);
+		infoText.Size = new Vector2(infoPanel.Size.X - 24, cardH - 42);
+		infoPanel.AddChild(infoText);
+
+		int currentCardIndex = _selectedCharacterName == "Magician" ? 1 : 0;
+
+		Action confirmSelection = () =>
+		{
+			_selectedCharacterName = currentCardIndex == 1 ? "Magician" : "Knight";
+			charSelectRoot.QueueFree();
+			_activeOverlay = null;
+			ShowSlotSelection(false);
+		};
+
+		Action updateCardUI = () =>
+		{
+			for (int i = 0; i < 2; i++)
+			{
+				bool isSel = (i == currentCardIndex);
+				var style = isSel ? cardSelectedStyle : cardNormalStyle;
+				cardButtons[i].AddThemeStyleboxOverride("normal", style);
+				cardButtons[i].AddThemeStyleboxOverride("hover", isSel ? cardHoverStyle : cardSelectedStyle);
+				cardButtons[i].AddThemeStyleboxOverride("pressed", cardSelectedStyle);
+				cardButtons[i].AddThemeStyleboxOverride("focus", style);
+
+				statusLabels[i].Text = isSel ? "[ SELECTED ]" : "CLICK TO SELECT";
+				statusLabels[i].AddThemeColorOverride("font_color", isSel ? new Color(1.0f, 0.85f, 0.25f) : new Color(0.6f, 0.62f, 0.68f));
+			}
+
+			if (currentCardIndex == 0)
+			{
+				infoHeader.Text = "KNIGHT — VANGUARD";
+				infoText.Text =
+					"HEALTH: 55 HP\n" +
+					"MANA: 100 MP (+1.5/s)\n" +
+					"MOVE SPEED: 60 (Sprint x1.3)\n" +
+					"WEAPON: Battle Axe (Melee)\n\n" +
+					"SPECIALTY:\n" +
+					"Durable frontline fighter with high base health and heavy cleaving strikes.";
+			}
+			else
+			{
+				infoHeader.Text = "MAGICIAN — SCHOLAR";
+				infoText.Text =
+					"HEALTH: 40 HP (+0.2/s)\n" +
+					"MANA: 200 MP (+4.5/s)\n" +
+					"MOVE SPEED: 55 (Sprint x1.35)\n" +
+					"WEAPON: Magic Staff (Piercing)\n\n" +
+					"SPECIALTY:\n" +
+					"High mana pool, fast mana regen, +15% Ranged Resistance & piercing bolts.";
 			}
 		};
 
-		// Initialize
 		updateCardUI();
 
-		prevBtn.Pressed += () => {
-			currentCardIndex = (currentCardIndex - 1 + 3) % 3;
-			updateCardUI();
-		};
+		for (int i = 0; i < 2; i++)
+		{
+			int capturedIndex = i;
+			cardButtons[i].Pressed += () =>
+			{
+				if (currentCardIndex == capturedIndex)
+				{
+					confirmSelection();
+				}
+				else
+				{
+					currentCardIndex = capturedIndex;
+					updateCardUI();
+				}
+			};
+		}
 
-		nextBtn.Pressed += () => {
-			currentCardIndex = (currentCardIndex + 1) % 3;
-			updateCardUI();
+		// Bottom Bar: BACK button (left) and CONFIRM HERO button (right)
+		var btnStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.14f, 0.14f, 0.18f, 0.95f),
+			BorderColor = new Color(0.5f, 0.5f, 0.58f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1,
+			CornerRadiusTopLeft = 3,
+			CornerRadiusTopRight = 3,
+			CornerRadiusBottomLeft = 3,
+			CornerRadiusBottomRight = 3
 		};
+		var btnHover = btnStyle.Duplicate() as StyleBoxFlat;
+		btnHover.BgColor = new Color(0.22f, 0.22f, 0.28f, 0.98f);
 
-		cardBtn.Pressed += () => {
-			if (currentCardIndex == 0 || currentCardIndex == 1) {
-				_selectedCharacterName = currentCardIndex == 1 ? "Magician" : "Knight";
-				charSelectRoot.QueueFree();
-				_activeOverlay = null;
-				ShowSlotSelection(false);
-			}
-		};
-
-		// Back button (smaller, lefter, font size 20)
 		var backBtn = new Button();
-		backBtn.Text = "BACK";
-		backBtn.Flat = true;
+		backBtn.Text = "< BACK";
 		backBtn.AddThemeFontOverride("font", titleFont);
-		backBtn.AddThemeFontSizeOverride("font_size", 20);
-		backBtn.Position = new Vector2(8, _menuRoot.Size.Y - 26);
-		backBtn.CustomMinimumSize = new Vector2(40, 16);
+		backBtn.AddThemeFontSizeOverride("font_size", 18);
+		backBtn.Position = new Vector2(22, H - 40);
+		backBtn.CustomMinimumSize = new Vector2(95, 28);
+		backBtn.Size = new Vector2(95, 28);
+		backBtn.AddThemeStyleboxOverride("normal", btnStyle);
+		backBtn.AddThemeStyleboxOverride("hover", btnHover);
+		backBtn.AddThemeStyleboxOverride("pressed", btnStyle);
+		backBtn.AddThemeStyleboxOverride("focus", btnStyle);
 		charSelectRoot.AddChild(backBtn);
 
-		backBtn.Pressed += () => {
+		backBtn.Pressed += () =>
+		{
 			charSelectRoot.QueueFree();
 			_activeOverlay = null;
 			ShowMainMenu();
 		};
+
+		var confirmStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.24f, 0.19f, 0.08f, 0.98f),
+			BorderColor = new Color(0.98f, 0.80f, 0.22f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1,
+			CornerRadiusTopLeft = 3,
+			CornerRadiusTopRight = 3,
+			CornerRadiusBottomLeft = 3,
+			CornerRadiusBottomRight = 3
+		};
+		var confirmHover = confirmStyle.Duplicate() as StyleBoxFlat;
+		confirmHover.BgColor = new Color(0.34f, 0.27f, 0.12f, 1.0f);
+
+		var confirmBtn = new Button();
+		confirmBtn.Text = "CONFIRM HERO >";
+		confirmBtn.AddThemeFontOverride("font", titleFont);
+		confirmBtn.AddThemeFontSizeOverride("font_size", 18);
+		confirmBtn.AddThemeColorOverride("font_color", new Color(1.0f, 0.92f, 0.6f));
+		confirmBtn.Position = new Vector2(W - 162, H - 40);
+		confirmBtn.CustomMinimumSize = new Vector2(140, 28);
+		confirmBtn.Size = new Vector2(140, 28);
+		confirmBtn.AddThemeStyleboxOverride("normal", confirmStyle);
+		confirmBtn.AddThemeStyleboxOverride("hover", confirmHover);
+		confirmBtn.AddThemeStyleboxOverride("pressed", confirmStyle);
+		confirmBtn.AddThemeStyleboxOverride("focus", confirmStyle);
+		charSelectRoot.AddChild(confirmBtn);
+
+		confirmBtn.Pressed += confirmSelection;
 
 		ConnectButtonSounds(charSelectRoot);
 	}

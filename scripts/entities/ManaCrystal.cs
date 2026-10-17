@@ -6,15 +6,16 @@ public partial class ManaCrystal : Node2D
 	private bool _isBeingPickedUp = false;
 	private bool _isAnimatingSpawn = true;
 	private Node2D _targetPlayer;
+	private Area2D _area;
 	private float _speed = 600.0f;
-	private float _pickupDelay = 0.6f;
+	private float _pickupDelay = 0.15f;
 	private static AudioStream _manaSound;
 
 	public override void _Ready()
 	{
 		Scale = new Vector2(3.0f, 3.0f);
-		var area = GetNode<Area2D>("Area2D");
-		area.AreaEntered += _on_area_2d_area_entered;
+		_area = GetNode<Area2D>("Area2D");
+		_area.AreaEntered += _on_area_2d_area_entered;
 
 		if (_manaSound == null)
 		{
@@ -46,15 +47,12 @@ public partial class ManaCrystal : Node2D
 		if (_pickupDelay > 0)
 		{
 			_pickupDelay -= (float)delta;
-			if (_pickupDelay <= 0)
-			{
-				var nearby = GetTree().GetFirstNodeInGroup("Player") as Node2D;
-				if (nearby != null && GlobalPosition.DistanceTo(nearby.GlobalPosition) < 15.0f * World.Scale)
-				{
-					StartPickup(nearby);
-				}
-			}
 			return;
+		}
+
+		if (!_isBeingPickedUp)
+		{
+			TryDetectPlayerInZone();
 		}
 
 		if (_isBeingPickedUp && IsInstanceValid(_targetPlayer))
@@ -63,7 +61,7 @@ public partial class ManaCrystal : Node2D
 			GlobalPosition += direction * _speed * (float)delta;
 			_speed += 1500.0f * (float)delta;
 
-			if (GlobalPosition.DistanceTo(_targetPlayer.GlobalPosition) < 15.0f)
+			if (GlobalPosition.DistanceTo(_targetPlayer.GlobalPosition) < 18.0f)
 			{
 				if (_targetPlayer is Player p)
 				{
@@ -79,9 +77,30 @@ public partial class ManaCrystal : Node2D
 		}
 	}
 
+	private void TryDetectPlayerInZone()
+	{
+		if (_area != null && _area.Monitoring)
+		{
+			foreach (var overlapping in _area.GetOverlappingAreas())
+			{
+				if (overlapping.GetParent() is Player overlappingPlayer)
+				{
+					StartPickup(overlappingPlayer);
+					return;
+				}
+			}
+		}
+
+		var nearby = GetTree().GetFirstNodeInGroup("Player") as Node2D;
+		if (nearby != null && GlobalPosition.DistanceTo(nearby.GlobalPosition) <= 32.0f * World.Scale)
+		{
+			StartPickup(nearby);
+		}
+	}
+
 	private void _on_area_2d_area_entered(Area2D area)
 	{
-		if (!_isBeingPickedUp && _pickupDelay <= 0 && area.GetParent() is Player player)
+		if (!_isBeingPickedUp && !_isAnimatingSpawn && _pickupDelay <= 0 && area.GetParent() is Player player)
 		{
 			StartPickup(player);
 		}

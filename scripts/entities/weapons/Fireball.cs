@@ -5,9 +5,9 @@ using System.Collections.Generic;
 public partial class Fireball : Area2D
 {
 	public Vector2 Direction = Vector2.Right;
-	public float Speed = 900.0f;
+	public float Speed = 600.0f;
 	public float Range = 400.0f;
-	public float Damage = 5.0f;
+	public float Damage = 10.0f;
 	public float ExplosionRadius = 45.0f;
 
 	private Vector2 _startPos;

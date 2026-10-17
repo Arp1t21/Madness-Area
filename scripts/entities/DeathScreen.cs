@@ -24,14 +24,16 @@ public partial class DeathScreen : CanvasLayer
 	public override async void _Ready()
 	{
 		ProcessMode = ProcessModeEnum.Always;
+		SettingsManager.ApplyFontQualityFixes();
 
 		// 1. You Died screen (4 seconds)
 		var rootControl = new Control();
 		AddChild(rootControl);
-		// Явный размер вместо FullRect-якорей: у прямых детей CanvasLayer якоря
-		// растягиваются не сразу, из-за чего экран смерти уезжал в верхний левый угол
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		float uiScale = Mathf.Clamp(viewportSize.X / 640.0f, 1.5f, 3.5f);
 		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		rootControl.Size = GetViewport().GetVisibleRect().Size;
+		rootControl.Size = viewportSize / uiScale;
+		rootControl.Scale = new Vector2(uiScale, uiScale);
 
 		var blackOverlay = new ColorRect();
 		blackOverlay.Color = new Color(0, 0, 0, 1);
@@ -46,7 +48,7 @@ public partial class DeathScreen : CanvasLayer
 		youDiedLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		youDiedLabel.VerticalAlignment = VerticalAlignment.Center;
 		youDiedLabel.AddThemeFontOverride("font", bigFont);
-		youDiedLabel.AddThemeFontSizeOverride("font_size", 30);
+		youDiedLabel.AddThemeFontSizeOverride("font_size", 32);
 		youDiedLabel.AddThemeColorOverride("font_color", new Color(1, 0, 0));
 		youDiedLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
 		rootControl.AddChild(youDiedLabel);
@@ -61,15 +63,15 @@ public partial class DeathScreen : CanvasLayer
 		}
 		
 		// Semi-transparent black background instead of pure black
-		blackOverlay.Color = new Color(0, 0, 0, 0.85f);
+		blackOverlay.Color = new Color(0, 0, 0, 0.88f);
 
 		// Left Side: Large Hero Sprite
 		if (_charAnimations != null)
 		{
 			var heroSprite = new AnimatedSprite2D();
 			heroSprite.SpriteFrames = _charAnimations;
-			heroSprite.Position = new Vector2(rootControl.Size.X * 0.25f, rootControl.Size.Y * 0.5f);
-			heroSprite.Scale = new Vector2(10.0f, 10.0f);
+			heroSprite.Position = new Vector2(rootControl.Size.X * 0.25f, rootControl.Size.Y * 0.52f);
+			heroSprite.Scale = new Vector2(5.5f, 5.5f);
 			heroSprite.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;
 			rootControl.AddChild(heroSprite);
 			if (heroSprite.SpriteFrames.HasAnimation("idle"))
@@ -80,16 +82,16 @@ public partial class DeathScreen : CanvasLayer
 
 		// Right Side: Stats Panel
 		var statsVBox = new VBoxContainer();
-		statsVBox.Position = new Vector2(rootControl.Size.X * 0.55f, rootControl.Size.Y * 0.2f);
-		statsVBox.Size = new Vector2(rootControl.Size.X * 0.4f, rootControl.Size.Y * 0.6f);
-		statsVBox.AddThemeConstantOverride("separation", 10);
+		statsVBox.Position = new Vector2(rootControl.Size.X * 0.46f, rootControl.Size.Y * 0.14f);
+		statsVBox.Size = new Vector2(rootControl.Size.X * 0.48f, rootControl.Size.Y * 0.62f);
+		statsVBox.AddThemeConstantOverride("separation", 8);
 		rootControl.AddChild(statsVBox);
 
 		var statsTitle = new Label();
 		statsTitle.Text = "DEATH STATISTICS";
 		statsTitle.AddThemeFontOverride("font", titleFont);
-		statsTitle.AddThemeFontSizeOverride("font_size", 24);
-		statsTitle.AddThemeColorOverride("font_color", new Color(1, 0.2f, 0.2f));
+		statsTitle.AddThemeFontSizeOverride("font_size", 32);
+		statsTitle.AddThemeColorOverride("font_color", new Color(1, 0.25f, 0.25f));
 		statsVBox.AddChild(statsTitle);
 
 		int mins = (int)(_timePlayed / 60);
@@ -106,16 +108,23 @@ public partial class DeathScreen : CanvasLayer
 		// Back Button
 		var backBtn = new Button();
 		backBtn.Text = "BACK TO MAIN MENU";
-		backBtn.Flat = true;
 		backBtn.AddThemeFontOverride("font", titleFont);
-		backBtn.AddThemeFontSizeOverride("font_size", 14);
-		backBtn.CustomMinimumSize = new Vector2(150, 25);
-		backBtn.Position = new Vector2(rootControl.Size.X * 0.55f, rootControl.Size.Y * 0.75f);
+		backBtn.AddThemeFontSizeOverride("font_size", 22);
+		backBtn.CustomMinimumSize = new Vector2(190, 32);
+		backBtn.Position = new Vector2(rootControl.Size.X * 0.46f, rootControl.Size.Y * 0.78f);
 		rootControl.AddChild(backBtn);
 
-		var btnNormal = new StyleBoxEmpty();
-		var btnHover = new StyleBoxFlat();
-		btnHover.BgColor = new Color(1, 1, 1, 0.08f);
+		var btnNormal = new StyleBoxFlat
+		{
+			BgColor = new Color(0.14f, 0.14f, 0.16f, 0.92f),
+			BorderColor = new Color(0.85f, 0.65f, 0.2f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1
+		};
+		var btnHover = btnNormal.Duplicate() as StyleBoxFlat;
+		btnHover.BgColor = new Color(0.24f, 0.22f, 0.28f, 0.95f);
 		backBtn.AddThemeStyleboxOverride("normal", btnNormal);
 		backBtn.AddThemeStyleboxOverride("hover", btnHover);
 		backBtn.AddThemeStyleboxOverride("pressed", btnNormal);
@@ -131,8 +140,8 @@ public partial class DeathScreen : CanvasLayer
 		var label = new Label();
 		label.Text = text;
 		label.AddThemeFontOverride("font", font);
-		label.AddThemeFontSizeOverride("font_size", 14);
-		label.AddThemeColorOverride("font_color", new Color(0.9f, 0.9f, 0.9f));
+		label.AddThemeFontSizeOverride("font_size", 20);
+		label.AddThemeColorOverride("font_color", new Color(0.92f, 0.92f, 0.92f));
 		label.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		parent.AddChild(label);
 	}

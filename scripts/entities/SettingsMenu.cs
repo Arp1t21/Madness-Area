@@ -44,14 +44,18 @@ public partial class SettingsMenu : CanvasLayer
 	{
 		ProcessMode = ProcessModeEnum.Always;
 		Layer = 25;
+		SettingsManager.ApplyFontQualityFixes();
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 
 		// 1. Create a root Control node
 		var rootControl = new Control();
 		AddChild(rootControl);
 		
-		rootControl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		rootControl.Size = GetViewport().GetVisibleRect().Size;
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		float uiScale = Mathf.Clamp(viewportSize.X / 960.0f, 1.0f, 3.0f);
+		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		rootControl.Size = viewportSize / uiScale;
+		rootControl.Scale = new Vector2(uiScale, uiScale);
 
 		// Solid dark background overlay (almost black)
 		var bgOverlay = new ColorRect();

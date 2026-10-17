@@ -127,10 +127,11 @@ public partial class Level : Node2D
 		// Удаляем призрачные тайлы с несуществующим source_id в слоях стен (в map.tscn на слое WallHorizontal остались тайлы пола от копирования)
 		foreach (var layer in new[] { _wallsVerticalLayer, _wallsHorizontalLayer, _columnsLayer })
 		{
-			if (layer == null) continue;
+			if (layer == null || layer.TileSet == null) continue;
 			foreach (var cell in layer.GetUsedCells())
 			{
-				if (layer.GetCellTileData(cell) == null)
+				int sourceId = layer.GetCellSourceId(cell);
+				if (sourceId == -1 || !layer.TileSet.HasSource(sourceId))
 				{
 					layer.EraseCell(cell);
 				}
@@ -139,9 +140,11 @@ public partial class Level : Node2D
 		
 		_spikesLayer = GetNodeOrNull<TileMapLayer>("Map/Spikes");
 
-		if (_floorLayer != null) {
+		if (_floorLayer != null && _floorLayer.TileSet != null) {
 			var usedCells = _floorLayer.GetUsedCells();
 			foreach (var cell in usedCells) {
+				int srcId = _floorLayer.GetCellSourceId(cell);
+				if (srcId == -1 || !_floorLayer.TileSet.HasSource(srcId)) continue;
 				var tileData = _floorLayer.GetCellTileData(cell);
 				// Если у тайла террейн равен 1 (террейн "wall" в floor.tres), создаем для него окклюдер
 				if (tileData != null && tileData.Terrain == 1) {
@@ -532,16 +535,19 @@ public partial class Level : Node2D
 		{
 			int sx = 0, sy = 0;
 			bool validPosition = false;
+			int stairAttempts = 0;
+			int minDist = Math.Max(3, Math.Min(6, Math.Min(halfW, halfH) - 4));
 
-			while (!validPosition)
+			while (!validPosition && stairAttempts < 100)
 			{
-				sx = _rng.RandiRange(-halfW + 4, halfW - 4);
-				sy = _rng.RandiRange(-halfH + 4, halfH - 4);
+				stairAttempts++;
+				sx = _rng.RandiRange(-halfW + 3, halfW - 3);
+				sy = _rng.RandiRange(-halfH + 3, halfH - 3);
 
-				// Лестница должна быть далеко от игрока
-				if (Math.Abs(sx) > 6 || Math.Abs(sy) > 6)
+				// Лестница должна быть достаточно далеко от игрока в центре (0,0)
+				if (Math.Abs(sx) >= minDist || Math.Abs(sy) >= minDist)
 				{
-					// И не пересекаться со стенами
+					// И не пересекаться со стенами/колоннами
 					bool hitWall = false;
 					if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
 					if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
@@ -552,6 +558,12 @@ public partial class Level : Node2D
 						validPosition = true;
 					}
 				}
+			}
+
+			if (!validPosition)
+			{
+				sx = Math.Max(3, halfW - 3);
+				sy = Math.Max(3, halfH - 3);
 			}
 
 			_stairsLayer.SetCell(new Vector2I(sx, sy), 1, new Vector2I(0, 5));
@@ -636,14 +648,36 @@ public partial class Level : Node2D
 		}
 	}
 
-	public Vector2 GetNextEnemySpawnPosition(Vector2 playerPos, float minPlayerDist = 120f)
+	private int _spawnQuadrant = 0;
+
+	public Vector2 GetNextEnemySpawnPosition(Vector2 playerPos, float minPlayerDist = 140f)
 	{
+		int targetQuad = _spawnQuadrant;
+		_spawnQuadrant = (_spawnQuadrant + 1) % 4;
+
 		if (_enemySpawnPositions == null || _enemySpawnPositions.Count == 0)
 		{
-			float angle = (float)GD.RandRange(0, Math.PI * 2);
-			return playerPos + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * 150.0f;
+			float baseAngle = targetQuad * (Mathf.Pi * 0.5f) + (float)GD.RandRange(0.15f, 1.4f);
+			return playerPos + new Vector2(Mathf.Cos(baseAngle), Mathf.Sin(baseAngle)) * 220.0f;
 		}
 
+		// Сначала ищем точку в целевом квадранте вокруг игрока, чтобы мобы спавнились со всех 4 сторон
+		for (int i = 0; i < _enemySpawnPositions.Count; i++)
+		{
+			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
+			Vector2 pos = _enemySpawnPositions[idx];
+			if (pos.DistanceTo(playerPos) < minPlayerDist) continue;
+
+			Vector2 rel = pos - playerPos;
+			int quad = (rel.X >= 0 ? 0 : 1) + (rel.Y >= 0 ? 0 : 2);
+			if (quad == targetQuad)
+			{
+				_spawnPosIndex = (idx + 1) % _enemySpawnPositions.Count;
+				return pos;
+			}
+		}
+
+		// Если в нужном квадранте точки не нашлось, берем любую достаточно далекую точку
 		for (int i = 0; i < _enemySpawnPositions.Count; i++)
 		{
 			Vector2 pos = _enemySpawnPositions[_spawnPosIndex];
@@ -658,6 +692,33 @@ public partial class Level : Node2D
 		Vector2 fallbackPos = _enemySpawnPositions[_spawnPosIndex];
 		_spawnPosIndex = (_spawnPosIndex + 1) % _enemySpawnPositions.Count;
 		return fallbackPos;
+	}
+
+	public Vector2 GetWalkableFlankTarget(Vector2 playerPos, Vector2 desiredFlankPos)
+	{
+		if (_floorLayer == null) return playerPos;
+		Vector2I cell = _floorLayer.LocalToMap(_floorLayer.ToLocal(desiredFlankPos));
+		if (IsCellFree(cell))
+		{
+			return _floorLayer.ToGlobal(_floorLayer.MapToLocal(cell));
+		}
+		// Пробуем найти свободную клетку рядом с точкой обхода
+		for (int r = 1; r <= 3; r++)
+		{
+			for (int dx = -r; dx <= r; dx++)
+			{
+				for (int dy = -r; dy <= r; dy++)
+				{
+					if (Math.Abs(dx) != r && Math.Abs(dy) != r) continue;
+					Vector2I candidate = new Vector2I(cell.X + dx, cell.Y + dy);
+					if (IsCellFree(candidate))
+					{
+						return _floorLayer.ToGlobal(_floorLayer.MapToLocal(candidate));
+					}
+				}
+			}
+		}
+		return playerPos;
 	}
 
 	public Node2D GetExitLadderNode()

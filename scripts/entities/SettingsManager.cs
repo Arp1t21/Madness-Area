@@ -97,6 +97,7 @@ public static class SettingsManager
 	public static void ApplySettings()
 	{
 		EnsureAudioBuses();
+		ApplyFontQualityFixes();
 
 		Engine.MaxFps = MaxFps;
 		DisplayServer.WindowSetVsyncMode(VSync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
@@ -123,6 +124,27 @@ public static class SettingsManager
 			keyEvent.PhysicalKeycode = pair.Value;
 			keyEvent.Keycode = pair.Value;
 			InputMap.ActionAddEvent(pair.Key, keyEvent);
+		}
+	}
+
+	public static void ApplyFontQualityFixes()
+	{
+		string[] fontPaths = new[]
+		{
+			"res://assets/fonts/silver/Silver.ttf",
+			"res://assets/fonts/fff-forward/FFFFORWA.TTF"
+		};
+
+		foreach (string path in fontPaths)
+		{
+			var font = GD.Load<Font>(path);
+			if (font is FontFile ff)
+			{
+				ff.Antialiasing = TextServer.FontAntialiasing.Gray;
+				ff.Hinting = TextServer.Hinting.Light;
+				ff.SubpixelPositioning = TextServer.SubpixelPositioning.Auto;
+				ff.Oversampling = 4.0f;
+			}
 		}
 	}
 

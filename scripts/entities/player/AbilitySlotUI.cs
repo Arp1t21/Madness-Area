@@ -15,8 +15,8 @@ public partial class AbilitySlotUI : Control
 	{
 		_abilityId = abilityId;
 		_hud = hud;
-		CustomMinimumSize = new Vector2(16, 16);
-		Size = new Vector2(16, 16);
+		CustomMinimumSize = new Vector2(26, 26);
+		Size = new Vector2(26, 26);
 	}
 
 	public override void _Ready()
@@ -26,13 +26,13 @@ public partial class AbilitySlotUI : Control
 		_circle = new AbilityCircle(_abilityId, this);
 		_circle.Size = new Vector2(24, 24);
 		_circle.Position = Vector2.Zero;
-		_circle.Scale = new Vector2(0.84f, 0.84f);
+		_circle.Scale = new Vector2(0.84f * 1.3f, 0.84f * 1.3f);
 		AddChild(_circle);
 
 		_upgradeButton = new AbilityUpgradeButton();
-		_upgradeButton.CustomMinimumSize = new Vector2(16, 9);
-		_upgradeButton.Size = new Vector2(16, 9);
-		_upgradeButton.Position = new Vector2(0, 34);
+		_upgradeButton.CustomMinimumSize = new Vector2(21, 12);
+		_upgradeButton.Size = new Vector2(21, 12);
+		_upgradeButton.Position = new Vector2(2.5f, -14);
 
 		var styleEmpty = new StyleBoxEmpty();
 		_upgradeButton.AddThemeStyleboxOverride("normal", styleEmpty);
@@ -284,7 +284,9 @@ public partial class AbilityUpgradeButton : Button
 		DrawRect(new Rect2(Vector2.Zero, Size), bgColor, true);
 
 		Color plusColor = new Color(0, 0, 0);
-		DrawRect(new Rect2(6, 4, 5, 1), plusColor);
-		DrawRect(new Rect2(8, 2, 1, 5), plusColor);
+		float cx = Mathf.Floor(Size.X / 2.0f);
+		float cy = Mathf.Floor(Size.Y / 2.0f);
+		DrawRect(new Rect2(cx - 3, cy - 0.5f, 7, 1.5f), plusColor);
+		DrawRect(new Rect2(cx - 0.5f, cy - 3, 1.5f, 7), plusColor);
 	}
 }

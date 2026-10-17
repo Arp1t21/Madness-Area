@@ -158,11 +158,15 @@ public partial class SupplyShopOverlay : CanvasLayer
 	{
 		ProcessMode = ProcessModeEnum.Always;
 		Layer = 20;
+		SettingsManager.ApplyFontQualityFixes();
 
 		var rootControl = new Control();
 		AddChild(rootControl);
+		var viewportSize = GetViewport().GetVisibleRect().Size;
+		float uiScale = Mathf.Clamp(viewportSize.X / 960.0f, 1.0f, 3.0f);
 		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		rootControl.Size = GetViewport().GetVisibleRect().Size;
+		rootControl.Size = viewportSize / uiScale;
+		rootControl.Scale = new Vector2(uiScale, uiScale);
 
 		var bgOverlay = new ColorRect();
 		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.72f);

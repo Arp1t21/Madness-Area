@@ -43,10 +43,10 @@ public partial class Quagmire : Enemy
 			Vector2 direction = UpdateNavigationDirection(delta, 36.0f);
 			direction = ApplyAntiStuck(direction, delta, () => _navigationPath.Clear());
 
-			Vector2 separation = ComputeEnemySeparation(18.0f);
+			Vector2 separation = ComputeEnemySeparation(90.0f);
 			if (separation != Vector2.Zero)
 			{
-				direction = (direction + separation * 0.15f).Normalized();
+				direction = (direction + separation * 0.65f).Normalized();
 			}
 
 			Velocity = Velocity.Lerp(direction * Config.Speed * World.Scale, 0.05f);

@@ -31,12 +31,12 @@ public partial class HUD : CanvasLayer
 	private AbilitySlotUI _ability2Slot;
 	private Control _hudRoot;
 
-	// Новые элементы HUD: этаж/враги, слоты оружия/патроны, полоска здоровья Босса
+	// Новые элементы HUD: этаж/статус зачистки (сверху справа), слоты оружия (снизу справа), полоска здоровья Босса
 	private Label _floorEnemiesLabel;
-	private Control _weaponInfoContainer;
-	private readonly Panel[] _weaponSlotPanels = new Panel[3];
-	private readonly Label[] _weaponSlotLabels = new Label[3];
-	private Label _ammoStatusLabel;
+	private Control _weaponsContainer;
+	private Panel[] _weaponSlotPanels = new Panel[3];
+	private Label[] _weaponSlotLabels = new Label[3];
+	private Label _ammoLabel;
 
 	private Control _bossBarContainer;
 	private Label _bossNameLabel;
@@ -45,6 +45,7 @@ public partial class HUD : CanvasLayer
 	public override void _Ready()
 	{
 		AddToGroup("HUD");
+		SettingsManager.ApplyFontQualityFixes();
 		_hudRoot = new Control();
 		_hudRoot.Name = "HUDRoot";
 		AddChild(_hudRoot);
@@ -148,7 +149,7 @@ public partial class HUD : CanvasLayer
 
 		CreateAbilitiesUI();
 		CreateFloorAndEnemiesUI(font);
-		CreateWeaponAndAmmoUI(font);
+		CreateWeaponsUI(font);
 		CreateBossBarUI(font);
 	}
 
@@ -191,7 +192,7 @@ public partial class HUD : CanvasLayer
 		if (IsInstanceValid(_ability2Slot)) _ability2Slot.UpdateState();
 
 		UpdateFloorAndEnemiesUI();
-		UpdateWeaponAndAmmoUI();
+		UpdateWeaponsUI();
 		UpdateBossBarUI();
 	}
 
@@ -324,17 +325,17 @@ public partial class HUD : CanvasLayer
 		_abilitiesContainer.LayoutMode = 1;
 		_abilitiesContainer.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
 		
-		// Смещаем к центру и прижимаем к нижнему краю
-		_abilitiesContainer.OffsetLeft = -30;
-		_abilitiesContainer.OffsetRight = 30;
-		_abilitiesContainer.OffsetTop = -30;
+		// Смещаем к центру и прижимаем к нижнему краю (увеличено в 1.3 раза)
+		_abilitiesContainer.OffsetLeft = -42;
+		_abilitiesContainer.OffsetRight = 42;
+		_abilitiesContainer.OffsetTop = -36;
 		_abilitiesContainer.OffsetBottom = -6;
 
 		var hbox = new HBoxContainer();
 		hbox.LayoutMode = 1;
 		hbox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
 		hbox.Alignment = BoxContainer.AlignmentMode.Center;
-		hbox.AddThemeConstantOverride("separation", 10);
+		hbox.AddThemeConstantOverride("separation", 13);
 		_abilitiesContainer.AddChild(hbox);
 
 		_ability1Slot = new AbilitySlotUI(1, this);
@@ -351,76 +352,61 @@ public partial class HUD : CanvasLayer
 		_floorEnemiesLabel = new Label();
 		_floorEnemiesLabel.Name = "FloorEnemiesLabel";
 		_floorEnemiesLabel.LayoutMode = 1;
-		_floorEnemiesLabel.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
-		_floorEnemiesLabel.OffsetLeft = -90;
-		_floorEnemiesLabel.OffsetRight = 90;
-		_floorEnemiesLabel.OffsetTop = 16;
-		_floorEnemiesLabel.OffsetBottom = 30;
-		_floorEnemiesLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		_floorEnemiesLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+		_floorEnemiesLabel.OffsetLeft = -180;
+		_floorEnemiesLabel.OffsetRight = -8;
+		_floorEnemiesLabel.OffsetTop = 2;
+		_floorEnemiesLabel.OffsetBottom = 22;
+		_floorEnemiesLabel.HorizontalAlignment = HorizontalAlignment.Right;
+		_floorEnemiesLabel.VerticalAlignment = VerticalAlignment.Center;
 		if (font != null) _floorEnemiesLabel.AddThemeFontOverride("font", font);
-		_floorEnemiesLabel.AddThemeFontSizeOverride("font_size", 10);
-		_floorEnemiesLabel.AddThemeColorOverride("font_color", new Color(0.9f, 0.85f, 0.7f));
+		_floorEnemiesLabel.AddThemeFontSizeOverride("font_size", 14);
+		_floorEnemiesLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.88f, 0.7f));
 		_hudRoot.AddChild(_floorEnemiesLabel);
 	}
 
-	private void UpdateFloorAndEnemiesUI()
+	private void CreateWeaponsUI(Font font)
 	{
-		if (!IsInstanceValid(_floorEnemiesLabel)) return;
-		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-		int floor = level != null ? level.CurrentLevelIndex : 1;
-		int enemies = _waveManager != null ? _waveManager.EnemiesRemaining : 0;
-		bool active = _waveManager != null && _waveManager.WaveInProgress;
+		_weaponsContainer = new Control();
+		_weaponsContainer.Name = "WeaponsContainer";
+		_weaponsContainer.LayoutMode = 1;
+		_weaponsContainer.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
+		_weaponsContainer.OffsetLeft = -152;
+		_weaponsContainer.OffsetRight = -6;
+		_weaponsContainer.OffsetTop = -44;
+		_weaponsContainer.OffsetBottom = -6;
+		_hudRoot.AddChild(_weaponsContainer);
 
-		if (active || enemies > 0)
-		{
-			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  ENEMIES: {enemies}";
-		}
-		else if (_isCountingDown)
-		{
-			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  PREPARE";
-		}
-		else
-		{
-			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  CLEARED";
-		}
-	}
+		_ammoLabel = new Label();
+		_ammoLabel.Name = "AmmoLabel";
+		_ammoLabel.LayoutMode = 1;
+		_ammoLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+		_ammoLabel.OffsetLeft = -146;
+		_ammoLabel.OffsetRight = 0;
+		_ammoLabel.OffsetTop = 0;
+		_ammoLabel.OffsetBottom = 14;
+		_ammoLabel.HorizontalAlignment = HorizontalAlignment.Right;
+		if (font != null) _ammoLabel.AddThemeFontOverride("font", font);
+		_ammoLabel.AddThemeFontSizeOverride("font_size", 11);
+		_ammoLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.9f, 0.4f));
+		_weaponsContainer.AddChild(_ammoLabel);
 
-	private void CreateWeaponAndAmmoUI(Font font)
-	{
-		_weaponInfoContainer = new Control();
-		_weaponInfoContainer.Name = "WeaponInfoContainer";
-		_weaponInfoContainer.LayoutMode = 1;
-		_weaponInfoContainer.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
-		_weaponInfoContainer.OffsetLeft = -150;
-		_weaponInfoContainer.OffsetRight = -6;
-		_weaponInfoContainer.OffsetTop = -44;
-		_weaponInfoContainer.OffsetBottom = -6;
-		_hudRoot.AddChild(_weaponInfoContainer);
-
-		var vbox = new VBoxContainer();
-		vbox.LayoutMode = 1;
-		vbox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		vbox.Alignment = BoxContainer.AlignmentMode.End;
-		vbox.AddThemeConstantOverride("separation", 2);
-		_weaponInfoContainer.AddChild(vbox);
-
-		_ammoStatusLabel = new Label();
-		_ammoStatusLabel.HorizontalAlignment = HorizontalAlignment.Right;
-		if (font != null) _ammoStatusLabel.AddThemeFontOverride("font", font);
-		_ammoStatusLabel.AddThemeFontSizeOverride("font_size", 10);
-		_ammoStatusLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.9f, 0.45f));
-		vbox.AddChild(_ammoStatusLabel);
-
-		var slotsRow = new HBoxContainer();
-		slotsRow.Alignment = BoxContainer.AlignmentMode.End;
-		slotsRow.AddThemeConstantOverride("separation", 3);
-		vbox.AddChild(slotsRow);
+		var hbox = new HBoxContainer();
+		hbox.LayoutMode = 1;
+		hbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
+		hbox.OffsetLeft = -146;
+		hbox.OffsetRight = 0;
+		hbox.OffsetTop = -22;
+		hbox.OffsetBottom = 0;
+		hbox.Alignment = BoxContainer.AlignmentMode.End;
+		hbox.AddThemeConstantOverride("separation", 4);
+		_weaponsContainer.AddChild(hbox);
 
 		for (int i = 0; i < 3; i++)
 		{
 			var panel = new Panel();
-			panel.CustomMinimumSize = new Vector2(44, 14);
-			slotsRow.AddChild(panel);
+			panel.CustomMinimumSize = new Vector2(45, 22);
+			hbox.AddChild(panel);
 			_weaponSlotPanels[i] = panel;
 
 			var lbl = new Label();
@@ -429,37 +415,51 @@ public partial class HUD : CanvasLayer
 			lbl.HorizontalAlignment = HorizontalAlignment.Center;
 			lbl.VerticalAlignment = VerticalAlignment.Center;
 			if (font != null) lbl.AddThemeFontOverride("font", font);
-			lbl.AddThemeFontSizeOverride("font_size", 10);
+			lbl.AddThemeFontSizeOverride("font_size", 9);
+			lbl.ClipText = true;
 			panel.AddChild(lbl);
 			_weaponSlotLabels[i] = lbl;
 		}
 	}
 
-	private void UpdateWeaponAndAmmoUI()
+	private void UpdateWeaponsUI()
 	{
-		if (!IsInstanceValid(_player) || !IsInstanceValid(_ammoStatusLabel)) return;
+		if (!IsInstanceValid(_player) || !IsInstanceValid(_weaponsContainer)) return;
+
+		AttackController activeCtrl = (_player.CurrentSlotIndex >= 0 && _player.CurrentSlotIndex < _player.WeaponSlots.Count)
+			? _player.WeaponSlots[_player.CurrentSlotIndex]
+			: null;
+
+		if (activeCtrl != null && activeCtrl.UsesAmmo)
+		{
+			if (activeCtrl.IsReloading)
+			{
+				_ammoLabel.Text = $"RELOADING {(int)(activeCtrl.ReloadProgress * 100)}%";
+				_ammoLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.2f));
+			}
+			else
+			{
+				_ammoLabel.Text = $"AMMO: {activeCtrl.CurrentAmmo}/{activeCtrl.MaxAmmo} [R]";
+				_ammoLabel.AddThemeColorOverride("font_color", activeCtrl.CurrentAmmo > 0 ? new Color(1.0f, 0.9f, 0.4f) : new Color(1.0f, 0.25f, 0.25f));
+			}
+		}
+		else
+		{
+			_ammoLabel.Text = "";
+		}
 
 		for (int i = 0; i < 3; i++)
 		{
-			if (!IsInstanceValid(_weaponSlotPanels[i]) || !IsInstanceValid(_weaponSlotLabels[i])) continue;
-
-			bool isActive = _player.CurrentSlotIndex == i;
-			AttackController slotCtrl = (i < _player.WeaponSlots.Count && IsInstanceValid(_player.WeaponSlots[i]))
-				? _player.WeaponSlots[i]
-				: null;
-			WeaponData weapon = slotCtrl?.CurrentWeapon;
-			string shortName = weapon != null && !string.IsNullOrEmpty(weapon.WeaponName)
-				? (weapon.WeaponName.Length > 6 ? weapon.WeaponName.Substring(0, 6) : weapon.WeaponName)
-				: "---";
-
-			_weaponSlotLabels[i].Text = $"{i + 1}:{shortName}";
-			_weaponSlotLabels[i].AddThemeColorOverride("font_color",
-				isActive ? new Color(1f, 0.9f, 0.35f) : new Color(0.75f, 0.72f, 0.78f));
+			if (_weaponSlotPanels[i] == null || _weaponSlotLabels[i] == null) continue;
+			bool isSelected = (_player.CurrentSlotIndex == i);
+			AttackController slotCtrl = i < _player.WeaponSlots.Count ? _player.WeaponSlots[i] : null;
+			string wName = slotCtrl?.CurrentWeapon?.WeaponName;
+			bool hasWeapon = !string.IsNullOrEmpty(wName);
 
 			var style = new StyleBoxFlat
 			{
-				BgColor = isActive ? new Color(0.22f, 0.16f, 0.08f, 0.9f) : new Color(0.08f, 0.07f, 0.10f, 0.75f),
-				BorderColor = isActive ? new Color(0.95f, 0.75f, 0.25f) : new Color(0.35f, 0.32f, 0.40f),
+				BgColor = isSelected ? new Color(0.24f, 0.2f, 0.12f, 0.92f) : new Color(0.1f, 0.1f, 0.12f, 0.78f),
+				BorderColor = isSelected ? new Color(0.95f, 0.78f, 0.22f) : new Color(0.32f, 0.32f, 0.36f),
 				BorderWidthLeft = 1,
 				BorderWidthTop = 1,
 				BorderWidthRight = 1,
@@ -470,38 +470,43 @@ public partial class HUD : CanvasLayer
 				CornerRadiusBottomRight = 2
 			};
 			_weaponSlotPanels[i].AddThemeStyleboxOverride("panel", style);
-		}
 
-		AttackController controller = (_player.CurrentSlotIndex >= 0 && _player.CurrentSlotIndex < _player.WeaponSlots.Count)
-			? _player.WeaponSlots[_player.CurrentSlotIndex]
-			: null;
-		if (controller == null || !IsInstanceValid(controller) || controller.CurrentWeapon == null)
-		{
-			_ammoStatusLabel.Text = "";
-			return;
+			if (hasWeapon)
+			{
+				string shortName = wName.Length > 9 ? wName.Substring(0, 9) : wName;
+				_weaponSlotLabels[i].Text = $"{i + 1}: {shortName}";
+				_weaponSlotLabels[i].AddThemeColorOverride("font_color", isSelected ? new Color(1f, 0.95f, 0.7f) : new Color(0.8f, 0.8f, 0.85f));
+			}
+			else
+			{
+				_weaponSlotLabels[i].Text = $"{i + 1}: -";
+				_weaponSlotLabels[i].AddThemeColorOverride("font_color", new Color(0.45f, 0.45f, 0.48f));
+			}
 		}
+	}
 
-		string dmgMultText = _player.WeaponDamageMultiplier > 1.01f
-			? $" (+{Mathf.RoundToInt((_player.WeaponDamageMultiplier - 1.0f) * 100f)}%)"
-			: "";
+	private void UpdateFloorAndEnemiesUI()
+	{
+		if (!IsInstanceValid(_floorEnemiesLabel)) return;
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		int floor = level != null ? level.CurrentLevelIndex : 1;
+		int enemies = _waveManager != null ? _waveManager.EnemiesRemaining : 0;
+		bool active = _waveManager != null && _waveManager.WaveInProgress;
 
-		if (!controller.UsesAmmo)
+		if (_isCountingDown)
 		{
-			string modeTag = controller.CurrentWeapon.IsRanged ? "MAGIC" : "MELEE";
-			_ammoStatusLabel.Text = $"{controller.CurrentWeapon.WeaponName} [{modeTag}]{dmgMultText}";
-			_ammoStatusLabel.AddThemeColorOverride("font_color", new Color(0.85f, 0.9f, 1.0f));
+			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  PREPARE";
+			_floorEnemiesLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.85f, 0.45f));
 		}
-		else if (controller.IsReloading)
+		else if (active || enemies > 0)
 		{
-			int pct = Mathf.RoundToInt(controller.ReloadProgress * 100f);
-			_ammoStatusLabel.Text = $"RELOADING... {pct}%";
-			_ammoStatusLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.25f));
+			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  IN BATTLE";
+			_floorEnemiesLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.45f));
 		}
 		else
 		{
-			_ammoStatusLabel.Text = $"AMMO: {controller.CurrentAmmo}/{controller.MaxAmmo}{dmgMultText}";
-			_ammoStatusLabel.AddThemeColorOverride("font_color",
-				controller.CurrentAmmo == 0 ? new Color(1.0f, 0.35f, 0.35f) : new Color(1.0f, 0.9f, 0.45f));
+			_floorEnemiesLabel.Text = $"FLOOR {floor}  |  CLEARED";
+			_floorEnemiesLabel.AddThemeColorOverride("font_color", new Color(0.45f, 1.0f, 0.55f));
 		}
 	}
 
@@ -513,8 +518,8 @@ public partial class HUD : CanvasLayer
 		_bossBarContainer.SetAnchorsPreset(Control.LayoutPreset.CenterTop);
 		_bossBarContainer.OffsetLeft = -85;
 		_bossBarContainer.OffsetRight = 85;
-		_bossBarContainer.OffsetTop = 30;
-		_bossBarContainer.OffsetBottom = 50;
+		_bossBarContainer.OffsetTop = 18;
+		_bossBarContainer.OffsetBottom = 38;
 		_bossBarContainer.Visible = false;
 		_hudRoot.AddChild(_bossBarContainer);
 

@@ -13,7 +13,7 @@ dest_files=["res://.godot/imported/FFFFORWA.TTF-56a8e8fab7a3a3497db8dbf1cb8770d3
 [params]
 
 Rendering=null
-antialiasing=0
+antialiasing=1
 generate_mipmaps=false
 disable_embedded_bitmaps=false
 multichannel_signed_distance_field=false
@@ -22,10 +22,10 @@ msdf_size=48
 allow_system_fallback=true
 force_autohinter=false
 modulate_color_glyphs=false
-hinting=0
-subpixel_positioning=0
+hinting=1
+subpixel_positioning=1
 keep_rounding_remainders=true
-oversampling=0.0
+oversampling=4.0
 Fallbacks=null
 fallbacks=[]
 Compress=null
