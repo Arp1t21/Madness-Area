@@ -1,0 +1,37 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" uid="uid://ce07vkpabhphc" path="res://scripts/entities/weapons/Projectile.cs" id="1_script"]
+
+[sub_resource type="CircleShape2D" id="CircleShape2D_orb"]
+radius = 5.0
+
+[node name="CultistOrb" type="Node2D"]
+script = ExtResource("1_script")
+EnableSoftGlow = true
+DrawOrbVisual = true
+GlowColor = Color(0.45, 0.98, 0.38, 1.0)
+GlowEnergy = 1.05
+GlowTextureSize = 84
+
+[node name="Area2D" type="Area2D" parent="."]
+collision_layer = 2
+
+[node name="CollisionShape2D" type="CollisionShape2D" parent="Area2D"]
+shape = SubResource("CircleShape2D_orb")
+
+[node name="CPUParticles2D" type="CPUParticles2D" parent="."]
+texture_filter = 1
+amount = 24
+lifetime = 0.35
+preprocess = 0.1
+speed_scale = 1.2
+emission_shape = 1
+emission_sphere_radius = 2.5
+direction = Vector2(-1, 0)
+spread = 18.0
+gravity = Vector2(0, 0)
+initial_velocity_min = 18.0
+initial_velocity_max = 40.0
+scale_amount_min = 2.0
+scale_amount_max = 3.5
+color = Color(0.5, 1.0, 0.4, 0.85)

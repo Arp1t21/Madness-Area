@@ -1,0 +1,118 @@
+[gd_resource type="Resource" script_class="PlayerData" load_steps=14 format=3]
+
+[ext_resource type="Script" uid="uid://qqaqh6s4vgb4" path="res://scripts/resources/PlayerData.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/waepons/double_axe.tres" id="2_daxe"]
+[ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="3_atlas"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle0"]
+atlas = ExtResource("3_atlas")
+region = Rect2(128, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle1"]
+atlas = ExtResource("3_atlas")
+region = Rect2(144, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle2"]
+atlas = ExtResource("3_atlas")
+region = Rect2(160, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle3"]
+atlas = ExtResource("3_atlas")
+region = Rect2(176, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run0"]
+atlas = ExtResource("3_atlas")
+region = Rect2(192, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run1"]
+atlas = ExtResource("3_atlas")
+region = Rect2(208, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run2"]
+atlas = ExtResource("3_atlas")
+region = Rect2(224, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run3"]
+atlas = ExtResource("3_atlas")
+region = Rect2(240, 292, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hit"]
+atlas = ExtResource("3_atlas")
+region = Rect2(256, 292, 16, 28)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_berserker"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hit")
+}],
+"loop": false,
+"name": &"hit",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle3")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 5.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run3")
+}],
+"loop": true,
+"name": &"run",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run3")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 8.0
+}]
+
+[resource]
+script = ExtResource("1_script")
+CharacterName = "Berserker"
+MaxHealth = 75
+HealthRegen = 0.6
+MaxMana = 90
+ManaRegen = 1.5
+ManaCostPerSecondRunning = 0.0
+WalkSpeed = 58.0
+RunMultiplier = 1.35
+MeleeResistance = 0.2
+StartingWeapons = Array[Object]([ExtResource("2_daxe")])
+CharacterAnimations = SubResource("SpriteFrames_berserker")
+metadata/_custom_type_script = "uid://qqaqh6s4vgb4"

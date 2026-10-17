@@ -11,15 +11,19 @@ public partial class Projectile : Node2D
 	public bool IsPiercing = false;
 	public float KnockbackForce = 5.0f;
 
+	[Export] public bool EnableSoftGlow = false;
+	[Export] public bool DrawOrbVisual = false;
+	[Export] public Color GlowColor = new Color(0.4f, 0.85f, 1.0f, 1.0f);
+	[Export] public float GlowEnergy = 0.65f;
+	[Export] public int GlowTextureSize = 68;
+
 	private Vector2 _startPos;
-	private bool _drawMagicOrb = false;
 	private readonly System.Collections.Generic.HashSet<ulong> _hitTargets = new System.Collections.Generic.HashSet<ulong>();
 
 	public override void _Ready()
 	{
 		Scale = new Vector2(3.0f, 3.0f);
 		_startPos = GlobalPosition;
-		_drawMagicOrb = IsPlayerOwned && GetNodeOrNull<Sprite2D>("Sprite2D") == null;
 
 		var area = GetNodeOrNull<Area2D>("Area2D") ?? GetNodeOrNull<Area2D>(".");
 		if (area != null)
@@ -32,16 +36,71 @@ public partial class Projectile : Node2D
 			GD.PushWarning("Projectile: No Area2D found to detect collisions!");
 		}
 
-		SetupTrail();
+		if (EnableSoftGlow || DrawOrbVisual)
+		{
+			var unshaded = new CanvasItemMaterial
+			{
+				LightMode = CanvasItemMaterial.LightModeEnum.Unshaded
+			};
+			Material = unshaded;
+			foreach (var child in GetChildren())
+			{
+				if (child is CanvasItem ci)
+				{
+					ci.Material = unshaded;
+				}
+			}
+			SetupSoftLight();
+		}
+
+		if (DrawOrbVisual)
+		{
+			SetupTrail();
+		}
+	}
+
+	private void SetupSoftLight()
+	{
+		var light = new PointLight2D();
+		light.Name = "SoftProjectileLight";
+		light.ShadowEnabled = false;
+		light.Color = GlowColor;
+		light.Energy = GlowEnergy;
+
+		var gradient = new Gradient();
+		gradient.Colors = new Color[]
+		{
+			new Color(1.0f, 1.0f, 1.0f, 1.0f),
+			new Color(0.85f, 0.95f, 1.0f, 0.65f),
+			new Color(0.0f, 0.0f, 0.0f, 0.0f)
+		};
+		gradient.Offsets = new float[] { 0.0f, 0.45f, 1.0f };
+
+		var gradTex = new GradientTexture2D();
+		gradTex.Gradient = gradient;
+		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
+		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
+		gradTex.FillTo = new Vector2(0.5f, 0.0f);
+		gradTex.Width = GlowTextureSize;
+		gradTex.Height = GlowTextureSize;
+
+		light.Texture = gradTex;
+		AddChild(light);
 	}
 
 	public override void _Draw()
 	{
-		if (!_drawMagicOrb || _isDestroyed) return;
+		if (!DrawOrbVisual || _isDestroyed) return;
 
-		DrawCircle(Vector2.Zero, 4.5f, new Color(0.2f, 0.65f, 1.0f, 0.38f));
-		DrawCircle(Vector2.Zero, 2.8f, new Color(0.45f, 0.85f, 1.0f, 0.85f));
-		DrawCircle(Vector2.Zero, 1.4f, new Color(0.9f, 0.98f, 1.0f, 1.0f));
+		Color outer = new Color(GlowColor.R, GlowColor.G, GlowColor.B, 0.42f);
+		Color mid = new Color(
+			Mathf.Min(1.0f, GlowColor.R + 0.15f),
+			Mathf.Min(1.0f, GlowColor.G + 0.12f),
+			Mathf.Min(1.0f, GlowColor.B + 0.12f),
+			0.88f);
+		DrawCircle(Vector2.Zero, 4.6f, outer);
+		DrawCircle(Vector2.Zero, 2.9f, mid);
+		DrawCircle(Vector2.Zero, 1.5f, new Color(0.95f, 0.99f, 1.0f, 1.0f));
 	}
 
 	private void SetupTrail()

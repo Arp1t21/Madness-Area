@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://bljefiu15ackd" path="res://scripts/resources/EnemyData.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+EnemyName = "Dark Cultist"
+MaxHealth = 26.0
+Speed = 30.0
+Damage = 6
+AttackRange = 145.0
+StopDuration = 0.25
+CoinDropChance = 0.35
+ManaCrystalDropChance = 0.65
+metadata/_custom_type_script = "uid://bljefiu15ackd"

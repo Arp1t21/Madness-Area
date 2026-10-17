@@ -286,6 +286,7 @@ public partial class Level : Node2D
 		{
 			_wallsVerticalLayer.SetCell(new Vector2I(0, -6), 0, new Vector2I(2, 1));
 			_wallsVerticalLayer.SetCell(new Vector2I(-1, -6), 0, new Vector2I(2, 1));
+			SpawnDungeonTorches();
 		}
 	}
 
@@ -354,6 +355,7 @@ public partial class Level : Node2D
 		}
 
 		_supplyAltar = new SupplyAltar();
+		_supplyAltar.Setup(this);
 		_supplyAltar.GlobalPosition = altarPos;
 		CallDeferred("add_child", _supplyAltar);
 	}
@@ -414,29 +416,32 @@ public partial class Level : Node2D
 		}
 	}
 
+	// Множитель сложности для будущих настроек сложности (влияет на число монстров и размер/число секций карты)
+	public static float DifficultyMultiplier = 1.0f;
+
+	public int GetExpectedMonsterCount()
+	{
+		int w = Mathf.Max(0, _currentLevelIndex - 1);
+		int baseCount = 8 + w * 12 + w * w * 2;
+		if (_currentLevelIndex % 5 == 0) baseCount += 1;
+		return Mathf.Max(8, Mathf.RoundToInt(baseCount * DifficultyMultiplier));
+	}
+
 	private void GenerateRandomLevel()
 	{
-		GD.Print($"Generating Random Level {_currentLevelIndex}...");
+		int expectedMonsters = GetExpectedMonsterCount();
+		GD.Print($"Generating Compound Level {_currentLevelIndex} (Monsters: ~{expectedMonsters}, Difficulty: {DifficultyMultiplier:0.00})...");
 
 		// 1. Очистка старых объектов с предыдущего уровня
 		foreach (var child in GetChildren())
 		{
-			if (child is WeaponPickup || child is Coin || child is ManaCrystal || child is SupplyAltar)
+			if (child is WeaponPickup || child is Coin || child is ManaCrystal || child is SupplyAltar || child is DungeonTorch)
 			{
 				child.QueueFree();
 			}
 		}
 
-		// 2. Выбираем случайные размеры арены (на 15% меньше прежних 22-35)
-		int width = _rng.RandiRange(19, 30);
-		int height = _rng.RandiRange(19, 30);
-
-		_halfW = width / 2;
-		_halfH = height / 2;
-		int halfW = _halfW;
-		int halfH = _halfH;
-
-		// 3. Очищаем тайлы
+		// 2. Очищаем тайлы
 		_floorLayer.Clear();
 		if (_wallsVerticalLayer != null) _wallsVerticalLayer.Clear();
 		if (_wallsHorizontalLayer != null) _wallsHorizontalLayer.Clear();
@@ -450,66 +455,249 @@ public partial class Level : Node2D
 			door.HideDoor();
 		}
 
-		// 4. Заполняем пол
-		for (int x = -halfW; x <= halfW; x++)
+		// 3. Строим составную арену из главного центрального квадрата/прямоугольника
+		// и примыкающих к нему дополнительных квадратов (меньшего или такого же размера) в зависимости от числа монстров
+		var rooms = new List<Rect2I>();
+
+		int mainHalfW = _rng.RandiRange(11, 14) + Mathf.Clamp(expectedMonsters / 32, 0, 5);
+		int mainHalfH = _rng.RandiRange(11, 14) + Mathf.Clamp(expectedMonsters / 32, 0, 5);
+		Rect2I mainRoom = new Rect2I(-mainHalfW, -mainHalfH, mainHalfW * 2 + 1, mainHalfH * 2 + 1);
+		rooms.Add(mainRoom);
+
+		// Количество примыкающих квадратов растет с числом монстров и этажом (от 2-3 на 2 этаже до 5-8 на высоких волнах)
+		int minExtraSquares = Mathf.Clamp(2 + (_currentLevelIndex - 2) / 2 + expectedMonsters / 28, 2, 6);
+		int maxExtraSquares = Mathf.Clamp(minExtraSquares + 2, 3, 8);
+		int extraSquaresCount = _rng.RandiRange(minExtraSquares, maxExtraSquares);
+
+		// Перемешиваем 4 направления (0=Север, 1=Юг, 2=Восток, 3=Запад), чтобы первые секции росли в разные стороны
+		int[] cardinalOrder = { 0, 1, 2, 3 };
+		for (int i = 3; i > 0; i--)
 		{
-			for (int y = -halfH; y <= halfH; y++)
+			int j = _rng.RandiRange(0, i);
+			(cardinalOrder[i], cardinalOrder[j]) = (cardinalOrder[j], cardinalOrder[i]);
+		}
+
+		// Шанс того, что примыкающий квадрат будет такого же размера (а не поменьше), растет с числом монстров
+		float equalSizeChance = Mathf.Clamp(0.32f + expectedMonsters * 0.006f, 0.35f, 0.75f);
+
+		for (int i = 0; i < extraSquaresCount; i++)
+		{
+			// Первые секции прикрепляем к центральному залу, а следующие могут ветвиться и от уже созданных секций
+			int parentIdx = (i < 3 || rooms.Count == 1) ? 0 : _rng.RandiRange(0, rooms.Count - 1);
+			Rect2I parentRoom = rooms[parentIdx];
+
+			int dir = (i < 4 && parentIdx == 0) ? cardinalOrder[i] : _rng.RandiRange(0, 3);
+			bool isEqualSize = _rng.Randf() < equalSizeChance;
+
+			float scaleFactor = isEqualSize
+				? _rng.RandfRange(0.88f, 1.05f)
+				: _rng.RandfRange(0.55f, 0.80f);
+
+			int baseSpan = Math.Max(parentRoom.Size.X, parentRoom.Size.Y);
+			int newW = Mathf.Clamp(Mathf.RoundToInt(baseSpan * scaleFactor) + _rng.RandiRange(-2, 2), 12, 30);
+			int newH = Mathf.Clamp(Mathf.RoundToInt(baseSpan * scaleFactor) + _rng.RandiRange(-2, 2), 12, 30);
+
+			// Перекрытие в 3 тайла внутрь родительского квадрата гарантирует широкий проход без узких затыков
+			const int overlap = 3;
+			const int minSharedPassage = 8;
+			int nx = 0;
+			int ny = 0;
+
+			if (dir == 0) // Север (-Y)
 			{
-				_floorLayer.SetCell(new Vector2I(x, y), 1, GetRandomFloorTile());
+				ny = parentRoom.Position.Y - newH + overlap;
+				int minX = parentRoom.Position.X - newW + minSharedPassage;
+				int maxX = parentRoom.End.X - minSharedPassage;
+				nx = minX <= maxX ? _rng.RandiRange(minX, maxX) : parentRoom.Position.X;
+			}
+			else if (dir == 1) // Юг (+Y)
+			{
+				ny = parentRoom.End.Y - overlap;
+				int minX = parentRoom.Position.X - newW + minSharedPassage;
+				int maxX = parentRoom.End.X - minSharedPassage;
+				nx = minX <= maxX ? _rng.RandiRange(minX, maxX) : parentRoom.Position.X;
+			}
+			else if (dir == 2) // Восток (+X)
+			{
+				nx = parentRoom.End.X - overlap;
+				int minY = parentRoom.Position.Y - newH + minSharedPassage;
+				int maxY = parentRoom.End.Y - minSharedPassage;
+				ny = minY <= maxY ? _rng.RandiRange(minY, maxY) : parentRoom.Position.Y;
+			}
+			else // Запад (-X)
+			{
+				nx = parentRoom.Position.X - newW + overlap;
+				int minY = parentRoom.Position.Y - newH + minSharedPassage;
+				int maxY = parentRoom.End.Y - minSharedPassage;
+				ny = minY <= maxY ? _rng.RandiRange(minY, maxY) : parentRoom.Position.Y;
+			}
+
+			rooms.Add(new Rect2I(nx, ny, newW, newH));
+		}
+
+		// 4. Собираем все клетки пола в единое множество и сглаживаем узкие перегородки (1-2 тайла) между соседними секциями
+		var floorSet = new HashSet<Vector2I>();
+		int boundMinX = 0, boundMaxX = 0, boundMinY = 0, boundMaxY = 0;
+
+		foreach (var r in rooms)
+		{
+			if (r.Position.X < boundMinX) boundMinX = r.Position.X;
+			if (r.End.X > boundMaxX) boundMaxX = r.End.X;
+			if (r.Position.Y < boundMinY) boundMinY = r.Position.Y;
+			if (r.End.Y > boundMaxY) boundMaxY = r.End.Y;
+
+			for (int x = r.Position.X; x < r.End.X; x++)
+			{
+				for (int y = r.Position.Y; y < r.End.Y; y++)
+				{
+					floorSet.Add(new Vector2I(x, y));
+				}
 			}
 		}
 
-		// 5. Рисуем внешние стены
-		// Горизонтальные границы (top and bottom walls) on _wallsVerticalLayer (uses floor.tres front walls)
-		if (_wallsVerticalLayer != null)
+		// Сглаживание 1-2 тайловых зазоров между параллельными квадратами, чтобы стены не резали карту тонкими полосками
+		for (int pass = 0; pass < 2; pass++)
 		{
-			Vector2I vTile = new Vector2I(2, 1); // Source ID 0 in floor.tres
-			// Углы НЕ рисуем здесь — их занимает боковая стена (WallHorizontal)
-			for (int x = -halfW; x <= halfW; x++)
+			var bridgedCells = new List<Vector2I>();
+			for (int x = boundMinX; x <= boundMaxX; x++)
 			{
-				_wallsVerticalLayer.SetCell(new Vector2I(x, -halfH - 1), 0, vTile);
-				_wallsVerticalLayer.SetCell(new Vector2I(x, halfH + 1), 0, vTile);
+				for (int y = boundMinY; y <= boundMaxY; y++)
+				{
+					Vector2I c = new Vector2I(x, y);
+					if (floorSet.Contains(c)) continue;
+
+					bool bridgeH = floorSet.Contains(new Vector2I(x - 1, y)) &&
+								   (floorSet.Contains(new Vector2I(x + 1, y)) || floorSet.Contains(new Vector2I(x + 2, y)));
+					bool bridgeV = floorSet.Contains(new Vector2I(x, y - 1)) &&
+								   (floorSet.Contains(new Vector2I(x, y + 1)) || floorSet.Contains(new Vector2I(x, y + 2)));
+
+					if (bridgeH || bridgeV)
+					{
+						bridgedCells.Add(c);
+					}
+				}
+			}
+			foreach (var bc in bridgedCells) floorSet.Add(bc);
+		}
+
+		_halfW = Math.Max(Math.Abs(boundMinX), Math.Abs(boundMaxX)) + 2;
+		_halfH = Math.Max(Math.Abs(boundMinY), Math.Abs(boundMaxY)) + 2;
+
+		// Заполняем тайлы пола
+		foreach (var cell in floorSet)
+		{
+			_floorLayer.SetCell(cell, 1, GetRandomFloorTile());
+		}
+
+		// 5. Выстраиваем контур внешних стен вокруг всей составной фигуры
+		Vector2I vTile = new Vector2I(2, 1);  // Source ID 0 in floor.tres (горизонтальная стена)
+		Vector2I hTile = new Vector2I(2, 10); // Source ID 2 (боковая стена)
+
+		for (int x = boundMinX - 2; x <= boundMaxX + 2; x++)
+		{
+			for (int y = boundMinY - 2; y <= boundMaxY + 2; y++)
+			{
+				Vector2I pos = new Vector2I(x, y);
+				if (floorSet.Contains(pos)) continue;
+
+				bool touchesFloor = false;
+				for (int dx = -1; dx <= 1 && !touchesFloor; dx++)
+				{
+					for (int dy = -1; dy <= 1; dy++)
+					{
+						if (dx == 0 && dy == 0) continue;
+						if (floorSet.Contains(new Vector2I(x + dx, y + dy)))
+						{
+							touchesFloor = true;
+							break;
+						}
+					}
+				}
+				if (!touchesFloor) continue;
+
+				bool floorNorth = floorSet.Contains(new Vector2I(x, y - 1));
+				bool floorSouth = floorSet.Contains(new Vector2I(x, y + 1));
+				bool floorWest = floorSet.Contains(new Vector2I(x - 1, y));
+				bool floorEast = floorSet.Contains(new Vector2I(x + 1, y));
+
+				if (floorNorth || floorSouth || (floorWest && floorEast))
+				{
+					if (_wallsVerticalLayer != null)
+					{
+						_wallsVerticalLayer.SetCell(pos, 0, vTile);
+					}
+				}
+				else if (floorEast)
+				{
+					if (_wallsHorizontalLayer != null)
+					{
+						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 1);
+					}
+				}
+				else if (floorWest)
+				{
+					if (_wallsHorizontalLayer != null)
+					{
+						_wallsHorizontalLayer.SetCell(pos, 2, hTile);
+					}
+				}
+				else
+				{
+					// Внешний диагональный угол
+					bool diagEast = floorSet.Contains(new Vector2I(x + 1, y - 1)) || floorSet.Contains(new Vector2I(x + 1, y + 1));
+					if (_wallsHorizontalLayer != null)
+					{
+						_wallsHorizontalLayer.SetCell(pos, 2, hTile, diagEast ? 1 : 0);
+					}
+				}
 			}
 		}
 
-		// Вертикальные границы (left and right walls) on _wallsHorizontalLayer (uses TileSet_tmxlf side walls)
-		if (_wallsHorizontalLayer != null)
-		{
-			Vector2I hTile = new Vector2I(2, 10); // Source ID 2
-			// Включая углы (y от -halfH-1 до halfH+1), чтобы углы были боковыми стенами, а не квадратами
-			for (int y = -halfH - 1; y <= halfH + 1; y++)
-			{
-				// Левая стена — отзеркаленный тайл (alternative 1, flip_h), чтобы не была "обрезанной"
-				_wallsHorizontalLayer.SetCell(new Vector2I(-halfW - 1, y), 2, hTile, 1);
-				_wallsHorizontalLayer.SetCell(new Vector2I(halfW + 1, y), 2, hTile);
-			}
-		}
+		var floorList = floorSet.ToList();
 
-		// 6. Рисуем внутренние колонны/препятствия
-		if (_columnsLayer != null)
+		// 6. Рисуем внутренние колонны/препятствия пропорционально площади всей составной карты
+		if (_columnsLayer != null && floorList.Count > 0)
 		{
-			int numPillars = _rng.RandiRange(2, 4);
-			var pillarPositions = new System.Collections.Generic.List<Vector2I>();
+			int numPillars = Mathf.Clamp(floorList.Count / 165, 3, 9);
+			var pillarPositions = new List<Vector2I>();
+
 			for (int i = 0; i < numPillars; i++)
 			{
 				int px = 0;
 				int py = 0;
 				bool valid = false;
 				int attempts = 0;
-				while (!valid && attempts < 100)
+
+				while (!valid && attempts < 120)
 				{
 					attempts++;
-					px = _rng.RandiRange(-halfW + 3, halfW - 3);
-					py = _rng.RandiRange(-halfH + 3, halfH - 5);
+					Vector2I candidate = floorList[_rng.RandiRange(0, floorList.Count - 1)];
+					px = candidate.X;
+					py = candidate.Y;
 
 					// Не спавним колонны у центра (0,0), где появляется игрок
 					if (Math.Abs(px) < 5 && Math.Abs(py) < 6) continue;
+
+					// Проверяем, что вокруг колонны (3 тайла в высоту + отступ 3 тайла от стен) везде пол
+					bool hasMargin = true;
+					for (int dx = -3; dx <= 3 && hasMargin; dx++)
+					{
+						for (int dy = -2; dy <= 4; dy++)
+						{
+							if (!floorSet.Contains(new Vector2I(px + dx, py + dy)))
+							{
+								hasMargin = false;
+								break;
+							}
+						}
+					}
+					if (!hasMargin) continue;
 
 					// Проверяем расстояние до других колонн
 					bool tooClose = false;
 					foreach (var pos in pillarPositions)
 					{
-						if (Math.Abs(pos.X - px) < 4 && Math.Abs(pos.Y - py) < 5)
+						if (Math.Abs(pos.X - px) < 5 && Math.Abs(pos.Y - py) < 6)
 						{
 							tooClose = true;
 							break;
@@ -530,40 +718,63 @@ public partial class Level : Node2D
 			}
 		}
 
-		// 7. Размещаем выходную лестницу на случайном свободном тайле
-		if (_stairsLayer != null)
+		// 7. Размещаем выходную лестницу в одной из отдаленных секций карты
+		if (_stairsLayer != null && floorList.Count > 0)
 		{
 			int sx = 0, sy = 0;
 			bool validPosition = false;
 			int stairAttempts = 0;
-			int minDist = Math.Max(3, Math.Min(6, Math.Min(halfW, halfH) - 4));
 
-			while (!validPosition && stairAttempts < 100)
+			while (!validPosition && stairAttempts < 150)
 			{
 				stairAttempts++;
-				sx = _rng.RandiRange(-halfW + 3, halfW - 3);
-				sy = _rng.RandiRange(-halfH + 3, halfH - 3);
+				Vector2I candidate = floorList[_rng.RandiRange(0, floorList.Count - 1)];
+				sx = candidate.X;
+				sy = candidate.Y;
 
-				// Лестница должна быть достаточно далеко от игрока в центре (0,0)
-				if (Math.Abs(sx) >= minDist || Math.Abs(sy) >= minDist)
+				// Стараемся спавнить лестницу подальше от центра (в примыкающих квадратах), постепенно снижая порог
+				int minDist = stairAttempts < 90 ? 10 : 5;
+				if (Math.Abs(sx) < minDist && Math.Abs(sy) < minDist) continue;
+
+				// Отступ от стен минимум 2 тайла
+				bool insideMargin = true;
+				for (int dx = -2; dx <= 2 && insideMargin; dx++)
 				{
-					// И не пересекаться со стенами/колоннами
-					bool hitWall = false;
-					if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
-					if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
-					if (_columnsLayer != null && _columnsLayer.GetCellSourceId(new Vector2I(sx, sy)) != -1) hitWall = true;
-
-					if (!hitWall)
+					for (int dy = -2; dy <= 2; dy++)
 					{
-						validPosition = true;
+						if (!floorSet.Contains(new Vector2I(sx + dx, sy + dy)))
+						{
+							insideMargin = false;
+							break;
+						}
 					}
+				}
+				if (!insideMargin) continue;
+
+				bool hitObstacle = false;
+				for (int dx = -1; dx <= 1 && !hitObstacle; dx++)
+				{
+					for (int dy = -1; dy <= 1; dy++)
+					{
+						Vector2I check = new Vector2I(sx + dx, sy + dy);
+						if (_columnsLayer != null && _columnsLayer.GetCellSourceId(check) != -1)
+						{
+							hitObstacle = true;
+							break;
+						}
+					}
+				}
+
+				if (!hitObstacle)
+				{
+					validPosition = true;
 				}
 			}
 
 			if (!validPosition)
 			{
-				sx = Math.Max(3, halfW - 3);
-				sy = Math.Max(3, halfH - 3);
+				sx = Math.Max(4, mainHalfW - 3);
+				sy = Math.Max(4, mainHalfH - 3);
 			}
 
 			_stairsLayer.SetCell(new Vector2I(sx, sy), 1, new Vector2I(0, 5));
@@ -609,10 +820,81 @@ public partial class Level : Node2D
 			_player.GlobalPosition = Vector2.Zero;
 		}
 
-		// 10. Обновляем доступные точки спавна врагов
+		// 10. Обновляем доступные точки спавна врагов, AStar-сетку, ловушки и настенные факелы
 		InitializeSpawnPositions();
 		InitializeAStarGrid();
 		GenerateSpikes();
+		SpawnDungeonTorches();
+	}
+
+	private void SpawnDungeonTorches()
+	{
+		if (_floorLayer == null) return;
+
+		var candidatePositions = new List<Vector2>();
+
+		// 1. Ищем верхние стены (где ниже стены сразу идет клетка пола)
+		if (_wallsVerticalLayer != null)
+		{
+			foreach (var wallCell in _wallsVerticalLayer.GetUsedCells())
+			{
+				Vector2I belowCell = wallCell + new Vector2I(0, 1);
+				if (_floorLayer.GetCellSourceId(belowCell) != -1 &&
+					_wallsVerticalLayer.GetCellSourceId(belowCell) == -1 &&
+					(_wallsHorizontalLayer == null || _wallsHorizontalLayer.GetCellSourceId(belowCell) == -1))
+				{
+					Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(wallCell)) + new Vector2(0, 14.0f);
+					candidatePositions.Add(worldPos);
+				}
+			}
+		}
+
+		// 2. Ищем основания внутренних колонн
+		if (_columnsLayer != null)
+		{
+			foreach (var colCell in _columnsLayer.GetUsedCells())
+			{
+				Vector2I belowCell = colCell + new Vector2I(0, 1);
+				if (_floorLayer.GetCellSourceId(belowCell) != -1 &&
+					_columnsLayer.GetCellSourceId(belowCell) == -1)
+				{
+					Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(colCell)) + new Vector2(0, 10.0f);
+					candidatePositions.Add(worldPos);
+				}
+			}
+		}
+
+		// Перемешиваем кандидатов детерминированным генератором уровня
+		for (int i = candidatePositions.Count - 1; i > 0; i--)
+		{
+			int j = _rng.RandiRange(0, i);
+			(candidatePositions[i], candidatePositions[j]) = (candidatePositions[j], candidatePositions[i]);
+		}
+
+		var placedTorches = new List<Vector2>();
+		float minTorchSpacing = 220.0f;
+		int maxTorches = Mathf.Clamp(6 + _currentLevelIndex * 2, 6, 20);
+
+		foreach (var pos in candidatePositions)
+		{
+			if (placedTorches.Count >= maxTorches) break;
+
+			bool tooClose = false;
+			foreach (var existing in placedTorches)
+			{
+				if (pos.DistanceTo(existing) < minTorchSpacing)
+				{
+					tooClose = true;
+					break;
+				}
+			}
+			if (tooClose) continue;
+
+			placedTorches.Add(pos);
+			var torch = new DungeonTorch();
+			torch.GlobalPosition = pos;
+			AddChild(torch);
+		}
 	}
 
 	public void InitializeSpawnPositions()
@@ -726,6 +1008,11 @@ public partial class Level : Node2D
 		return GodotObject.IsInstanceValid(_exitLadder) ? _exitLadder : null;
 	}
 
+	public Node2D GetShopAltarNode()
+	{
+		return GodotObject.IsInstanceValid(_supplyAltar) && !_supplyAltar.HasPurchased ? _supplyAltar : null;
+	}
+
 	public void InitializeAStarGrid()
 	{
 		_astarGrid = null;
@@ -748,6 +1035,19 @@ public partial class Level : Node2D
 		_astarGrid.Offset = new Vector2(8, 8);
 		_astarGrid.DiagonalMode = AStarGrid2D.DiagonalModeEnum.OnlyIfNoObstacles;
 		_astarGrid.Update();
+
+		// Клетки вне пола (пустота вокруг составных секций карты) делаем непроходимыми
+		for (int x = minX; x <= maxX; x++)
+		{
+			for (int y = minY; y <= maxY; y++)
+			{
+				Vector2I c = new Vector2I(x, y);
+				if (_floorLayer.GetCellSourceId(c) == -1)
+				{
+					_astarGrid.SetPointSolid(c, true);
+				}
+			}
+		}
 
 		// Заполняем стены как непроходимые препятствия
 		if (_wallsVerticalLayer != null)

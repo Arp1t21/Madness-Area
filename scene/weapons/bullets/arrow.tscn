@@ -7,6 +7,10 @@ size = Vector2(14, 4)
 
 [node name="Arrow" type="Node2D"]
 script = ExtResource("1_script")
+EnableSoftGlow = true
+GlowColor = Color(0.95, 0.78, 0.42, 1.0)
+GlowEnergy = 0.7
+GlowTextureSize = 44
 
 [node name="Area2D" type="Area2D" parent="."]
 collision_layer = 2
@@ -16,5 +20,5 @@ collision_mask = 1
 shape = SubResource("RectangleShape2D_arrow")
 
 [node name="Visual" type="Polygon2D" parent="."]
-color = Color(0.55, 0.4, 0.2, 1)
+color = Color(0.88, 0.68, 0.35, 1)
 polygon = PackedVector2Array(-8, -1.5, 6, -1.5, 11, 0, 6, 1.5, -8, 1.5, -11, 0)

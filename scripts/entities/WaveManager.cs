@@ -49,7 +49,8 @@ public partial class WaveManager : Node2D
 
 		bool isBossWave = (_currentWave % 5 == 0);
 		int w = Mathf.Max(0, _currentWave - 1);
-		int enemyCount = InitialEnemyCount * 2 + w * 12 + w * w * 2;
+		int baseCount = InitialEnemyCount * 2 + w * 12 + w * w * 2;
+		int enemyCount = Mathf.Max(4, Mathf.RoundToInt(baseCount * Level.DifficultyMultiplier));
 		if (isBossWave)
 		{
 			enemyCount += 1; // +1 большой Босс поверх волны
@@ -57,8 +58,8 @@ public partial class WaveManager : Node2D
 
 		_enemiesToSpawn = enemyCount;
 		_isSpawning = true;
-		float spawnDelay = Mathf.Clamp(0.45f - w * 0.04f, 0.16f, 0.45f);
-		GD.Print($"Wave {_currentWave} started! Enemies: {enemyCount} (BossWave: {isBossWave})");
+		float spawnDelay = Mathf.Clamp(0.45f + w * 0.08f, 0.45f, 1.2f);
+		GD.Print($"Wave {_currentWave} started! Enemies: {enemyCount} (BossWave: {isBossWave}, SpawnDelay: {spawnDelay:0.00}s)");
 
 		for (int i = 0; i < enemyCount; i++)
 		{
@@ -87,22 +88,38 @@ public partial class WaveManager : Node2D
 
 		if (isBoss)
 		{
-			selectedPrefab = (levelIndex % 10 == 0)
-				? GD.Load<PackedScene>("res://scene/actors/quagmire.tscn")
-				: GD.Load<PackedScene>("res://scene/actors/orc_warrior.tscn");
+			if (levelIndex % 15 == 0)
+				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/big_demon.tscn");
+			else if (levelIndex % 10 == 0)
+				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/quagmire.tscn");
+			else if (levelIndex % 5 == 0 && levelIndex >= 5)
+				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/big_demon.tscn");
+			else
+				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/orc_warrior.tscn");
 		}
 		else
 		{
-			float ghostChance = levelIndex >= 2 ? 0.12f : 0.0f;
-			float archerChance = levelIndex >= 2 ? 0.14f : 0.0f;
-			float quagmireChance = levelIndex >= 3 ? 0.15f : 0.0f;
+			float chortChance = levelIndex >= 1 ? 0.18f : 0.0f;
+			float ghostChance = levelIndex >= 2 ? 0.11f : 0.0f;
+			float archerChance = levelIndex >= 2 ? 0.12f : 0.0f;
+			float cultistChance = levelIndex >= 3 ? 0.10f : 0.0f;
+			float quagmireChance = levelIndex >= 3 ? 0.12f : 0.0f;
+			float bigDemonChance = levelIndex >= 4 ? 0.08f : 0.0f;
 			float roll = GD.Randf();
 
-			if (roll < quagmireChance)
+			if (roll < bigDemonChance)
+			{
+				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/big_demon.tscn");
+			}
+			else if (roll < bigDemonChance + quagmireChance)
 			{
 				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/quagmire.tscn");
 			}
-			else if (roll < quagmireChance + ghostChance + archerChance)
+			else if (roll < bigDemonChance + quagmireChance + chortChance)
+			{
+				selectedPrefab = GD.Load<PackedScene>("res://scene/actors/chort.tscn");
+			}
+			else if (roll < bigDemonChance + quagmireChance + chortChance + ghostChance + archerChance + cultistChance)
 			{
 				// На 2-м этаже делаем на 2 ренджовых моба меньше (и ограничиваем максимум 3 ренджовыми)
 				if (levelIndex == 2 && (_rangedSkippedThisWave < 2 || _rangedSpawnedThisWave >= 3))
@@ -112,13 +129,18 @@ public partial class WaveManager : Node2D
 				else
 				{
 					_rangedSpawnedThisWave++;
-					if (roll < quagmireChance + ghostChance)
+					float rangedStart = bigDemonChance + quagmireChance + chortChance;
+					if (roll < rangedStart + ghostChance)
 					{
 						selectedPrefab = GD.Load<PackedScene>("res://scene/actors/ghost.tscn");
 					}
-					else
+					else if (roll < rangedStart + ghostChance + archerChance)
 					{
 						selectedPrefab = GD.Load<PackedScene>("res://scene/actors/archer.tscn");
+					}
+					else
+					{
+						selectedPrefab = GD.Load<PackedScene>("res://scene/actors/dark_cultist.tscn");
 					}
 				}
 			}

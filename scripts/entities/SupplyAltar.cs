@@ -2,6 +2,17 @@ using Godot;
 using System;
 using System.Collections.Generic;
 
+public class ShopOffer
+{
+	public string Category;
+	public string Title;
+	public string Description;
+	public int Cost;
+	public Color AccentColor;
+	public bool IsPurchased = false;
+	public Func<Player, Level, SupplyAltar, string> OnPurchase;
+}
+
 public partial class SupplyAltar : Area2D, IInteractable
 {
 	private Label _promptLabel;
@@ -10,6 +21,20 @@ public partial class SupplyAltar : Area2D, IInteractable
 	private Texture2D _openTex;
 	private Level _level;
 	private SupplyShopOverlay _activeShop;
+
+	public List<ShopOffer> RolledOffers { get; private set; } = new List<ShopOffer>();
+	public bool HasPurchased => RolledOffers.Count > 0 && RolledOffers.TrueForAll(o => o.IsPurchased);
+
+	private static readonly string[] AllShopWeapons = new[]
+	{
+		"res://data/waepons/katana.tres",
+		"res://data/waepons/double_axe.tres",
+		"res://data/waepons/auto_rifle.tres",
+		"res://data/waepons/shotgun.tres",
+		"res://data/waepons/revolver.tres",
+		"res://data/waepons/dagger.tres",
+		"res://data/waepons/magic_staff.tres"
+	};
 
 	public void Setup(Level level)
 	{
@@ -33,14 +58,14 @@ public partial class SupplyAltar : Area2D, IInteractable
 		_sprite.Position = new Vector2(0, -6);
 		AddChild(_sprite);
 
-		// Золотое свечение вокруг сундука снабжения
+		// Золотое свечение вокруг магазина
 		var glow = new PointLight2D();
-		glow.Color = new Color(1.0f, 0.85f, 0.35f, 0.9f);
-		glow.Energy = 0.8f;
+		glow.Color = new Color(1.0f, 0.85f, 0.35f, 0.95f);
+		glow.Energy = 1.0f;
 		var grad = new Gradient();
 		grad.Colors = new Color[]
 		{
-			new Color(1f, 0.9f, 0.4f, 0.9f),
+			new Color(1f, 0.9f, 0.4f, 0.95f),
 			new Color(0f, 0f, 0f, 0f)
 		};
 		grad.Offsets = new float[] { 0f, 1f };
@@ -49,13 +74,13 @@ public partial class SupplyAltar : Area2D, IInteractable
 		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
 		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
 		gradTex.FillTo = new Vector2(0.85f, 0.85f);
-		gradTex.Width = 64;
-		gradTex.Height = 64;
+		gradTex.Width = 72;
+		gradTex.Height = 72;
 		glow.Texture = gradTex;
 		AddChild(glow);
 
 		_promptLabel = new Label();
-		_promptLabel.Text = "Supply Shop [E]";
+		_promptLabel.Text = "Shop [E]";
 		_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		_promptLabel.Position = new Vector2(-45, -28);
 		_promptLabel.Size = new Vector2(90, 15);
@@ -71,8 +96,176 @@ public partial class SupplyAltar : Area2D, IInteractable
 		_promptLabel.Visible = false;
 		AddChild(_promptLabel);
 
+		RollThreeRandomOffers();
+
 		AreaEntered += OnAreaEntered;
 		AreaExited += OnAreaExited;
+	}
+
+	private void RollThreeRandomOffers()
+	{
+		string rolledWeaponPath = AllShopWeapons[GD.Randi() % AllShopWeapons.Length];
+		string weaponDisplayName = System.IO.Path.GetFileNameWithoutExtension(rolledWeaponPath).Replace("_", " ").ToUpper();
+
+		var pool = new List<ShopOffer>
+		{
+			new ShopOffer
+			{
+				Category = "PERMANENT STAT",
+				Title = "RING OF REGENERATION",
+				Description = "+1 HP Regen Forever (during waves)",
+				Cost = 5,
+				AccentColor = new Color(0.35f, 0.95f, 0.45f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusHealthRegen += 1.0f;
+					return $"Permanent +1 HP Regen! (Now {p.HealthRegenEffective:0.#}/s)";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "PERMANENT STAT",
+				Title = "ARCANE MANA VESSEL",
+				Description = "+50 Max Mana Forever & restores +50 Mana",
+				Cost = 4,
+				AccentColor = new Color(0.35f, 0.72f, 1.0f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusMaxMana += 50.0f;
+					p.CurrentMana = Mathf.Min(p.MaxManaEffective, p.CurrentMana + 50.0f);
+					return $"Permanent +50 Max Mana! (Now {(int)p.MaxManaEffective} MP)";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "PERMANENT STAT",
+				Title = "TITAN HEARTSTONE",
+				Description = "+25 Max HP Forever & heals +25 HP",
+				Cost = 4,
+				AccentColor = new Color(1.0f, 0.42f, 0.42f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusMaxHealth += 25.0f;
+					p.CurrentHealth = Mathf.Min(p.MaxHealthEffective, p.CurrentHealth + 25.0f);
+					return $"Permanent +25 Max HP! (Now {(int)p.MaxHealthEffective} HP)";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "PERMANENT STAT",
+				Title = "AETHER SPRING",
+				Description = "+2 Mana Regen Forever (during waves)",
+				Cost = 5,
+				AccentColor = new Color(0.45f, 0.85f, 1.0f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusManaRegen += 2.0f;
+					return $"Permanent +2 Mana Regen! (Now {p.ManaRegenEffective:0.#}/s)";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "PERMANENT STAT",
+				Title = "WINDRUNNER GREAVES",
+				Description = "+10 Move Speed Forever",
+				Cost = 5,
+				AccentColor = new Color(0.55f, 1.0f, 0.8f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.BonusMoveSpeed += 10.0f;
+					return "Permanent +10 Move Speed!";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "ITEM UPGRADE",
+				Title = "MASTERWORK WHETSTONE",
+				Description = "+25% All Weapon Damage Forever",
+				Cost = 6,
+				AccentColor = new Color(1.0f, 0.72f, 0.25f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.WeaponDamageMultiplier += 0.25f;
+					return $"Weapon Damage increased to {(int)Mathf.Round(p.WeaponDamageMultiplier * 100)}%!";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "HERO ABILITY",
+				Title = "TOME OF MASTERY",
+				Description = "+1 Skill Point to upgrade any hero ability",
+				Cost = 7,
+				AccentColor = new Color(0.82f, 0.52f, 1.0f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.SkillPoints++;
+					var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+					hud?.UpdateAbilitiesUI();
+					return "Gained +1 Skill Point!";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "HERO ABILITY",
+				Title = "GRIMOIRE OF FLAME [Q]",
+				Description = "+1 Level to Ability 1 (Fireball)",
+				Cost = 7,
+				AccentColor = new Color(1.0f, 0.52f, 0.22f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.Ability1Level++;
+					var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+					hud?.UpdateAbilitiesUI();
+					return $"Ability 1 upgraded to Level {p.Ability1Level}!";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "HERO ABILITY",
+				Title = "RUNE OF THE AEGIS [V]",
+				Description = "+1 Level to Ability 2 (Arcane Shield & Dash)",
+				Cost = 7,
+				AccentColor = new Color(0.35f, 0.88f, 1.0f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					p.Ability2Level++;
+					var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+					hud?.UpdateAbilitiesUI();
+					return $"Ability 2 upgraded to Level {p.Ability2Level}!";
+				}
+			},
+			new ShopOffer
+			{
+				Category = "WEAPON",
+				Title = $"ARMORY: {weaponDisplayName}",
+				Description = $"Spawns {weaponDisplayName} next to the shop",
+				Cost = 6,
+				AccentColor = new Color(1.0f, 0.88f, 0.32f),
+				OnPurchase = (p, lvl, alt) =>
+				{
+					Vector2 dropPos = alt != null ? alt.GlobalPosition + new Vector2(0, 42) : p.GlobalPosition;
+					lvl?.SpawnWeaponPickupAt(dropPos, rolledWeaponPath);
+					return $"Dropped {weaponDisplayName} next to the shop!";
+				}
+			}
+		};
+
+		// Перемешиваем пул и выбираем ровно 3 случайных товара на эту волну
+		RolledOffers.Clear();
+		for (int i = 0; i < 3 && pool.Count > 0; i++)
+		{
+			int idx = (int)(GD.Randi() % (uint)pool.Count);
+			RolledOffers.Add(pool[idx]);
+			pool.RemoveAt(idx);
+		}
+	}
+
+	public void UpdatePromptText()
+	{
+		if (_promptLabel != null)
+		{
+			_promptLabel.Text = HasPurchased ? "Shop [Sold Out]" : "Shop [E]";
+		}
 	}
 
 	public void Interact(Player player)
@@ -98,6 +291,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 	{
 		if (_promptLabel != null)
 		{
+			UpdatePromptText();
 			_promptLabel.Visible = show;
 		}
 	}
@@ -134,18 +328,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 	private readonly SupplyAltar _altar;
 	private Label _goldLabel;
 	private Label _statusLabel;
-	private readonly List<(Button btn, int cost, Func<string> labelGen)> _shopButtons = new();
-
-	private static readonly string[] AllShopWeapons = new[]
-	{
-		"res://data/waepons/katana.tres",
-		"res://data/waepons/double_axe.tres",
-		"res://data/waepons/auto_rifle.tres",
-		"res://data/waepons/shotgun.tres",
-		"res://data/waepons/revolver.tres",
-		"res://data/waepons/dagger.tres",
-		"res://data/waepons/magic_staff.tres"
-	};
+	private readonly List<(Button btn, ShopOffer offer, StyleBoxFlat normalStyle, StyleBoxFlat purchasedStyle)> _offerButtons = new();
 
 	public SupplyShopOverlay(Player player, Level level, SupplyAltar altar)
 	{
@@ -169,104 +352,65 @@ public partial class SupplyShopOverlay : CanvasLayer
 		rootControl.Scale = new Vector2(uiScale, uiScale);
 
 		var bgOverlay = new ColorRect();
-		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.72f);
+		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.76f);
 		rootControl.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
 		var panel = new Panel();
-		Vector2 panelSize = new Vector2(460, 340);
+		Vector2 panelSize = new Vector2(540, 360);
 		panel.Size = panelSize;
 		panel.Position = (rootControl.Size - panelSize) / 2.0f;
 		rootControl.AddChild(panel);
 
 		var panelStyle = new StyleBoxFlat();
-		panelStyle.BgColor = new Color(0.08f, 0.08f, 0.1f, 0.96f);
+		panelStyle.BgColor = new Color(0.08f, 0.08f, 0.11f, 0.97f);
 		panelStyle.BorderWidthBottom = panelStyle.BorderWidthLeft = panelStyle.BorderWidthRight = panelStyle.BorderWidthTop = 2;
-		panelStyle.BorderColor = new Color(0.85f, 0.68f, 0.2f);
+		panelStyle.BorderColor = new Color(0.88f, 0.70f, 0.22f);
 		panel.AddThemeStyleboxOverride("panel", panelStyle);
 
 		var vbox = new VBoxContainer();
-		vbox.Position = new Vector2(20, 14);
-		vbox.Size = new Vector2(panelSize.X - 40, panelSize.Y - 28);
-		vbox.AddThemeConstantOverride("separation", 8);
+		vbox.Position = new Vector2(22, 14);
+		vbox.Size = new Vector2(panelSize.X - 44, panelSize.Y - 28);
+		vbox.AddThemeConstantOverride("separation", 10);
 		panel.AddChild(vbox);
 
 		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 
 		var title = new Label();
-		title.Text = "SUPPLY ALTAR";
+		title.Text = "WAVE SHOP";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
-		title.AddThemeFontOverride("font", font);
+		if (font != null) title.AddThemeFontOverride("font", font);
 		title.AddThemeFontSizeOverride("font_size", 28);
 		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.86f, 0.35f));
 		vbox.AddChild(title);
 
 		_goldLabel = new Label();
 		_goldLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		_goldLabel.AddThemeFontOverride("font", font);
+		if (font != null) _goldLabel.AddThemeFontOverride("font", font);
 		_goldLabel.AddThemeFontSizeOverride("font_size", 18);
 		_goldLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.95f, 0.6f));
 		vbox.AddChild(_goldLabel);
 
-		AddShopItem(vbox, font, 3,
-			() => $"HEAL POTION (+25 HP, +10 MAX HP)  —  3 GOLD",
-			() =>
+		if (_altar != null && _altar.RolledOffers != null)
+		{
+			foreach (var offer in _altar.RolledOffers)
 			{
-				_player.BonusMaxHealth += 10.0f;
-				_player.CurrentHealth = Mathf.Min(_player.MaxHealthEffective, _player.CurrentHealth + 25.0f);
-				return "Restored +25 HP & +10 Max HP!";
-			});
-
-		AddShopItem(vbox, font, 3,
-			() => $"MANA ELIXIR (+50 MP, +20 MAX MP)  —  3 GOLD",
-			() =>
-			{
-				_player.BonusMaxMana += 20.0f;
-				_player.CurrentMana = Mathf.Min(_player.MaxManaEffective, _player.CurrentMana + 50.0f);
-				return "Restored +50 Mana & +20 Max Mana!";
-			});
-
-		AddShopItem(vbox, font, 5,
-			() => $"SHARPEN WEAPONS (+20% DMG, NOW {(int)Mathf.Round(_player.WeaponDamageMultiplier * 100)}%)  —  5 GOLD",
-			() =>
-			{
-				_player.WeaponDamageMultiplier += 0.20f;
-				return $"Weapon damage increased to {(int)Mathf.Round(_player.WeaponDamageMultiplier * 100)}%!";
-			});
-
-		AddShopItem(vbox, font, 6,
-			() => "MYSTERY WEAPON CRATE (RANDOM WEAPON)  —  6 GOLD",
-			() =>
-			{
-				string chosen = PickRandomShopWeapon();
-				Vector2 dropPos = _altar != null ? _altar.GlobalPosition + new Vector2(0, 42) : _player.GlobalPosition;
-				_level?.SpawnWeaponPickupAt(dropPos, chosen);
-				string wName = System.IO.Path.GetFileNameWithoutExtension(chosen).Replace("_", " ").ToUpper();
-				return $"Dropped {wName} next to the altar!";
-			});
-
-		AddShopItem(vbox, font, 8,
-			() => $"ANCIENT TOME (+1 SKILL POINT)  —  8 GOLD",
-			() =>
-			{
-				_player.SkillPoints++;
-				var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
-				hud?.UpdateAbilitiesUI();
-				return "Gained +1 Skill Point!";
-			});
+				AddOfferButton(vbox, font, offer);
+			}
+		}
 
 		_statusLabel = new Label();
-		_statusLabel.Text = "Spend your coins to prepare for the next floor.";
+		_statusLabel.Text = "Buy items to strengthen your hero. Purchased items stay greyed out.";
 		_statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		_statusLabel.AddThemeFontOverride("font", font);
-		_statusLabel.AddThemeFontSizeOverride("font_size", 15);
+		if (font != null) _statusLabel.AddThemeFontOverride("font", font);
+		_statusLabel.AddThemeFontSizeOverride("font_size", 16);
 		_statusLabel.AddThemeColorOverride("font_color", new Color(0.55f, 0.95f, 0.55f));
 		vbox.AddChild(_statusLabel);
 
 		var closeBtn = new Button();
 		closeBtn.Text = "CLOSE [ESC]";
-		closeBtn.CustomMinimumSize = new Vector2(140, 28);
-		closeBtn.AddThemeFontOverride("font", font);
+		closeBtn.CustomMinimumSize = new Vector2(150, 32);
+		if (font != null) closeBtn.AddThemeFontOverride("font", font);
 		closeBtn.AddThemeFontSizeOverride("font_size", 18);
 		closeBtn.Pressed += CloseShop;
 		vbox.AddChild(closeBtn);
@@ -275,36 +419,45 @@ public partial class SupplyShopOverlay : CanvasLayer
 		MainMenu.ConnectButtonSounds(this);
 	}
 
-	private void AddShopItem(Control parent, Font font, int cost, Func<string> labelGen, Func<string> onBuy)
+	private void AddOfferButton(Control parent, Font font, ShopOffer offer)
 	{
 		var btn = new Button();
-		btn.CustomMinimumSize = new Vector2(0, 32);
-		btn.AddThemeFontOverride("font", font);
-		btn.AddThemeFontSizeOverride("font_size", 16);
+		btn.CustomMinimumSize = new Vector2(0, 56);
+		if (font != null) btn.AddThemeFontOverride("font", font);
+		btn.AddThemeFontSizeOverride("font_size", 17);
 
 		var normalStyle = new StyleBoxFlat();
-		normalStyle.BgColor = new Color(0.15f, 0.15f, 0.18f, 0.95f);
-		normalStyle.BorderWidthBottom = normalStyle.BorderWidthLeft = normalStyle.BorderWidthRight = normalStyle.BorderWidthTop = 1;
-		normalStyle.BorderColor = new Color(0.45f, 0.45f, 0.5f);
+		normalStyle.BgColor = new Color(0.14f, 0.14f, 0.18f, 0.96f);
+		normalStyle.BorderWidthBottom = normalStyle.BorderWidthLeft = normalStyle.BorderWidthRight = normalStyle.BorderWidthTop = 2;
+		normalStyle.BorderColor = offer.AccentColor.Darkened(0.25f);
 
 		var hoverStyle = normalStyle.Duplicate() as StyleBoxFlat;
-		hoverStyle.BgColor = new Color(0.24f, 0.22f, 0.16f, 0.98f);
-		hoverStyle.BorderColor = new Color(0.95f, 0.78f, 0.25f);
+		hoverStyle.BgColor = new Color(0.22f, 0.20f, 0.15f, 0.98f);
+		hoverStyle.BorderColor = offer.AccentColor;
 
-		var disabledStyle = normalStyle.Duplicate() as StyleBoxFlat;
-		disabledStyle.BgColor = new Color(0.09f, 0.09f, 0.1f, 0.7f);
-		disabledStyle.BorderColor = new Color(0.25f, 0.25f, 0.25f);
+		var cantAffordStyle = normalStyle.Duplicate() as StyleBoxFlat;
+		cantAffordStyle.BgColor = new Color(0.10f, 0.10f, 0.12f, 0.80f);
+		cantAffordStyle.BorderColor = new Color(0.28f, 0.28f, 0.32f);
+
+		var purchasedStyle = normalStyle.Duplicate() as StyleBoxFlat;
+		purchasedStyle.BgColor = new Color(0.07f, 0.07f, 0.08f, 0.65f);
+		purchasedStyle.BorderColor = new Color(0.20f, 0.20f, 0.22f, 0.7f);
 
 		btn.AddThemeStyleboxOverride("normal", normalStyle);
 		btn.AddThemeStyleboxOverride("hover", hoverStyle);
 		btn.AddThemeStyleboxOverride("pressed", hoverStyle);
-		btn.AddThemeStyleboxOverride("disabled", disabledStyle);
+		btn.AddThemeStyleboxOverride("disabled", cantAffordStyle);
 
 		btn.Pressed += () =>
 		{
-			if (_player == null || _player.CoinCount < cost) return;
-			_player.CoinCount -= cost;
-			string msg = onBuy();
+			if (_player == null || _altar == null || offer.IsPurchased) return;
+			if (_player.CoinCount < offer.Cost) return;
+
+			_player.CoinCount -= offer.Cost;
+			offer.IsPurchased = true;
+			_altar.UpdatePromptText();
+
+			string msg = offer.OnPurchase != null ? offer.OnPurchase(_player, _level, _altar) : "Purchased!";
 			if (_statusLabel != null) _statusLabel.Text = msg;
 
 			var sound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
@@ -314,39 +467,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 		};
 
 		parent.AddChild(btn);
-		_shopButtons.Add((btn, cost, labelGen));
-	}
-
-	private string PickRandomShopWeapon()
-	{
-		var ownedPaths = new HashSet<string>();
-		if (_player != null)
-		{
-			foreach (var slot in _player.WeaponSlots)
-			{
-				if (slot.CurrentWeapon != null && !string.IsNullOrEmpty(slot.CurrentWeapon.ResourcePath))
-				{
-					ownedPaths.Add(slot.CurrentWeapon.ResourcePath);
-				}
-			}
-		}
-
-		var candidates = new List<string>();
-		foreach (var path in AllShopWeapons)
-		{
-			if (!ownedPaths.Contains(path))
-			{
-				candidates.Add(path);
-			}
-		}
-
-		if (candidates.Count == 0)
-		{
-			candidates.AddRange(AllShopWeapons);
-		}
-
-		int idx = (int)(GD.Randi() % (uint)candidates.Count);
-		return candidates[idx];
+		_offerButtons.Add((btn, offer, cantAffordStyle, purchasedStyle));
 	}
 
 	private void RefreshUI()
@@ -355,13 +476,26 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		if (_goldLabel != null)
 		{
-			_goldLabel.Text = $"YOUR GOLD: {_player.CoinCount}   |   HP: {(int)_player.CurrentHealth}/{(int)_player.MaxHealthEffective}   |   MP: {(int)_player.CurrentMana}/{(int)_player.MaxManaEffective}";
+			_goldLabel.Text = $"GOLD: {_player.CoinCount}   |   HP: {(int)_player.CurrentHealth}/{(int)_player.MaxHealthEffective} (Regen {_player.HealthRegenEffective:0.#}/s)   |   MP: {(int)_player.CurrentMana}/{(int)_player.MaxManaEffective}";
 		}
 
-		foreach (var item in _shopButtons)
+		foreach (var (btn, offer, cantAffordStyle, purchasedStyle) in _offerButtons)
 		{
-			item.btn.Text = item.labelGen();
-			item.btn.Disabled = _player.CoinCount < item.cost;
+			if (offer.IsPurchased)
+			{
+				// Купленный товар становится серым и неактивным, остальные остаются на своих местах
+				btn.Text = $"[SOLD] {offer.Title}\n{offer.Description}";
+				btn.Disabled = true;
+				btn.AddThemeStyleboxOverride("disabled", purchasedStyle);
+				btn.AddThemeColorOverride("font_disabled_color", new Color(0.42f, 0.42f, 0.46f));
+			}
+			else
+			{
+				btn.Text = $"[{offer.Category}] {offer.Title}  —  {offer.Cost} GOLD\n{offer.Description}";
+				btn.Disabled = _player.CoinCount < offer.Cost;
+				btn.AddThemeStyleboxOverride("disabled", cantAffordStyle);
+				btn.AddThemeColorOverride("font_disabled_color", new Color(0.62f, 0.62f, 0.66f));
+			}
 		}
 	}
 

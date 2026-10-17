@@ -4,8 +4,61 @@ public partial class Ghost : Enemy
 {
 	protected override Color WarningLabelColor => new Color(0.2f, 0.6f, 1.0f);
 
+	private PointLight2D _ghostLight;
+	private float _glowPulseTime = 0.0f;
+
+	public override void _Ready()
+	{
+		base._Ready();
+		if (_sprite != null)
+		{
+			_sprite.Material = new CanvasItemMaterial
+			{
+				LightMode = CanvasItemMaterial.LightModeEnum.Unshaded
+			};
+			_sprite.SelfModulate = new Color(1.25f, 1.38f, 1.55f, 1.0f);
+		}
+		SetupGhostGlow();
+	}
+
+	private void SetupGhostGlow()
+	{
+		_ghostLight = new PointLight2D();
+		_ghostLight.Name = "GhostSpectralLight";
+		_ghostLight.Position = new Vector2(0, -6);
+		_ghostLight.ShadowEnabled = false;
+		_ghostLight.Color = new Color(0.55f, 0.92f, 1.0f, 1.0f);
+		_ghostLight.Energy = 1.45f;
+
+		var gradient = new Gradient();
+		gradient.Colors = new Color[]
+		{
+			new Color(0.95f, 0.99f, 1.0f, 1.0f),
+			new Color(0.5f, 0.88f, 1.0f, 0.72f),
+			new Color(0.0f, 0.0f, 0.0f, 0.0f)
+		};
+		gradient.Offsets = new float[] { 0.0f, 0.50f, 1.0f };
+
+		var gradTex = new GradientTexture2D();
+		gradTex.Gradient = gradient;
+		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
+		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
+		gradTex.FillTo = new Vector2(0.5f, 0.0f);
+		gradTex.Width = 70;
+		gradTex.Height = 70;
+
+		_ghostLight.Texture = gradTex;
+		AddChild(_ghostLight);
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
+		if (_ghostLight != null && GodotObject.IsInstanceValid(_ghostLight))
+		{
+			_glowPulseTime += (float)delta * 3.5f;
+			_ghostLight.Energy = 1.40f + Mathf.Sin(_glowPulseTime) * 0.20f;
+		}
+
 		if (_player == null || !GodotObject.IsInstanceValid(_player) || Config == null || CurrentHealth <= 0)
 		{
 			Velocity = Velocity.Lerp(Vector2.Zero, 0.1f);
@@ -56,7 +109,7 @@ public partial class Ghost : Enemy
 
 			if (direction != Vector2.Zero)
 			{
-				direction = ApplyAntiStuck(direction, delta, () => _navigationPath.Clear());
+				direction = ApplyAntiStuck(direction, delta, () => _navigationPath?.Clear());
 			}
 
 			Vector2 targetVelocity = direction * currentSpeed;

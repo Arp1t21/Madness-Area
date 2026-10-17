@@ -16,6 +16,9 @@ public class SaveData
 	public float CurrentMana { get; set; } = 100f;
 	public float BonusMaxHealth { get; set; } = 0.0f;
 	public float BonusMaxMana { get; set; } = 0.0f;
+	public float BonusHealthRegen { get; set; } = 0.0f;
+	public float BonusManaRegen { get; set; } = 0.0f;
+	public float BonusMoveSpeed { get; set; } = 0.0f;
 	public float WeaponDamageMultiplier { get; set; } = 1.0f;
 	public int SkillPoints { get; set; } = 0;
 	public int Ability1Level { get; set; } = 0;

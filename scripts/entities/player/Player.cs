@@ -30,11 +30,17 @@ public partial class Player : CharacterBody2D
 	public float CurrentMana;
 	public float BonusMaxHealth = 0.0f;
 	public float BonusMaxMana = 0.0f;
+	public float BonusHealthRegen = 0.0f;
+	public float BonusManaRegen = 0.0f;
+	public float BonusMoveSpeed = 0.0f;
 	public float WeaponDamageMultiplier = 1.0f;
 	public int CoinCount = 0;
 
 	public float MaxHealthEffective => (Config != null ? Config.MaxHealth : 100.0f) + BonusMaxHealth;
 	public float MaxManaEffective => (Config != null ? Config.MaxMana : 100.0f) + BonusMaxMana;
+	public float HealthRegenEffective => (Config != null ? Config.HealthRegen : 0.0f) + BonusHealthRegen;
+	public float ManaRegenEffective => (Config != null ? Config.ManaRegen : 0.0f) + BonusManaRegen;
+	public float WalkSpeedEffective => (Config != null ? Config.WalkSpeed : 60.0f) + BonusMoveSpeed;
 
 	private StatusEffectManager _statusManager;
 	private Vector2 _externalVelocity = Vector2.Zero;
@@ -47,6 +53,10 @@ public partial class Player : CharacterBody2D
 	public int Ability2Level = 0; // Passive Shield + Active Arcane Barrier & Dash (V)
 	public int SkillPoints = 0;
 
+	[ExportGroup("Abilities")]
+	[Export] public float FireballBaseDamage = 20.0f;
+	[Export] public float FireballDamagePerLevel = 6.0f;
+
 	public float FireballCooldownTimer = 0.0f;
 	public const float FireballCooldownMax = 10.0f;
 
@@ -57,6 +67,7 @@ public partial class Player : CharacterBody2D
 	private double _shieldPulseTime = 0.0;
 
 	private PackedScene _fireballScene;
+	public CharacterAbilitySet CharacterAbilities { get; private set; }
 
 	public void RegisterInteractable(IInteractable interactable)
 	{
@@ -86,18 +97,27 @@ public partial class Player : CharacterBody2D
 		// Гарантируем, что бинды и аудио-шины инициализированы даже при запуске напрямую со сцены уровня
 		SettingsManager.ApplySettings();
 
-		// Подгружаем конфиг выбранного героя из сохранения (Knight или Magician)
+		// Подгружаем конфиг выбранного героя из сохранения (Knight, Magician, Rogue, Berserker)
 		if (SaveManager.CurrentSave != null && !string.IsNullOrEmpty(SaveManager.CurrentSave.CharacterName))
 		{
-			string charPath = SaveManager.CurrentSave.CharacterName.Equals("Magician", StringComparison.OrdinalIgnoreCase)
-				? "res://data/characters/magician.tres"
-				: "res://data/characters/knight.tres";
+			string savedName = SaveManager.CurrentSave.CharacterName;
+			string charPath = "res://data/characters/knight.tres";
+			if (savedName.Equals("Magician", StringComparison.OrdinalIgnoreCase))
+				charPath = "res://data/characters/magician.tres";
+			else if (savedName.Equals("Rogue", StringComparison.OrdinalIgnoreCase))
+				charPath = "res://data/characters/rogue.tres";
+			else if (savedName.Equals("Berserker", StringComparison.OrdinalIgnoreCase))
+				charPath = "res://data/characters/berserker.tres";
+
 			var loadedConfig = GD.Load<PlayerData>(charPath);
 			if (loadedConfig != null)
 			{
 				Config = loadedConfig;
 			}
 		}
+
+		// Создаем индивидуальный набор способностей для текущего персонажа (KnightAbilitySet / MagicianAbilitySet)
+		CharacterAbilities = CharacterAbilitySet.CreateForCharacter(this, Config?.CharacterName ?? "Knight");
 
 		_animatedSprite.Visible = true;
 
@@ -129,6 +149,9 @@ public partial class Player : CharacterBody2D
 			var save = SaveManager.CurrentSave;
 			BonusMaxHealth = save.BonusMaxHealth;
 			BonusMaxMana = save.BonusMaxMana;
+			BonusHealthRegen = save.BonusHealthRegen;
+			BonusManaRegen = save.BonusManaRegen;
+			BonusMoveSpeed = save.BonusMoveSpeed;
 			WeaponDamageMultiplier = save.WeaponDamageMultiplier > 0.01f ? save.WeaponDamageMultiplier : 1.0f;
 			CurrentHealth = Mathf.Clamp(save.CurrentHealth, 1.0f, MaxHealthEffective);
 			CurrentMana = Mathf.Clamp(save.CurrentMana, 0.0f, MaxManaEffective);
@@ -162,6 +185,11 @@ public partial class Player : CharacterBody2D
 
 			if (!hasAnySavedWeapon)
 			{
+				CurrentHealth = MaxHealthEffective;
+				CurrentMana = MaxManaEffective;
+				save.CurrentHealth = CurrentHealth;
+				save.CurrentMana = CurrentMana;
+
 				if (Config != null && Config.StartingWeapons != null)
 				{
 					save.WeaponResourcePaths = new List<string>();
@@ -249,6 +277,8 @@ public partial class Player : CharacterBody2D
 
 	public override void _Draw()
 	{
+		CharacterAbilities?.DrawSpecialAttackIndicator(this);
+
 		if (!IsShieldActive) return;
 
 		float pulse = 1.0f + Mathf.Sin((float)_shieldPulseTime * 8.0f) * 0.08f;
@@ -294,6 +324,7 @@ public partial class Player : CharacterBody2D
 
 		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root))
 		{
+			CharacterAbilities?.UpdateSpecialAttack(delta, false);
 			Velocity = Vector2.Zero;
 			MoveAndSlide();
 			UpdateAnimation(Vector2.Zero);
@@ -304,7 +335,7 @@ public partial class Player : CharacterBody2D
 
 		float slowStrength = _statusManager.GetEffectStrength(StatusEffectType.Slow);
 		float speedMod = 1.0f - Mathf.Clamp(slowStrength, 0.0f, 0.95f);
-		float currentSpeed = Config.WalkSpeed * speedMod * World.Scale;
+		float currentSpeed = WalkSpeedEffective * speedMod * World.Scale;
 
 		bool isRunningPressed = direction != Vector2.Zero && Input.IsActionPressed("shift");
 		bool hasManaToRun = CurrentMana >= Config.ManaCostPerSecondRunning * (float)delta;
@@ -335,6 +366,12 @@ public partial class Player : CharacterBody2D
 
 		HandleWeaponSwitching();
 
+		// Специальная атака на Правую кнопку мыши (ПКМ) — у каждого персонажа индивидуальная
+		bool isRmbPressed = Input.IsMouseButtonPressed(MouseButton.Right)
+			&& !_statusManager.HasEffect(StatusEffectType.Disarm)
+			&& !_statusManager.HasEffect(StatusEffectType.Stun);
+		CharacterAbilities?.UpdateSpecialAttack(delta, isRmbPressed);
+
 		if (Input.IsActionJustPressed("reload"))
 		{
 			if (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count)
@@ -343,7 +380,10 @@ public partial class Player : CharacterBody2D
 			}
 		}
 
-		if (Input.IsActionPressed("attack") && !_statusManager.HasEffect(StatusEffectType.Disarm) && !_statusManager.HasEffect(StatusEffectType.Stun))
+		if (Input.IsActionPressed("attack")
+			&& !_statusManager.HasEffect(StatusEffectType.Disarm)
+			&& !_statusManager.HasEffect(StatusEffectType.Stun)
+			&& (CharacterAbilities == null || !CharacterAbilities.IsNormalAttackBlocked))
 		{
 			ExecuteAttack();
 		}
@@ -389,18 +429,10 @@ public partial class Player : CharacterBody2D
 			amount *= (1.0f - Mathf.Clamp(res, 0.0f, 0.95f));
 		}
 
-		// Пассивное снижение урона от Щита (способность 2)
-		if (Ability2Level > 0)
+		// Применяем пассивную и активную защиту способностей текущего персонажа
+		if (CharacterAbilities != null)
 		{
-			float shieldRes = 0.05f + (Ability2Level - 1) * 0.05f;
-			amount *= (1.0f - shieldRes);
-		}
-
-		// Активный энергетический барьер (по клавише V) поглощает еще 60% урона и блокирует отбрасывание
-		if (IsShieldActive)
-		{
-			amount *= 0.4f;
-			knockForce = 0.0f;
+			amount = CharacterAbilities.ApplyPassiveAndActiveDefense(amount, ref knockForce);
 		}
 
 		CurrentHealth -= amount;
@@ -527,16 +559,23 @@ public partial class Player : CharacterBody2D
 	{
 		if (Config == null) return;
 
+		// Регенерация ХП и маны работает во время обратного отсчета до начала волны и во время самой волны,
+		// но отключается после зачистки этажа, чтобы игрок не стоял на пустом этаже, абузя восстановление
+		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
+		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+		bool canRegen = (waveManager != null && waveManager.WaveInProgress) || (hud != null && hud.IsCountingDown);
+		if (!canRegen) return;
+
 		float maxHp = MaxHealthEffective;
 		if (CurrentHealth < maxHp)
 		{
-			CurrentHealth = Mathf.Min(maxHp, CurrentHealth + Config.HealthRegen * (float)delta);
+			CurrentHealth = Mathf.Min(maxHp, CurrentHealth + HealthRegenEffective * (float)delta);
 		}
 
 		float maxMp = MaxManaEffective;
 		if (CurrentMana < maxMp)
 		{
-			CurrentMana = Mathf.Min(maxMp, CurrentMana + Config.ManaRegen * (float)delta);
+			CurrentMana = Mathf.Min(maxMp, CurrentMana + ManaRegenEffective * (float)delta);
 		}
 	}
 
@@ -607,6 +646,8 @@ public partial class Player : CharacterBody2D
 
 	private void HandleWeaponSwitching()
 	{
+		if (CharacterAbilities != null && CharacterAbilities.IsNormalAttackBlocked) return;
+
 		if (Input.IsActionJustPressed("weapon_1")) SelectSlot(0);
 		else if (Input.IsActionJustPressed("weapon_2")) SelectSlot(1);
 		else if (Input.IsActionJustPressed("weapon_3")) SelectSlot(2);
@@ -614,6 +655,8 @@ public partial class Player : CharacterBody2D
 
 	public override void _UnhandledInput(InputEvent @event)
 	{
+		if (CharacterAbilities != null && CharacterAbilities.IsNormalAttackBlocked) return;
+
 		if (@event is InputEventMouseButton mb && mb.Pressed && WeaponSlots.Count > 0)
 		{
 			if (mb.ButtonIndex == MouseButton.WheelUp || mb.ButtonIndex == MouseButton.WheelDown)
@@ -708,74 +751,25 @@ public partial class Player : CharacterBody2D
 		ft.Init(message, color);
 	}
 
+	public void ActivateShieldEffect(float duration)
+	{
+		ActiveShieldTimer = duration;
+		_shieldPulseTime = 0.0;
+	}
+
+	public void SetDashVelocity(Vector2 velocity)
+	{
+		_externalVelocity = velocity;
+	}
+
 	private void UseFireball()
 	{
-		if (Ability1Level <= 0 || FireballCooldownTimer > 0.0f) return;
-
-		if (CurrentMana < 20.0f)
-		{
-			ShowNoManaWarning();
-			return;
-		}
-
-		CurrentMana -= 20.0f;
-		FireballCooldownTimer = FireballCooldownMax;
-
-		Vector2 mousePos = GetGlobalMousePosition();
-		Vector2 dir = (mousePos - GlobalPosition).Normalized();
-
-		Fireball fireball = _fireballScene != null ? _fireballScene.Instantiate<Fireball>() : new Fireball();
-		fireball.GlobalPosition = GlobalPosition;
-		fireball.Direction = dir;
-		fireball.Damage = (6.0f + (Ability1Level - 1) * 6.0f) * WeaponDamageMultiplier;
-		GetParent().AddChild(fireball);
+		CharacterAbilities?.UseAbility1();
 	}
 
 	private void UseArcaneShieldDash()
 	{
-		if (Ability2Level <= 0 || ShieldCooldownTimer > 0.0f) return;
-
-		const float manaCost = 15.0f;
-		if (CurrentMana < manaCost)
-		{
-			ShowNoManaWarning();
-			return;
-		}
-
-		CurrentMana -= manaCost;
-		ShieldCooldownTimer = ShieldCooldownMax;
-		ActiveShieldTimer = 2.5f + (Ability2Level - 1) * 0.7f;
-		_shieldPulseTime = 0.0;
-
-		// Рывок по направлению движения (или к курсору мыши, если игрок стоит на месте)
-		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
-		if (moveDir == Vector2.Zero)
-		{
-			moveDir = (GetGlobalMousePosition() - GlobalPosition).Normalized();
-		}
-		_externalVelocity = moveDir.Normalized() * 680.0f;
-
-		// Импульс щита отбрасывает ближайших врагов и наносит магический урон
-		float pulseRadius = 52.0f * World.Scale;
-		float pulseDamage = (4.0f + Ability2Level * 3.0f) * WeaponDamageMultiplier;
-		foreach (Node node in GetTree().GetNodesInGroup("enemy"))
-		{
-			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
-			{
-				if (GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
-				{
-					enemy.TakeDamage(pulseDamage, GlobalPosition, 16.0f, false);
-				}
-			}
-		}
-
-		var buffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-		if (buffSound != null)
-		{
-			MainMenu.PlayUISound(buffSound);
-		}
-
-		QueueRedraw();
+		CharacterAbilities?.UseAbility2();
 	}
 
 	public void OnWaveCleared()

@@ -184,7 +184,7 @@ public partial class Enemy : CharacterBody2D
 					Vector2 desiredFlank = _player.GlobalPosition + new Vector2(Mathf.Cos(_flankAngle), Mathf.Sin(_flankAngle)) * flankRadius;
 					navGoal = level.GetWalkableFlankTarget(_player.GlobalPosition, desiredFlank);
 				}
-				_navigationPath = level.GetPathToPlayer(GlobalPosition, navGoal);
+				_navigationPath = level.GetPathToPlayer(GlobalPosition, navGoal) ?? new List<Vector2>();
 			}
 		}
 
@@ -445,14 +445,15 @@ public partial class Enemy : CharacterBody2D
 
 	protected void FlashRed()
 	{
+		if (_sprite == null) return;
 		Color flashColor = Config?.FlashColor ?? new Color(1, 0, 0);
-		Modulate = flashColor;
+		_sprite.Modulate = flashColor;
 		var timer = GetTree().CreateTimer(0.1f, processAlways: false);
 		timer.Timeout += () =>
 		{
-			if (GodotObject.IsInstanceValid(this) && CurrentHealth > 0)
+			if (GodotObject.IsInstanceValid(this) && GodotObject.IsInstanceValid(_sprite) && CurrentHealth > 0)
 			{
-				Modulate = new Color(1, 1, 1);
+				_sprite.Modulate = new Color(1, 1, 1);
 			}
 		};
 	}

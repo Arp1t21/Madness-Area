@@ -1,0 +1,15 @@
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" uid="uid://bljefiu15ackd" path="res://scripts/resources/EnemyData.cs" id="1_script"]
+
+[resource]
+script = ExtResource("1_script")
+EnemyName = "Chort"
+MaxHealth = 22.0
+Speed = 52.0
+Damage = 8
+AttackRange = 22.0
+StopDuration = 0.16
+CoinDropChance = 0.3
+ManaCrystalDropChance = 0.45
+metadata/_custom_type_script = "uid://bljefiu15ackd"

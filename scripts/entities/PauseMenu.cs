@@ -107,6 +107,9 @@ public partial class PauseMenu : CanvasLayer
 			currentSave.CurrentMana = player.CurrentMana;
 			currentSave.BonusMaxHealth = player.BonusMaxHealth;
 			currentSave.BonusMaxMana = player.BonusMaxMana;
+			currentSave.BonusHealthRegen = player.BonusHealthRegen;
+			currentSave.BonusManaRegen = player.BonusManaRegen;
+			currentSave.BonusMoveSpeed = player.BonusMoveSpeed;
 			currentSave.WeaponDamageMultiplier = player.WeaponDamageMultiplier;
 			currentSave.SkillPoints = player.SkillPoints;
 			currentSave.Ability1Level = player.Ability1Level;

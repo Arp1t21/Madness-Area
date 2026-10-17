@@ -56,7 +56,7 @@ public partial class Archer : Enemy
 
 			if (direction != Vector2.Zero)
 			{
-				direction = ApplyAntiStuck(direction, delta, () => _navigationPath.Clear());
+				direction = ApplyAntiStuck(direction, delta, () => _navigationPath?.Clear());
 			}
 
 			Vector2 targetVelocity = direction * currentSpeed;

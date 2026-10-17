@@ -1,0 +1,120 @@
+[gd_resource type="Resource" script_class="PlayerData" load_steps=15 format=3]
+
+[ext_resource type="Script" uid="uid://qqaqh6s4vgb4" path="res://scripts/resources/PlayerData.cs" id="1_script"]
+[ext_resource type="Resource" path="res://data/waepons/dagger.tres" id="2_dagger"]
+[ext_resource type="Resource" path="res://data/waepons/revolver.tres" id="3_revolver"]
+[ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="4_atlas"]
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle0"]
+atlas = ExtResource("4_atlas")
+region = Rect2(128, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle1"]
+atlas = ExtResource("4_atlas")
+region = Rect2(144, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle2"]
+atlas = ExtResource("4_atlas")
+region = Rect2(160, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_idle3"]
+atlas = ExtResource("4_atlas")
+region = Rect2(176, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run0"]
+atlas = ExtResource("4_atlas")
+region = Rect2(192, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run1"]
+atlas = ExtResource("4_atlas")
+region = Rect2(208, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run2"]
+atlas = ExtResource("4_atlas")
+region = Rect2(224, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_run3"]
+atlas = ExtResource("4_atlas")
+region = Rect2(240, 36, 16, 28)
+
+[sub_resource type="AtlasTexture" id="AtlasTexture_hit"]
+atlas = ExtResource("4_atlas")
+region = Rect2(256, 36, 16, 28)
+
+[sub_resource type="SpriteFrames" id="SpriteFrames_rogue"]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_hit")
+}],
+"loop": false,
+"name": &"hit",
+"speed": 10.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_idle3")
+}],
+"loop": true,
+"name": &"idle",
+"speed": 6.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run3")
+}],
+"loop": true,
+"name": &"run",
+"speed": 12.0
+}, {
+"frames": [{
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run0")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run1")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run2")
+}, {
+"duration": 1.0,
+"texture": SubResource("AtlasTexture_run3")
+}],
+"loop": true,
+"name": &"walk",
+"speed": 9.0
+}]
+
+[resource]
+script = ExtResource("1_script")
+CharacterName = "Rogue"
+MaxHealth = 45
+HealthRegen = 0.3
+MaxMana = 120
+ManaRegen = 2.5
+ManaCostPerSecondRunning = 0.0
+WalkSpeed = 74.0
+RunMultiplier = 1.4
+MeleeResistance = 0.1
+RangedResistance = 0.1
+StartingWeapons = Array[Object]([ExtResource("2_dagger"), ExtResource("3_revolver")])
+CharacterAnimations = SubResource("SpriteFrames_rogue")
+metadata/_custom_type_script = "uid://qqaqh6s4vgb4"

@@ -18,7 +18,16 @@ public partial class Coin : Node2D
 		_area.AreaEntered += _on_area_2d_area_entered;
 
 		var sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		if (sprite != null) sprite.Play("idle");
+		if (sprite != null)
+		{
+			sprite.Play("idle");
+			sprite.Material = new CanvasItemMaterial
+			{
+				LightMode = CanvasItemMaterial.LightModeEnum.Unshaded
+			};
+		}
+
+		SetupGlow();
 
 		if (_coinSound == null)
 		{
@@ -26,6 +35,35 @@ public partial class Coin : Node2D
 		}
 
 		PlaySpawnAnimation();
+	}
+
+	private void SetupGlow()
+	{
+		var light = new PointLight2D();
+		light.Name = "CoinGlow";
+		light.ShadowEnabled = false;
+		light.Color = new Color(1.0f, 0.85f, 0.25f, 1.0f);
+		light.Energy = 0.85f;
+
+		var gradient = new Gradient();
+		gradient.Colors = new Color[]
+		{
+			new Color(1.0f, 0.96f, 0.65f, 1.0f),
+			new Color(1.0f, 0.78f, 0.20f, 0.55f),
+			new Color(0.0f, 0.0f, 0.0f, 0.0f)
+		};
+		gradient.Offsets = new float[] { 0.0f, 0.45f, 1.0f };
+
+		var gradTex = new GradientTexture2D();
+		gradTex.Gradient = gradient;
+		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
+		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
+		gradTex.FillTo = new Vector2(0.5f, 0.0f);
+		gradTex.Width = 64;
+		gradTex.Height = 64;
+
+		light.Texture = gradTex;
+		AddChild(light);
 	}
 
 	private void PlaySpawnAnimation()

@@ -1,7 +1,7 @@
 [gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3 uid="uid://cqsap4phewht4"]
 
 [ext_resource type="PackedScene" path="res://scene/weapons/bullets/magic_bolt.tscn" id="1_bolt"]
-[ext_resource type="PackedScene" path="res://scene/weapons/magic_staff.tscn" id="2_staff"]
+[ext_resource type="PackedScene" uid="uid://cyy1ytgk80kd3" path="res://scene/weapons/magic_staff.tscn" id="2_staff"]
 [ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="3_script"]
 
 [resource]
@@ -15,9 +15,9 @@ ManaCost = 4.0
 WeaponVisualPrefab = ExtResource("2_staff")
 IsRanged = true
 BulletPrefab = ExtResource("1_bolt")
-BulletSpeed = 420.0
-Spread = 0.02
+BulletSpeed = 380.0
+Spread = 0.05
 IsPiercing = true
 MaxAmmo = 999
-ReloadTime = 0.5
+ReloadTime = 0.01
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

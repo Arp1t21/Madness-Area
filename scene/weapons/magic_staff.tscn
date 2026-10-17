@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=5 format=3 uid="uid://cyy1ytgk80kd3"]
 
 [ext_resource type="Script" uid="uid://m5n70dsws8w1" path="res://scripts/entities/weapons/RangedWeaponVisual.cs" id="1_ranged"]
 [ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="2_atlas"]

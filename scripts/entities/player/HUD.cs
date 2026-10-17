@@ -20,11 +20,13 @@ public partial class HUD : CanvasLayer
 	private Control _markersContainer;
 	private float _time = 5.0f;
 	private bool _isCountingDown = true;
+	public bool IsCountingDown => _isCountingDown;
 	private float _lastMaxHealth = 0;
 
 	private Player _player;
 	private WaveManager _waveManager;
 	private ArrowIndicator _arrowIndicator;
+	private ArrowIndicator _shopArrowIndicator;
 
 	private Control _abilitiesContainer;
 	private AbilitySlotUI _ability1Slot;
@@ -34,9 +36,10 @@ public partial class HUD : CanvasLayer
 	// Новые элементы HUD: этаж/статус зачистки (сверху справа), слоты оружия (снизу справа), полоска здоровья Босса
 	private Label _floorEnemiesLabel;
 	private Control _weaponsContainer;
-	private Panel[] _weaponSlotPanels = new Panel[3];
-	private Label[] _weaponSlotLabels = new Label[3];
+	private WeaponShowcaseSlot[] _weaponSlots = new WeaponShowcaseSlot[3];
 	private Label _ammoLabel;
+	private Panel _weaponTooltipPanel;
+	private Label _weaponTooltipLabel;
 
 	private Control _bossBarContainer;
 	private Label _bossNameLabel;
@@ -142,10 +145,17 @@ public partial class HUD : CanvasLayer
 			CallDeferred(nameof(StartGame));
 		}
 
-		// Создаем стрелку для лестницы
+		// Создаем стрелку для лестницы (зеленая) и для магазина снабжения (золотая)
 		_arrowIndicator = new ArrowIndicator();
 		_arrowIndicator.Visible = false;
 		_hudRoot.AddChild(_arrowIndicator);
+
+		_shopArrowIndicator = new ArrowIndicator
+		{
+			Color = new Color(1.0f, 0.84f, 0.18f, 0.95f)
+		};
+		_shopArrowIndicator.Visible = false;
+		_hudRoot.AddChild(_shopArrowIndicator);
 
 		CreateAbilitiesUI();
 		CreateFloorAndEnemiesUI(font);
@@ -184,8 +194,9 @@ public partial class HUD : CanvasLayer
 		// Логика таймера
 		ProcessTimer((float)delta);
 
-		// Стрелка к лестнице
+		// Стрелки к лестнице и к магазину
 		UpdateExitLadderArrow();
+		UpdateShopAltarArrow();
 
 		// Обновление состояния кд и плюсиков способностей
 		if (IsInstanceValid(_ability1Slot)) _ability1Slot.UpdateState();
@@ -254,27 +265,36 @@ public partial class HUD : CanvasLayer
 
 	private void UpdateExitLadderArrow()
 	{
-		if (_arrowIndicator == null) return;
-
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-		var exitLadder = level?.GetExitLadderNode();
-		
-		if (exitLadder == null || !GodotObject.IsInstanceValid(exitLadder)) {
-			_arrowIndicator.Visible = false;
+		UpdateTargetArrow(_arrowIndicator, level?.GetExitLadderNode(), 25.0f, -22.0f);
+	}
+
+	private void UpdateShopAltarArrow()
+	{
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		UpdateTargetArrow(_shopArrowIndicator, level?.GetShopAltarNode(), 36.0f, -34.0f);
+	}
+
+	private void UpdateTargetArrow(ArrowIndicator indicator, Node2D targetNode, float margin, float hoverOffsetY)
+	{
+		if (indicator == null) return;
+
+		if (targetNode == null || !GodotObject.IsInstanceValid(targetNode))
+		{
+			indicator.Visible = false;
 			return;
 		}
 
-		_arrowIndicator.Visible = true;
+		indicator.Visible = true;
 
 		// 1. Пульсация размера (на 10% меньше)
 		float pulseScale = (1.0f + (float)Math.Sin(Time.GetTicksMsec() * 0.01f) * 0.15f) * 0.9f;
-		_arrowIndicator.Scale = new Vector2(pulseScale, pulseScale);
+		indicator.Scale = new Vector2(pulseScale, pulseScale);
 
-		Vector2 screenPos = exitLadder.GetGlobalTransformWithCanvas().Origin;
+		Vector2 screenPos = targetNode.GetGlobalTransformWithCanvas().Origin;
 		Vector2 viewportSize = GetViewport().GetVisibleRect().Size;
 		Vector2 center = viewportSize / 2.0f;
 
-		float margin = 25.0f;
 		float minX = margin;
 		float maxX = viewportSize.X - margin;
 		float minY = margin;
@@ -283,7 +303,8 @@ public partial class HUD : CanvasLayer
 		Vector2 arrowPos = screenPos;
 		float angle = 0.0f;
 
-		if (screenPos.X < minX || screenPos.X > maxX || screenPos.Y < minY || screenPos.Y > maxY) {
+		if (screenPos.X < minX || screenPos.X > maxX || screenPos.Y < minY || screenPos.Y > maxY)
+		{
 			// Вне экрана: прижимаем к краю
 			Vector2 dir = (screenPos - center).Normalized();
 			float tX = float.MaxValue;
@@ -297,24 +318,27 @@ public partial class HUD : CanvasLayer
 			float t = Math.Min(tX, tY);
 			arrowPos = center + dir * t;
 			angle = (screenPos - arrowPos).Angle();
-			
-			// Качание вперед-назад по направлению к лестнице
+
+			// Качание вперед-назад по направлению к цели
 			float bounce = (float)Math.Sin(Time.GetTicksMsec() * 0.015f) * 5.0f;
 			arrowPos += new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * bounce;
-		} else {
-			// На экране: парит над лестницей и указывает вниз
-			arrowPos = screenPos + new Vector2(0, -22);
+		}
+		else
+		{
+			// На экране: парит над объектом и указывает вниз
+			arrowPos = screenPos + new Vector2(0, hoverOffsetY);
 			angle = (float)(Math.PI / 2.0f); // 90 градусов (вниз)
-			
+
 			// Плавное покачивание по высоте
 			float wave = (float)Math.Sin(Time.GetTicksMsec() * 0.007f) * 4.0f;
 			arrowPos.Y += wave;
 		}
 
-		_arrowIndicator.Position = arrowPos / World.UiScale;
-		if (Math.Abs(_arrowIndicator.Angle - angle) > 0.001f) {
-			_arrowIndicator.Angle = angle;
-			_arrowIndicator.QueueRedraw();
+		indicator.Position = arrowPos / World.UiScale;
+		if (Math.Abs(indicator.Angle - angle) > 0.001f)
+		{
+			indicator.Angle = angle;
+			indicator.QueueRedraw();
 		}
 	}
 
@@ -371,9 +395,9 @@ public partial class HUD : CanvasLayer
 		_weaponsContainer.Name = "WeaponsContainer";
 		_weaponsContainer.LayoutMode = 1;
 		_weaponsContainer.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
-		_weaponsContainer.OffsetLeft = -152;
+		_weaponsContainer.OffsetLeft = -140;
 		_weaponsContainer.OffsetRight = -6;
-		_weaponsContainer.OffsetTop = -44;
+		_weaponsContainer.OffsetTop = -56;
 		_weaponsContainer.OffsetBottom = -6;
 		_hudRoot.AddChild(_weaponsContainer);
 
@@ -381,45 +405,76 @@ public partial class HUD : CanvasLayer
 		_ammoLabel.Name = "AmmoLabel";
 		_ammoLabel.LayoutMode = 1;
 		_ammoLabel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
-		_ammoLabel.OffsetLeft = -146;
-		_ammoLabel.OffsetRight = 0;
+		_ammoLabel.OffsetLeft = -134;
+		_ammoLabel.OffsetRight = -2;
 		_ammoLabel.OffsetTop = 0;
 		_ammoLabel.OffsetBottom = 14;
 		_ammoLabel.HorizontalAlignment = HorizontalAlignment.Right;
 		if (font != null) _ammoLabel.AddThemeFontOverride("font", font);
 		_ammoLabel.AddThemeFontSizeOverride("font_size", 11);
-		_ammoLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.9f, 0.4f));
+		_ammoLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.9f, 0.45f));
 		_weaponsContainer.AddChild(_ammoLabel);
 
 		var hbox = new HBoxContainer();
 		hbox.LayoutMode = 1;
 		hbox.SetAnchorsPreset(Control.LayoutPreset.BottomRight);
-		hbox.OffsetLeft = -146;
+		hbox.OffsetLeft = -134;
 		hbox.OffsetRight = 0;
-		hbox.OffsetTop = -22;
+		hbox.OffsetTop = -36;
 		hbox.OffsetBottom = 0;
 		hbox.Alignment = BoxContainer.AlignmentMode.End;
-		hbox.AddThemeConstantOverride("separation", 4);
+		hbox.AddThemeConstantOverride("separation", 6);
 		_weaponsContainer.AddChild(hbox);
 
 		for (int i = 0; i < 3; i++)
 		{
-			var panel = new Panel();
-			panel.CustomMinimumSize = new Vector2(45, 22);
-			hbox.AddChild(panel);
-			_weaponSlotPanels[i] = panel;
-
-			var lbl = new Label();
-			lbl.LayoutMode = 1;
-			lbl.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-			lbl.HorizontalAlignment = HorizontalAlignment.Center;
-			lbl.VerticalAlignment = VerticalAlignment.Center;
-			if (font != null) lbl.AddThemeFontOverride("font", font);
-			lbl.AddThemeFontSizeOverride("font_size", 9);
-			lbl.ClipText = true;
-			panel.AddChild(lbl);
-			_weaponSlotLabels[i] = lbl;
+			var slot = new WeaponShowcaseSlot(i + 1, font);
+			hbox.AddChild(slot);
+			_weaponSlots[i] = slot;
 		}
+
+		// Панель подсказки характеристик оружия при наведении курсора на слот в инвентаре
+		_weaponTooltipPanel = new Panel();
+		_weaponTooltipPanel.Name = "WeaponTooltipPanel";
+		_weaponTooltipPanel.LayoutMode = 1;
+		_weaponTooltipPanel.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+		_weaponTooltipPanel.OffsetLeft = -168;
+		_weaponTooltipPanel.OffsetRight = 0;
+		_weaponTooltipPanel.OffsetTop = -44;
+		_weaponTooltipPanel.OffsetBottom = -3;
+		_weaponTooltipPanel.MouseFilter = Control.MouseFilterEnum.Ignore;
+		_weaponTooltipPanel.Visible = false;
+
+		var tipStyle = new StyleBoxFlat
+		{
+			BgColor = new Color(0.06f, 0.06f, 0.09f, 0.94f),
+			BorderColor = new Color(0.95f, 0.78f, 0.25f, 0.9f),
+			BorderWidthLeft = 1,
+			BorderWidthTop = 1,
+			BorderWidthRight = 1,
+			BorderWidthBottom = 1,
+			CornerRadiusTopLeft = 3,
+			CornerRadiusTopRight = 3,
+			CornerRadiusBottomLeft = 3,
+			CornerRadiusBottomRight = 3
+		};
+		_weaponTooltipPanel.AddThemeStyleboxOverride("panel", tipStyle);
+		_weaponsContainer.AddChild(_weaponTooltipPanel);
+
+		_weaponTooltipLabel = new Label();
+		_weaponTooltipLabel.LayoutMode = 1;
+		_weaponTooltipLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		_weaponTooltipLabel.OffsetLeft = 4;
+		_weaponTooltipLabel.OffsetRight = -4;
+		_weaponTooltipLabel.OffsetTop = 2;
+		_weaponTooltipLabel.OffsetBottom = -2;
+		_weaponTooltipLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		_weaponTooltipLabel.VerticalAlignment = VerticalAlignment.Center;
+		if (font != null) _weaponTooltipLabel.AddThemeFontOverride("font", font);
+		_weaponTooltipLabel.AddThemeFontSizeOverride("font_size", 10);
+		_weaponTooltipLabel.AddThemeConstantOverride("line_spacing", -2);
+		_weaponTooltipLabel.AddThemeColorOverride("font_color", new Color(0.96f, 0.94f, 0.86f));
+		_weaponTooltipPanel.AddChild(_weaponTooltipLabel);
 	}
 
 	private void UpdateWeaponsUI()
@@ -430,57 +485,61 @@ public partial class HUD : CanvasLayer
 			? _player.WeaponSlots[_player.CurrentSlotIndex]
 			: null;
 
+		string activeWeaponName = activeCtrl?.CurrentWeapon?.WeaponName ?? "";
+
 		if (activeCtrl != null && activeCtrl.UsesAmmo)
 		{
 			if (activeCtrl.IsReloading)
 			{
-				_ammoLabel.Text = $"RELOADING {(int)(activeCtrl.ReloadProgress * 100)}%";
+				_ammoLabel.Text = $"{activeWeaponName.ToUpper()} — RELOAD {(int)(activeCtrl.ReloadProgress * 100)}%";
 				_ammoLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.55f, 0.2f));
 			}
 			else
 			{
-				_ammoLabel.Text = $"AMMO: {activeCtrl.CurrentAmmo}/{activeCtrl.MaxAmmo} [R]";
-				_ammoLabel.AddThemeColorOverride("font_color", activeCtrl.CurrentAmmo > 0 ? new Color(1.0f, 0.9f, 0.4f) : new Color(1.0f, 0.25f, 0.25f));
+				_ammoLabel.Text = $"{activeWeaponName.ToUpper()} [{activeCtrl.CurrentAmmo}/{activeCtrl.MaxAmmo}]";
+				_ammoLabel.AddThemeColorOverride("font_color", activeCtrl.CurrentAmmo > 0 ? new Color(1.0f, 0.9f, 0.45f) : new Color(1.0f, 0.3f, 0.3f));
 			}
+		}
+		else if (!string.IsNullOrEmpty(activeWeaponName))
+		{
+			_ammoLabel.Text = activeWeaponName.ToUpper();
+			_ammoLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.86f, 0.62f));
 		}
 		else
 		{
 			_ammoLabel.Text = "";
 		}
 
+		WeaponData hoveredWeapon = null;
+		Vector2 mouseScreenPos = GetViewport().GetMousePosition();
+
 		for (int i = 0; i < 3; i++)
 		{
-			if (_weaponSlotPanels[i] == null || _weaponSlotLabels[i] == null) continue;
+			if (_weaponSlots[i] == null) continue;
 			bool isSelected = (_player.CurrentSlotIndex == i);
 			AttackController slotCtrl = i < _player.WeaponSlots.Count ? _player.WeaponSlots[i] : null;
-			string wName = slotCtrl?.CurrentWeapon?.WeaponName;
-			bool hasWeapon = !string.IsNullOrEmpty(wName);
+			WeaponData w = slotCtrl?.CurrentWeapon;
+			_weaponSlots[i].UpdateSlot(w, isSelected);
 
-			var style = new StyleBoxFlat
+			if (w != null && _weaponSlots[i].GetGlobalRect().HasPoint(mouseScreenPos))
 			{
-				BgColor = isSelected ? new Color(0.24f, 0.2f, 0.12f, 0.92f) : new Color(0.1f, 0.1f, 0.12f, 0.78f),
-				BorderColor = isSelected ? new Color(0.95f, 0.78f, 0.22f) : new Color(0.32f, 0.32f, 0.36f),
-				BorderWidthLeft = 1,
-				BorderWidthTop = 1,
-				BorderWidthRight = 1,
-				BorderWidthBottom = 1,
-				CornerRadiusTopLeft = 2,
-				CornerRadiusTopRight = 2,
-				CornerRadiusBottomLeft = 2,
-				CornerRadiusBottomRight = 2
-			};
-			_weaponSlotPanels[i].AddThemeStyleboxOverride("panel", style);
+				hoveredWeapon = w;
+			}
+		}
 
-			if (hasWeapon)
+		if (IsInstanceValid(_weaponTooltipPanel) && IsInstanceValid(_weaponTooltipLabel))
+		{
+			if (hoveredWeapon != null)
 			{
-				string shortName = wName.Length > 9 ? wName.Substring(0, 9) : wName;
-				_weaponSlotLabels[i].Text = $"{i + 1}: {shortName}";
-				_weaponSlotLabels[i].AddThemeColorOverride("font_color", isSelected ? new Color(1f, 0.95f, 0.7f) : new Color(0.8f, 0.8f, 0.85f));
+				_weaponTooltipLabel.Text = WeaponShowcaseSlot.FormatWeaponStatsTooltip(
+					hoveredWeapon,
+					_player.WeaponDamageMultiplier,
+					false);
+				_weaponTooltipPanel.Visible = true;
 			}
 			else
 			{
-				_weaponSlotLabels[i].Text = $"{i + 1}: -";
-				_weaponSlotLabels[i].AddThemeColorOverride("font_color", new Color(0.45f, 0.45f, 0.48f));
+				_weaponTooltipPanel.Visible = false;
 			}
 		}
 	}
@@ -621,5 +680,197 @@ public partial class ArrowIndicator : Control
 			new Vector2(10, 0).Rotated(Angle)
 		};
 		DrawPolyline(outline, new Color(0, 0, 0, 1), 1.5f, true);
+	}
+}
+
+public partial class WeaponShowcaseSlot : Control
+{
+	private static readonly System.Collections.Generic.Dictionary<string, Texture2D> s_weaponTexCache =
+		new System.Collections.Generic.Dictionary<string, Texture2D>();
+
+	private readonly int _slotNumber;
+	private readonly Label _keyBadgeLabel;
+	private WeaponData _currentWeapon;
+	private Texture2D _weaponTexture;
+	private bool _isSelected = false;
+
+	public WeaponShowcaseSlot(int slotNumber, Font font)
+	{
+		_slotNumber = slotNumber;
+		CustomMinimumSize = new Vector2(36, 36);
+		Size = new Vector2(36, 36);
+		TextureFilter = TextureFilterEnum.Nearest;
+
+		_keyBadgeLabel = new Label();
+		_keyBadgeLabel.Text = slotNumber.ToString();
+		_keyBadgeLabel.Position = new Vector2(3, 1);
+		_keyBadgeLabel.Size = new Vector2(12, 12);
+		if (font != null) _keyBadgeLabel.AddThemeFontOverride("font", font);
+		_keyBadgeLabel.AddThemeFontSizeOverride("font_size", 10);
+		_keyBadgeLabel.AddThemeColorOverride("font_color", new Color(0.75f, 0.75f, 0.8f));
+		AddChild(_keyBadgeLabel);
+	}
+
+	public void UpdateSlot(WeaponData weapon, bool isSelected)
+	{
+		bool changed = (_currentWeapon != weapon) || (_isSelected != isSelected);
+		_currentWeapon = weapon;
+		_isSelected = isSelected;
+
+		if (changed)
+		{
+			_weaponTexture = GetWeaponTexture(weapon);
+			_keyBadgeLabel.AddThemeColorOverride("font_color",
+				isSelected ? new Color(1.0f, 0.88f, 0.35f) : new Color(0.62f, 0.64f, 0.70f));
+		}
+
+		// Плавно перерисовываем активный слот для анимации парения оружия
+		if (_isSelected || changed)
+		{
+			QueueRedraw();
+		}
+	}
+
+	public static Texture2D ExtractWeaponTextureStatic(WeaponData weapon) => GetWeaponTexture(weapon);
+
+	public static string FormatWeaponStatsTooltip(WeaponData weapon, float damageMultiplier = 1.0f, bool isGroundPickup = false)
+	{
+		if (weapon == null) return "";
+
+		string displayName = weapon.WeaponName;
+		if (string.IsNullOrEmpty(displayName) || displayName == "Новое оружие")
+		{
+			displayName = System.IO.Path.GetFileNameWithoutExtension(weapon.ResourcePath);
+		}
+
+		float effectiveDmg = weapon.Damage * damageMultiplier;
+		string ammoText = (weapon.IsRanged && weapon.MaxAmmo < 500)
+			? weapon.MaxAmmo.ToString()
+			: (weapon.IsRanged ? "INF" : "-");
+
+		string header = isGroundPickup ? $"{displayName.ToUpper()} [E]" : displayName.ToUpper();
+		return $"{header}\n" +
+			   $"DMG: {effectiveDmg:0.#}  |  CD: {weapon.AttackCooldown:0.##}s\n" +
+			   $"MAX AMMO: {ammoText}  |  KNOCK: {weapon.KnockbackForce:0.#}";
+	}
+
+	private static Texture2D GetWeaponTexture(WeaponData weapon)
+	{
+		if (weapon == null || weapon.WeaponVisualPrefab == null) return null;
+
+		string key = !string.IsNullOrEmpty(weapon.ResourcePath) ? weapon.ResourcePath : (weapon.WeaponName ?? "default");
+		if (s_weaponTexCache.TryGetValue(key, out var cached) && cached != null)
+		{
+			return cached;
+		}
+
+		var instance = weapon.WeaponVisualPrefab.Instantiate();
+		Texture2D foundTex = FindTextureRecursive(instance);
+		instance.QueueFree();
+
+		if (foundTex != null)
+		{
+			s_weaponTexCache[key] = foundTex;
+		}
+		return foundTex;
+	}
+
+	private static Texture2D FindTextureRecursive(Node node)
+	{
+		if (node is Sprite2D s && !s.Name.ToString().Contains("Slash") && s.Texture != null)
+		{
+			return s.Texture;
+		}
+		if (node is AnimatedSprite2D anim && anim.SpriteFrames != null)
+		{
+			if (anim.SpriteFrames.HasAnimation("idle") && anim.SpriteFrames.GetFrameCount("idle") > 0)
+			{
+				return anim.SpriteFrames.GetFrameTexture("idle", 0);
+			}
+		}
+		foreach (Node child in node.GetChildren())
+		{
+			var tex = FindTextureRecursive(child);
+			if (tex != null) return tex;
+		}
+		return null;
+	}
+
+	public override void _Draw()
+	{
+		Vector2 sz = Size;
+		float bob = _isSelected ? Mathf.Sin(Time.GetTicksMsec() * 0.006f) * 1.4f : 0.0f;
+
+		// 1. Внешняя тень и декоративная подложка пьедестала
+		DrawRect(new Rect2(1, 2, sz.X, sz.Y), new Color(0f, 0f, 0f, 0.55f));
+
+		Color bgOuter = _isSelected
+			? new Color(0.24f, 0.18f, 0.09f, 0.95f)
+			: new Color(0.10f, 0.11f, 0.14f, 0.85f);
+		Color bgInner = _isSelected
+			? new Color(0.34f, 0.25f, 0.12f, 0.95f)
+			: new Color(0.14f, 0.15f, 0.19f, 0.85f);
+		Color borderOuter = _isSelected
+			? new Color(1.0f, 0.82f, 0.25f, 1.0f)
+			: new Color(0.36f, 0.38f, 0.44f, 0.9f);
+		Color borderInner = _isSelected
+			? new Color(1.0f, 0.92f, 0.55f, 0.45f)
+			: new Color(0.22f, 0.24f, 0.28f, 0.5f);
+
+		DrawRect(new Rect2(0, 0, sz.X, sz.Y), bgOuter);
+		DrawRect(new Rect2(3, 3, sz.X - 6, sz.Y - 6), bgInner);
+
+		// Внутренний ромб/ореол за оружием
+		Vector2 center = sz * 0.5f + new Vector2(0, 1);
+		if (_isSelected)
+		{
+			DrawCircle(center, 12.5f, new Color(1.0f, 0.80f, 0.22f, 0.18f));
+			DrawCircle(center, 8.5f, new Color(1.0f, 0.90f, 0.45f, 0.16f));
+		}
+		else
+		{
+			DrawCircle(center, 10.0f, new Color(0.05f, 0.05f, 0.07f, 0.45f));
+		}
+
+		// Двойная рамка с декоративными заклепками по углам
+		DrawRect(new Rect2(0.5f, 0.5f, sz.X - 1, sz.Y - 1), borderOuter, false, 1.2f);
+		DrawRect(new Rect2(2.5f, 2.5f, sz.X - 5, sz.Y - 5), borderInner, false, 1.0f);
+
+		Color cornerColor = _isSelected ? new Color(1.0f, 0.92f, 0.55f) : new Color(0.50f, 0.52f, 0.58f);
+		DrawRect(new Rect2(1, 1, 2, 2), cornerColor);
+		DrawRect(new Rect2(sz.X - 3, 1, 2, 2), cornerColor);
+		DrawRect(new Rect2(1, sz.Y - 3, 2, 2), cornerColor);
+		DrawRect(new Rect2(sz.X - 3, sz.Y - 3, 2, 2), cornerColor);
+
+		// 2. Отрисовка самого оружия (или пустого силуэта)
+		if (_weaponTexture != null)
+		{
+			Vector2 texSize = _weaponTexture.GetSize();
+			float maxDim = Mathf.Max(1.0f, Mathf.Max(texSize.X, texSize.Y));
+			float targetSpan = _isSelected ? 25.0f : 22.0f;
+			float scale = targetSpan / maxDim;
+
+			// Вертикальные клинки/посохи наклоняем по диагонали (+40°), а огнестрел — слегка вверх (-18°)
+			float angle = (texSize.Y > texSize.X * 1.15f) ? 0.68f : -0.30f;
+			Vector2 drawCenter = center + new Vector2(1.0f, bob);
+
+			// Тень под оружием
+			DrawSetTransform(drawCenter + new Vector2(1.5f, 1.8f), angle, new Vector2(scale, scale));
+			DrawTexture(_weaponTexture, -texSize * 0.5f, new Color(0f, 0f, 0f, 0.65f));
+
+			// Само оружие
+			Color tint = _isSelected ? new Color(1.08f, 1.08f, 1.08f, 1.0f) : new Color(0.82f, 0.84f, 0.88f, 0.92f);
+			DrawSetTransform(drawCenter, angle, new Vector2(scale, scale));
+			DrawTexture(_weaponTexture, -texSize * 0.5f, tint);
+
+			// Сброс трансформации CanvasItem
+			DrawSetTransform(Vector2.Zero, 0.0f, Vector2.One);
+		}
+		else
+		{
+			// Пустой слот — аккуратная диагональная эмблема пустого крепления
+			DrawLine(center + new Vector2(-5, 5), center + new Vector2(5, -5), new Color(0.32f, 0.34f, 0.40f, 0.45f), 1.5f);
+			DrawCircle(center, 2.0f, new Color(0.32f, 0.34f, 0.40f, 0.45f));
+		}
 	}
 }

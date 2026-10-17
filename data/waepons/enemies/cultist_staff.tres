@@ -1,0 +1,21 @@
+[gd_resource type="Resource" script_class="WeaponData" load_steps=3 format=3]
+
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_script"]
+[ext_resource type="PackedScene" path="res://scene/weapons/bullets/cultist_orb.tscn" id="2_orb"]
+
+[resource]
+script = ExtResource("1_script")
+WeaponName = "PlagueBolt"
+Damage = 6
+AttackCooldown = 2.6
+AttackRange = 155.0
+KnockbackForce = 6.0
+Recoil = 4.0
+IsRanged = true
+BulletPrefab = ExtResource("2_orb")
+BulletSpeed = 105.0
+Spread = 0.08
+IsPiercing = false
+MaxAmmo = 1
+ReloadTime = 0.8
+metadata/_custom_type_script = "uid://de3w7d6rcby3g"

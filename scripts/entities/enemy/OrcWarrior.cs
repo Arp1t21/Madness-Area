@@ -30,7 +30,7 @@ public partial class OrcWarrior : Enemy
 		else
 		{
 			Vector2 direction = UpdateNavigationDirection(delta, 36.0f);
-			direction = ApplyAntiStuck(direction, delta, () => _navigationPath.Clear());
+			direction = ApplyAntiStuck(direction, delta, () => _navigationPath?.Clear());
 
 			Vector2 separation = ComputeEnemySeparation(84.0f);
 			if (separation != Vector2.Zero)
