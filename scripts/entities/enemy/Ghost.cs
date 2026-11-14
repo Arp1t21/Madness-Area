@@ -26,14 +26,17 @@ public partial class Ghost : Enemy
 			70);
 	}
 
-	public override void _PhysicsProcess(double delta)
+	protected override void UpdateEnemyClientVisualTick(double delta)
 	{
 		if (_ghostLight != null && GodotObject.IsInstanceValid(_ghostLight))
 		{
 			_glowPulseTime += (float)delta * 3.5f;
 			_ghostLight.Energy = 1.40f + Mathf.Sin(_glowPulseTime) * 0.20f;
 		}
+	}
 
+	protected override void TickEnemyAI(double delta)
+	{
 		if (StepEnemyActionState(delta))
 		{
 			RunRangedKitingAI(delta, 150.0f, 1.0f, 105.0f, 12.0f, 0.65f, 0.55f);

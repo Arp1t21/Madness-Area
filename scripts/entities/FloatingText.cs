@@ -9,8 +9,11 @@ public partial class FloatingText : Node2D
 
 	public void Init(string text, Color color)
 	{
-		Vector2 baseScale = new Vector2(2.7f, 2.7f);
-		Scale = baseScale * 1.32f;
+		Material = GameResourceCache.GetUnshadedMaterial();
+		ZIndex = 20;
+		bool isEmphasized = !string.IsNullOrEmpty(text) && (text.Contains("CRIT") || text.Contains("!"));
+		Vector2 baseScale = Vector2.One;
+		Scale = baseScale * (isEmphasized ? 1.36f : 1.18f);
 		_label = new Label();
 		_label.Text = text;
 		_label.AddThemeColorOverride("font_color", color);
@@ -18,9 +21,9 @@ public partial class FloatingText : Node2D
 		// Используем fff-forward для цифр урона (как для большого текста)
 		var font = GameResourceCache.GetForwardFont();
 		_label.AddThemeFontOverride("font", font);
-		_label.AddThemeFontSizeOverride("font_size", 8);
-		_label.AddThemeConstantOverride("letter_spacing", 2);
-		DungeonVisuals.ApplyPixelOutline(_label, 2, new Color(0.03f, 0.02f, 0.04f, 0.98f), 1, 1);
+		_label.AddThemeFontSizeOverride("font_size", 7);
+		_label.AddThemeConstantOverride("letter_spacing", 1);
+		DungeonVisuals.ApplyPixelOutline(_label, 1, new Color(0.03f, 0.02f, 0.04f, 0.98f), 1, 1);
 		
 		_label.HorizontalAlignment = HorizontalAlignment.Center;
 		_label.VerticalAlignment = VerticalAlignment.Center;
@@ -34,7 +37,7 @@ public partial class FloatingText : Node2D
 		tween.TweenProperty(this, "scale", baseScale, 0.14f)
 			.SetTrans(Tween.TransitionType.Back)
 			.SetEase(Tween.EaseType.Out);
-		tween.TweenProperty(this, "position", Position + new Vector2(0, -22), _duration)
+		tween.TweenProperty(this, "position", Position + new Vector2(0, -8), _duration)
 			.SetTrans(Tween.TransitionType.Quad)
 			.SetEase(Tween.EaseType.Out);
 		tween.TweenProperty(this, "modulate:a", 0.0f, _duration * 0.72f)

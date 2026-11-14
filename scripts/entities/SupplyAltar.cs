@@ -12,6 +12,7 @@ public class ShopOffer
 	public Color AccentColor;
 	public string IconPath = null;
 	public bool IsPurchased = false;
+	public bool IsFreeDraftOffer = false;
 	public bool RequiresWeaponChoice = false;
 	public Func<Player, bool> CanPurchase = null;
 	public Func<Player, string> UnavailableReason = null;
@@ -60,6 +61,7 @@ public class ShopOffer
 
 	public int GetEffectiveCost(Player player, int levelIndex)
 	{
+		if (IsFreeDraftOffer || BaseCost <= 0) return 0;
 		int floorBonus = Mathf.Max(0, levelIndex - 1) * 2;
 		int baseScaled = BaseCost + floorBonus;
 		int boughtCount = player != null ? player.GetShopPurchaseCount(Id) : 0;
@@ -78,6 +80,8 @@ public partial class SupplyAltar : Area2D, IInteractable
 	private SupplyShopOverlay _activeShop;
 
 	public List<ShopOffer> RolledOffers { get; private set; } = new List<ShopOffer>();
+	public List<ShopOffer> MilestoneRelicOffers { get; private set; } = new List<ShopOffer>();
+	public bool HasClaimedMilestoneRelic { get; set; } = false;
 	public bool HasPurchased => RolledOffers.Count > 0 && RolledOffers.TrueForAll(o => o.IsPurchased);
 
 	private static readonly string[] AllShopWeapons = new[]
@@ -91,14 +95,15 @@ public partial class SupplyAltar : Area2D, IInteractable
 		"res://data/waepons/shotgun.tres",
 		"res://data/waepons/revolver.tres",
 		"res://data/waepons/dagger.tres",
-		"res://data/waepons/magic_staff.tres"
+		"res://data/waepons/magic_staff.tres",
+		"res://data/waepons/laser_cannon.tres"
 	};
 
 	public void Setup(Level level)
 	{
 		_level = level;
 		Name = "SupplyAltar";
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		CollisionLayer = 0;
 		CollisionMask = 16; // Слой 5 (Area2DPickWeapon игрока)
 
@@ -140,7 +145,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 		_promptLabel = new Label();
 		_promptLabel.Text = "Shop [E]";
 		_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		_promptLabel.Position = new Vector2(-45, -28);
+		_promptLabel.Position = new Vector2(-45, -24);
 		_promptLabel.Size = new Vector2(90, 15);
 		_promptLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.35f));
 
@@ -156,9 +161,74 @@ public partial class SupplyAltar : Area2D, IInteractable
 		AddChild(_promptLabel);
 
 		RollFourRandomOffers();
+		UpdatePromptText();
 
 		AreaEntered += OnAreaEntered;
 		AreaExited += OnAreaExited;
+	}
+
+	private static string GetRelicIconPath(string relicId) => relicId switch
+	{
+		GameLogic.RelicPrismLens => "res://assets/ui/shop_icons/piercing.png",
+		GameLogic.RelicRicochet => "res://assets/ui/shop_icons/velocity_core.png",
+		GameLogic.RelicEmberCore => "res://assets/ui/shop_icons/ability_q.png",
+		GameLogic.RelicVenomCoat => "res://assets/ui/shop_icons/mana_harmony.png",
+		GameLogic.RelicCrimsonEdge => "res://assets/ui/shop_icons/fury_draught.png",
+		GameLogic.RelicChainSpark => "res://assets/ui/shop_icons/multishot.png",
+		GameLogic.RelicFrostAegis => "res://assets/ui/shop_icons/ability_v.png",
+		GameLogic.RelicVampiricFang => "res://assets/ui/shop_icons/crimson_elixir.png",
+		GameLogic.RelicVolatileSigil => "res://assets/ui/shop_icons/impact_core.png",
+		_ => "res://assets/ui/shop_icons/skill_point.png"
+	};
+
+	private static ShopOffer CreateRelicOffer(GameLogic.RelicDefinition relic, bool isFreeDraft)
+	{
+		Color accent = new Color(
+			((relic.AccentHex >> 16) & 0xFF) / 255.0f,
+			((relic.AccentHex >> 8) & 0xFF) / 255.0f,
+			(relic.AccentHex & 0xFF) / 255.0f,
+			1.0f);
+
+		return new ShopOffer
+		{
+			Id = relic.Id,
+			Category = isFreeDraft ? "MILESTONE RELIC" : "PASSIVE RELIC",
+			Title = relic.Name.ToUpper(),
+			Description = relic.Description,
+			BaseCost = isFreeDraft ? 0 : relic.ShopCost,
+			IsFreeDraftOffer = isFreeDraft,
+			AccentColor = accent,
+			IconPath = GetRelicIconPath(relic.Id),
+			CanPurchase = p => p != null && !p.HasRelic(relic.Id),
+			UnavailableReason = _ => "[OWNED]",
+			OnPurchase = (p, lvl, alt) =>
+			{
+				p.AddRelic(relic.Id);
+				if (isFreeDraft && alt != null)
+				{
+					alt.HasClaimedMilestoneRelic = true;
+				}
+				return $"RELIC ACQUIRED: {relic.Name.ToUpper()}!";
+			}
+		};
+	}
+
+	public void EnsureMilestoneRelicsRolled(Player player)
+	{
+		if (HasClaimedMilestoneRelic) return;
+		int floor = _level != null ? _level.CurrentLevelIndex : 1;
+		if (!GameLogic.IsMilestoneRelicFloor(floor)) return;
+		if (MilestoneRelicOffers.Count > 0) return;
+
+		var picks = GameLogic.PickRelicChoices(player?.GetRelicIdsList(), n => (int)(GD.Randi() % (uint)n), 3);
+		foreach (var relic in picks)
+		{
+			MilestoneRelicOffers.Add(CreateRelicOffer(relic, isFreeDraft: true));
+		}
+		if (MilestoneRelicOffers.Count == 0)
+		{
+			HasClaimedMilestoneRelic = true;
+		}
 	}
 
 	private void RollFourRandomOffers()
@@ -377,7 +447,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				OnPurchase = (p, lvl, alt) =>
 				{
 					Vector2 dropPos = alt != null ? alt.GlobalPosition + new Vector2(0, 42) : p.GlobalPosition;
-					lvl?.SpawnWeaponPickupAt(dropPos, rolledWeaponPath);
+					lvl?.RequestSpawnWeaponPickup(dropPos, rolledWeaponPath);
 					return $"Dropped {weaponDisplayName} next to the shop!";
 				}
 			}
@@ -575,6 +645,9 @@ public partial class SupplyAltar : Area2D, IInteractable
 		var currentPlayer = _level?.Player
 			?? (IsInsideTree() ? GetTree()?.GetFirstNodeInGroup("Player") as Player : null)
 			?? (_level != null && _level.IsInsideTree() ? _level.GetTree()?.GetFirstNodeInGroup("Player") as Player : null);
+
+		EnsureMilestoneRelicsRolled(currentPlayer);
+
 		foreach (var offer in generalPool)
 		{
 			if (offer.CanPurchase != null && currentPlayer != null && !offer.CanPurchase(currentPlayer))
@@ -585,6 +658,13 @@ public partial class SupplyAltar : Area2D, IInteractable
 		}
 		combinedPool.AddRange(singleWeaponPool);
 
+		// Add up to 2 unowned passive relics into normal shop rotation
+		var shopRelicPicks = GameLogic.PickRelicChoices(currentPlayer?.GetRelicIdsList(), n => (int)(GD.Randi() % (uint)n), 2);
+		foreach (var relic in shopRelicPicks)
+		{
+			combinedPool.Add(CreateRelicOffer(relic, isFreeDraft: false));
+		}
+
 		while (RolledOffers.Count < 4 && combinedPool.Count > 0)
 		{
 			int idx = (int)(GD.Randi() % (uint)combinedPool.Count);
@@ -593,16 +673,33 @@ public partial class SupplyAltar : Area2D, IInteractable
 		}
 	}
 
+	public bool ShouldShowMilestoneDraft(Player player)
+	{
+		EnsureMilestoneRelicsRolled(player);
+		int floor = _level != null ? _level.CurrentLevelIndex : 1;
+		return GameLogic.IsMilestoneRelicFloor(floor) && !HasClaimedMilestoneRelic && MilestoneRelicOffers.Count > 0;
+	}
+
 	public void UpdatePromptText()
 	{
 		if (_promptLabel != null)
 		{
-			_promptLabel.Text = HasPurchased ? "Shop [Sold Out]" : "Shop [E]";
+			int floor = _level != null ? _level.CurrentLevelIndex : 1;
+			if (GameLogic.IsMilestoneRelicFloor(floor) && !HasClaimedMilestoneRelic)
+			{
+				_promptLabel.Text = "Relic Choice [E]";
+			}
+			else
+			{
+				_promptLabel.Text = HasPurchased ? "Shop [Sold Out]" : "Shop [E]";
+			}
 		}
 	}
 
 	public void Interact(Player player)
 	{
+		bool isCoop = NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+		if (isCoop && (player == null || !player.IsLocalPlayer || player.IsDead)) return;
 		if (_activeShop != null && GodotObject.IsInstanceValid(_activeShop)) return;
 
 		if (_sprite != null && _openTex != null)
@@ -610,7 +707,10 @@ public partial class SupplyAltar : Area2D, IInteractable
 			_sprite.Texture = _openTex;
 		}
 
-		GetTree().Paused = true;
+		if (!isCoop)
+		{
+			GetTree().Paused = true;
+		}
 		_activeShop = new SupplyShopOverlay(player, _level, this);
 		GetTree().Root.AddChild(_activeShop);
 	}
@@ -633,6 +733,8 @@ public partial class SupplyAltar : Area2D, IInteractable
 	{
 		if (area.GetParent() is Player player)
 		{
+			bool isCoop = NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+			if (isCoop && (!player.IsLocalPlayer || player.IsDead)) return;
 			player.RegisterInteractable(this);
 		}
 	}
@@ -641,6 +743,8 @@ public partial class SupplyAltar : Area2D, IInteractable
 	{
 		if (area.GetParent() is Player player)
 		{
+			bool isCoop = NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+			if (isCoop && !player.IsLocalPlayer) return;
 			player.UnregisterInteractable(this);
 		}
 	}
@@ -649,8 +753,9 @@ public partial class SupplyAltar : Area2D, IInteractable
 	{
 		if (_activeShop != null && GodotObject.IsInstanceValid(_activeShop))
 		{
+			bool isCoop = NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
 			var tree = GetTree();
-			if (tree != null && tree.Paused)
+			if (!isCoop && tree != null && tree.Paused)
 			{
 				tree.Paused = false;
 			}
@@ -688,6 +793,9 @@ public partial class SupplyShopOverlay : CanvasLayer
 	private Label _goldLabel;
 	private Label _statusLabel;
 	private Control _weaponChoiceModal;
+	private Label _titleLabel;
+	private HBoxContainer _cardsHBox;
+	private bool _showingMilestoneDraft = false;
 	private readonly List<OfferCardUI> _offerCards = new();
 
 	public SupplyShopOverlay(Player player, Level level, SupplyAltar altar)
@@ -705,11 +813,8 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		_rootControl = new Control();
 		AddChild(_rootControl);
-		var viewportSize = GetViewport().GetVisibleRect().Size;
-		float uiScale = Mathf.Clamp(viewportSize.X / 960.0f, 1.0f, 3.0f);
-		_rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		_rootControl.Size = viewportSize / uiScale;
-		_rootControl.Scale = new Vector2(uiScale, uiScale);
+		_rootControl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		Vector2 rootSize = GetViewport().GetVisibleRect().Size;
 
 		var bgOverlay = new ColorRect();
 		bgOverlay.Color = new Color(0.02f, 0.022f, 0.035f, 0.80f);
@@ -727,7 +832,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 		var panel = new Panel();
 		Vector2 panelSize = new Vector2(840, 476);
 		panel.Size = panelSize;
-		panel.Position = (_rootControl.Size - panelSize) / 2.0f;
+		panel.Position = (rootSize - panelSize) / 2.0f;
 		_rootControl.AddChild(panel);
 
 		var panelStyle = DungeonVisuals.CreatePanelStyle(
@@ -742,14 +847,13 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		_font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 
-		var title = new Label();
-		title.Text = "SUPPLY ALTAR  —  WAVE SHOP";
-		title.HorizontalAlignment = HorizontalAlignment.Center;
-		if (_font != null) title.AddThemeFontOverride("font", _font);
-		title.AddThemeFontSizeOverride("font_size", 28);
-		title.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
-		DungeonVisuals.ApplyPixelOutline(title, 2);
-		vbox.AddChild(title);
+		_titleLabel = new Label();
+		_titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		if (_font != null) _titleLabel.AddThemeFontOverride("font", _font);
+		_titleLabel.AddThemeFontSizeOverride("font_size", 28);
+		_titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(_titleLabel, 2);
+		vbox.AddChild(_titleLabel);
 
 		var statsPill = new PanelContainer();
 		statsPill.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePillStyle(
@@ -767,28 +871,21 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		DungeonVisuals.AddDivider(vbox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.6f), 1.5f);
 
-		var cardsHBox = new HBoxContainer();
-		cardsHBox.CustomMinimumSize = new Vector2(0, 316);
-		cardsHBox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		cardsHBox.AddThemeConstantOverride("separation", 10);
-		vbox.AddChild(cardsHBox);
-
-		if (_altar != null && _altar.RolledOffers != null)
-		{
-			foreach (var offer in _altar.RolledOffers)
-			{
-				AddOfferCard(cardsHBox, _font, offer);
-			}
-		}
+		_cardsHBox = new HBoxContainer();
+		_cardsHBox.CustomMinimumSize = new Vector2(0, 316);
+		_cardsHBox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
+		_cardsHBox.AddThemeConstantOverride("separation", 10);
+		vbox.AddChild(_cardsHBox);
 
 		_statusLabel = new Label();
-		_statusLabel.Text = "Buy items to strengthen your hero. Repeat purchases cost 1.5x more.";
 		_statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		if (_font != null) _statusLabel.AddThemeFontOverride("font", _font);
-		_statusLabel.AddThemeFontSizeOverride("font_size", 14);
-		_statusLabel.AddThemeColorOverride("font_color", DungeonVisuals.Emerald);
+		_statusLabel.AddThemeFontSizeOverride("font_size", 15);
+		_statusLabel.AddThemeColorOverride("font_color", new Color(0.86f, 0.78f, 0.58f));
 		DungeonVisuals.ApplyPixelOutline(_statusLabel, 1);
 		vbox.AddChild(_statusLabel);
+
+		RebuildDisplayedOffers();
 
 		var bottomHBox = new HBoxContainer();
 		bottomHBox.Alignment = BoxContainer.AlignmentMode.Center;
@@ -805,6 +902,54 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		RefreshUI();
 		MainMenu.ConnectButtonSounds(this);
+	}
+
+	private void RebuildDisplayedOffers()
+	{
+		if (!IsInstanceValid(_cardsHBox)) return;
+		foreach (Node child in _cardsHBox.GetChildren())
+		{
+			child.QueueFree();
+		}
+		_offerCards.Clear();
+
+		_showingMilestoneDraft = _altar != null && _altar.ShouldShowMilestoneDraft(_player);
+		if (_showingMilestoneDraft)
+		{
+			if (_titleLabel != null)
+			{
+				_titleLabel.Text = $"FLOOR {GetCurrentLevelIndex()} REWARD  —  CHOOSE 1 FREE RELIC";
+				_titleLabel.AddThemeColorOverride("font_color", new Color(0.38f, 0.95f, 1.0f));
+			}
+			if (_statusLabel != null)
+			{
+				_statusLabel.Text = "Every 5 floors grants a FREE passive Relic! Pick 1 of 3 before browsing the shop.";
+				_statusLabel.AddThemeColorOverride("font_color", DungeonVisuals.ArcaneCyan.Lightened(0.22f));
+			}
+			foreach (var offer in _altar.MilestoneRelicOffers)
+			{
+				AddOfferCard(_cardsHBox, _font, offer);
+			}
+		}
+		else
+		{
+			if (_titleLabel != null)
+			{
+				_titleLabel.Text = "SUPPLY ALTAR  —  WAVE SHOP";
+				_titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+			}
+			if (_statusLabel != null && string.IsNullOrEmpty(_statusLabel.Text))
+			{
+				_statusLabel.Text = "Buy items to strengthen your hero. Repeat purchases cost 1.5x more.";
+			}
+			if (_altar?.RolledOffers != null)
+			{
+				foreach (var offer in _altar.RolledOffers)
+				{
+					AddOfferCard(_cardsHBox, _font, offer);
+				}
+			}
+		}
 	}
 
 	private int GetCurrentLevelIndex()
@@ -868,7 +1013,9 @@ public partial class SupplyShopOverlay : CanvasLayer
 		iconRect.TextureFilter = CanvasItem.TextureFilterEnum.Nearest;
 
 		string iconPath = offer.GetEffectiveIconPath();
-		var tex = GD.Load<Texture2D>(iconPath);
+		Texture2D tex = GameLogic.FindRelic(offer.Id) != null
+			? DungeonVisuals.GetRelicIconTexture(offer.Id)
+			: GD.Load<Texture2D>(iconPath);
 		if (tex != null)
 		{
 			iconRect.Texture = tex;
@@ -881,14 +1028,14 @@ public partial class SupplyShopOverlay : CanvasLayer
 		titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		titleLabel.VerticalAlignment = VerticalAlignment.Center;
 		titleLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		titleLabel.CustomMinimumSize = new Vector2(0, 32);
+		titleLabel.CustomMinimumSize = new Vector2(0, 36);
 		if (font != null) titleLabel.AddThemeFontOverride("font", font);
-		titleLabel.AddThemeFontSizeOverride("font_size", 14);
-		titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
+		titleLabel.AddThemeFontSizeOverride("font_size", 17);
+		titleLabel.AddThemeColorOverride("font_color", offer.IsFreeDraftOffer ? offer.AccentColor.Lightened(0.28f) : DungeonVisuals.Parchment);
 		DungeonVisuals.ApplyPixelOutline(titleLabel, 1);
 		vbox.AddChild(titleLabel);
 
-		DungeonVisuals.AddDivider(vbox, new Color(offer.AccentColor.R, offer.AccentColor.G, offer.AccentColor.B, 0.35f), 1.0f);
+		DungeonVisuals.AddDivider(vbox, new Color(offer.AccentColor.R, offer.AccentColor.G, offer.AccentColor.B, 0.45f), 1.5f);
 
 		// 4. Description Label
 		var descLabel = new Label();
@@ -898,8 +1045,8 @@ public partial class SupplyShopOverlay : CanvasLayer
 		descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		descLabel.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 		if (font != null) descLabel.AddThemeFontOverride("font", font);
-		descLabel.AddThemeFontSizeOverride("font_size", 12);
-		descLabel.AddThemeColorOverride("font_color", new Color(0.82f, 0.86f, 0.92f));
+		descLabel.AddThemeFontSizeOverride("font_size", 15);
+		descLabel.AddThemeColorOverride("font_color", new Color(0.88f, 0.91f, 0.96f));
 		vbox.AddChild(descLabel);
 
 		// 5. Extra Label
@@ -993,14 +1140,27 @@ public partial class SupplyShopOverlay : CanvasLayer
 		}
 
 		_player.CoinCount -= cost;
-		_player.RecordShopPurchase(offer.Id);
+		if (!offer.IsFreeDraftOffer)
+		{
+			_player.RecordShopPurchase(offer.Id);
+		}
 		offer.IsPurchased = true;
 		_altar.UpdatePromptText();
+		_player.BroadcastCoopBuildSync();
 
-		if (_statusLabel != null) _statusLabel.Text = msg;
+		if (_statusLabel != null)
+		{
+			_statusLabel.Text = msg;
+			_statusLabel.AddThemeColorOverride("font_color", DungeonVisuals.Emerald);
+		}
 
 		var sound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
 		if (sound != null) MainMenu.PlayUISound(sound);
+
+		if (offer.IsFreeDraftOffer && _showingMilestoneDraft)
+		{
+			RebuildDisplayedOffers();
+		}
 
 		RefreshUI();
 	}
@@ -1024,7 +1184,8 @@ public partial class SupplyShopOverlay : CanvasLayer
 		var modalPanel = new Panel();
 		Vector2 modalSize = new Vector2(490, 310);
 		modalPanel.Size = modalSize;
-		modalPanel.Position = (_rootControl.Size - modalSize) / 2.0f;
+		Vector2 rootSize = _rootControl.Size != Vector2.Zero ? _rootControl.Size : GetViewport().GetVisibleRect().Size;
+		modalPanel.Position = (rootSize - modalSize) / 2.0f;
 		_weaponChoiceModal.AddChild(modalPanel);
 
 		modalPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
@@ -1193,14 +1354,26 @@ public partial class SupplyShopOverlay : CanvasLayer
 				}
 
 				bool canAfford = _player.CoinCount >= cost;
-				card.BuyButton.Text = canOfferPurchase ? $"BUY: {cost} GOLD" : "MAXED";
+				if (offer.IsFreeDraftOffer)
+				{
+					card.BuyButton.Text = canOfferPurchase ? "CLAIM RELIC (FREE)" : "OWNED";
+				}
+				else
+				{
+					card.BuyButton.Text = canOfferPurchase
+						? (canAfford ? $"BUY: {cost} GOLD" : $"NEED {cost} GOLD")
+						: "MAXED";
+				}
 				card.BuyButton.Disabled = !canOfferPurchase || !canAfford || !hasCompatibleWeapon;
 				card.CardPanel.AddThemeStyleboxOverride("panel", card.CardNormalStyle);
 
 				if (card.BuyButton.Disabled)
 				{
 					card.BuyButton.AddThemeStyleboxOverride("disabled", card.BtnDisabledStyle);
-					card.BuyButton.AddThemeColorOverride("font_disabled_color", new Color(0.60f, 0.60f, 0.65f));
+					Color disabledTextCol = (!canAfford && canOfferPurchase && hasCompatibleWeapon)
+						? new Color(0.88f, 0.45f, 0.42f, 0.95f)
+						: new Color(0.55f, 0.57f, 0.62f, 0.85f);
+					card.BuyButton.AddThemeColorOverride("font_disabled_color", disabledTextCol);
 				}
 			}
 		}
@@ -1208,7 +1381,11 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 	private void CloseShop()
 	{
-		GetTree().Paused = false;
+		bool isCoop = NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+		if (!isCoop && GetTree() != null)
+		{
+			GetTree().Paused = false;
+		}
 		QueueFree();
 	}
 

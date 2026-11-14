@@ -20,17 +20,17 @@ public partial class Chort : Enemy
 			72);
 	}
 
-	public override void _PhysicsProcess(double delta)
+	protected override void TickEnemyAI(double delta)
 	{
 		if (StepEnemyActionState(delta))
 		{
 			float playerDist = GlobalPosition.DistanceTo(_player.GlobalPosition);
-			float speedMult = (playerDist < 120.0f * World.Scale && playerDist > 30.0f * World.Scale) ? 1.25f : 1.0f;
-			UpdateMeleeChaseVelocity(delta, 42.0f, 76.0f, speedMult, 0.14f);
+			float speedMult = (playerDist < 120.0f && playerDist > 30.0f) ? 1.25f : 1.0f;
+			UpdateMeleeChaseVelocity(delta, 14.0f, 25.0f, speedMult, 0.14f);
 
 			if (_cancelAttackCooldown <= 0 && _attackController != null && _attackController.CanAttack())
 			{
-				if (playerDist < Config.AttackRange * World.Scale)
+				if (playerDist < Config.AttackRange)
 				{
 					StartAttackPreparation();
 				}

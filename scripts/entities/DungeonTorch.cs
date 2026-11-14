@@ -13,7 +13,7 @@ public partial class DungeonTorch : Node2D
 
 	public override void _Ready()
 	{
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		ZIndex = 1;
 		_flickerTime = (float)GD.RandRange(0.0, 10.0);
 
@@ -56,8 +56,8 @@ public partial class DungeonTorch : Node2D
 		embers.Gravity = new Vector2(0, -14.0f);
 		embers.InitialVelocityMin = 4.0f;
 		embers.InitialVelocityMax = 10.0f;
-		embers.ScaleAmountMin = 1.5f;
-		embers.ScaleAmountMax = 2.5f;
+		embers.ScaleAmountMin = 0.8f;
+		embers.ScaleAmountMax = 1.4f;
 
 		var ramp = new Gradient();
 		ramp.Colors = new Color[]

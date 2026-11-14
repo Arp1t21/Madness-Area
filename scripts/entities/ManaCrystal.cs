@@ -17,6 +17,14 @@ public partial class ManaCrystal : PickupItem
 
 	protected override void ApplyPickupEffect(Player player)
 	{
+		if (NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession)
+		{
+			if (NetworkManager.Instance.IsServerAuthority)
+			{
+				player?.Rpc(nameof(Player.RpcRestoreMana), 8.0f);
+			}
+			return;
+		}
 		float maxMana = player.MaxManaEffective;
 		player.CurrentMana = Mathf.Min(maxMana, player.CurrentMana + 8.0f);
 	}

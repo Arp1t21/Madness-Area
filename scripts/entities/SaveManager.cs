@@ -24,7 +24,9 @@ public static class SaveManager
 			Spread = w.Spread,
 			BulletSpeed = w.BulletSpeed,
 			IsPiercing = w.IsPiercing,
-			AllowMultiHit = w.AllowMultiHit
+			AllowMultiHit = w.AllowMultiHit,
+			IsContinuousLaser = w.IsContinuousLaser,
+			SplashRadius = w.SplashRadius
 		};
 	}
 
@@ -48,6 +50,8 @@ public static class SaveManager
 		if (stats.BulletSpeed.HasValue) weaponData.BulletSpeed = stats.BulletSpeed.Value;
 		if (stats.IsPiercing.HasValue) weaponData.IsPiercing = stats.IsPiercing.Value;
 		if (stats.AllowMultiHit.HasValue) weaponData.AllowMultiHit = stats.AllowMultiHit.Value;
+		if (stats.IsContinuousLaser.HasValue) weaponData.IsContinuousLaser = stats.IsContinuousLaser.Value;
+		if (stats.SplashRadius.HasValue) weaponData.SplashRadius = stats.SplashRadius.Value;
 
 		return weaponData;
 	}
@@ -96,6 +100,7 @@ public static class SaveManager
 		save.Ability2Level = player.Ability2Level;
 		save.PlayedTimeSeconds += level.ConsumePlayedTime();
 		save.ShopPurchaseCounts = new Dictionary<string, int>(player.ShopPurchaseCounts);
+		save.UnlockedRelics = player.GetRelicIdsList();
 		CapturePlayerInventory(player, save);
 		SaveGame(save);
 	}

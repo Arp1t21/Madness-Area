@@ -43,12 +43,27 @@ public abstract class CharacterAbilitySet
 
 		Vector2 mousePos = Player.GetGlobalMousePosition();
 		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
+		if (dir == Vector2.Zero) dir = Vector2.Right;
+		float damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
 
+		if (Player.IsCoopSession)
+		{
+			Player.BroadcastSpawnFireball(Player.GlobalPosition, dir, damage);
+		}
+		else
+		{
+			ExecuteFireballVisualAndSpawn(Player.GlobalPosition, dir, damage);
+		}
+	}
+
+	public void ExecuteFireballVisualAndSpawn(Vector2 spawnPos, Vector2 dir, float damage)
+	{
 		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
-		fireball.GlobalPosition = Player.GlobalPosition;
+		fireball.GlobalPosition = spawnPos;
 		fireball.Direction = dir;
-		fireball.Damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
-		Player.GetParent().AddChild(fireball);
+		fireball.Damage = damage;
+		fireball.OwnerPlayer = Player;
+		Player.GetParent()?.AddChild(fireball);
 	}
 
 	public virtual void UseAbility2()
@@ -63,35 +78,62 @@ public abstract class CharacterAbilitySet
 
 		Player.CurrentMana -= Ability2ManaCost;
 		Player.ShieldCooldownTimer = Ability2CooldownMax;
-		Player.ActivateShieldEffect(2.5f + (Player.Ability2Level - 1) * 0.7f);
 
 		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
 		if (moveDir == Vector2.Zero)
 		{
 			moveDir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
 		}
+		if (moveDir == Vector2.Zero) moveDir = Vector2.Right;
 		Vector2 dashDir = moveDir.Normalized();
-		Player.SetDashVelocity(dashDir * 680.0f);
+		Player.SetDashVelocity(dashDir * 228.0f);
+
+		float shieldDuration = 2.5f + (Player.Ability2Level - 1) * 0.7f;
+		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
+		bool hasFrostAegis = Player.HasRelic(GameLogic.RelicFrostAegis);
+
+		if (Player.IsCoopSession)
+		{
+			Player.BroadcastActivateShieldPulse(dashDir, shieldDuration, pulseDamage, hasFrostAegis);
+		}
+		else
+		{
+			ExecuteShieldPulseVisualAndHit(dashDir, shieldDuration, pulseDamage, hasFrostAegis);
+		}
+	}
+
+	public void ExecuteShieldPulseVisualAndHit(Vector2 dashDir, float shieldDuration, float pulseDamage, bool hasFrostAegis)
+	{
+		Player.ActivateShieldEffect(shieldDuration);
 		Player.PlayDashVisuals(dashDir);
 
-		float pulseRadius = 52.0f * World.Scale;
-		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
+		float pulseRadius = 52.0f;
+		float effectiveRadius = hasFrostAegis ? pulseRadius * 1.25f : pulseRadius;
+		bool isServerAuthority = NetworkManager.Instance == null || NetworkManager.Instance.IsServerAuthority;
 		foreach (Node node in Player.GetTree().GetNodesInGroup("Enemies"))
 		{
 			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
 			{
-				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
+				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= effectiveRadius)
 				{
-					enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false);
+					if (isServerAuthority)
+					{
+						enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false, false, Player);
+						if (hasFrostAegis)
+						{
+							enemy.ApplyStatusEffect(StatusEffectType.Stun, 0.9f, 1.0f);
+							enemy.ApplyStatusEffect(StatusEffectType.Slow, 3.0f, 0.40f);
+						}
+					}
 					DungeonVisuals.SpawnImpactSparks(
 						Player.GetParent(),
-						enemy.GlobalPosition + new Vector2(0, -18),
+						enemy.GlobalPosition + new Vector2(0, -6),
 						enemy.GlobalPosition - Player.GlobalPosition,
-						new Color(0.45f, 0.92f, 1.0f),
-						8,
-						150.0f,
+						hasFrostAegis ? new Color(0.65f, 0.96f, 1.0f) : new Color(0.45f, 0.92f, 1.0f),
+						hasFrostAegis ? 12 : 8,
+						50.0f,
 						75.0f,
-						1.6f);
+						hasFrostAegis ? 1.15f : 0.9f);
 				}
 			}
 		}
@@ -222,6 +264,11 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 
 	public override void UpdateSpecialAttack(double delta, bool isRmbPressed)
 	{
+		if (!Player.IsLocalPlayer || Player.IsDead)
+		{
+			if (_isCharging) ResetChargeState();
+			return;
+		}
 		if (_isBoomerangInFlight)
 		{
 			if (_isCharging) ResetChargeState();
@@ -266,23 +313,44 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 
 	private void LaunchBoomerang(AttackController activeSlot, WeaponData weapon, float chargeRatio)
 	{
-		_isBoomerangInFlight = true;
-		if (activeSlot != null)
-		{
-			activeSlot.Visible = false;
-		}
-
+		int slotIdx = Player.WeaponSlots.IndexOf(activeSlot);
 		// Дистанция полета уменьшена на 0.7 раз, скорость полета и возврата увеличена в 2 раза
-		float minDist = (85.0f / 1.2f) * 0.7f * World.Scale;
-		float maxDist = (320.0f / 1.2f) * 0.7f * World.Scale;
+		float minDist = (85.0f / 1.2f) * 0.7f;
+		float maxDist = (320.0f / 1.2f) * 0.7f;
 		float throwDistance = Mathf.Lerp(minDist, maxDist, chargeRatio);
-		float speed = Mathf.Lerp(430.0f, 600.0f, chargeRatio);
+		float speed = Mathf.Lerp(145.0f, 200.0f, chargeRatio);
 
 		// Урон оружия при метании остается таким же, как у самого оружия
 		float damage = weapon.Damage * Player.WeaponDamageMultiplier;
 		float knockback = weapon.KnockbackForce;
 
 		Vector2 dir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
+		if (dir == Vector2.Zero) dir = Vector2.Right;
+
+		if (Player.IsCoopSession)
+		{
+			Player.BroadcastThrowBoomerang(slotIdx, dir, throwDistance, speed, damage, knockback);
+		}
+		else
+		{
+			SpawnBoomerangLocal(slotIdx, dir, throwDistance, speed, damage, knockback);
+		}
+	}
+
+	public void SpawnBoomerangLocal(int slotIdx, Vector2 dir, float throwDistance, float speed, float damage, float knockback)
+	{
+		AttackController activeSlot = (slotIdx >= 0 && slotIdx < Player.WeaponSlots.Count)
+			? Player.WeaponSlots[slotIdx]
+			: null;
+		WeaponData weapon = activeSlot?.CurrentWeapon;
+		if (weapon == null) return;
+
+		_isBoomerangInFlight = true;
+		if (activeSlot != null)
+		{
+			activeSlot.Visible = false;
+		}
+
 		Texture2D weaponTex = WeaponShowcaseSlot.ExtractWeaponTextureStatic(weapon);
 
 		var boomerang = new BoomerangWeaponProjectile();
@@ -301,15 +369,15 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 				if (activeSlot != null && GodotObject.IsInstanceValid(activeSlot) &&
 					Player != null && GodotObject.IsInstanceValid(Player))
 				{
-					int slotIdx = Player.WeaponSlots.IndexOf(activeSlot);
-					if (slotIdx != -1 && Player.CurrentSlotIndex == slotIdx)
+					int idx = Player.WeaponSlots.IndexOf(activeSlot);
+					if (idx != -1 && Player.CurrentSlotIndex == idx)
 					{
 						activeSlot.Visible = true;
 					}
 				}
 			});
 
-		Player.GetParent().AddChild(boomerang);
+		Player.GetParent()?.AddChild(boomerang);
 	}
 
 	public override void DrawSpecialAttackIndicator(Player player)

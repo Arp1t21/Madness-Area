@@ -34,7 +34,7 @@ public partial class Chest : StaticBody2D, IInteractable
 			_promptLabel = new Label();
 			_promptLabel.Text = "Press E to open";
 			_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_promptLabel.Position = new Vector2(-50, -35);
+			_promptLabel.Position = new Vector2(-50, -24);
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 
@@ -50,7 +50,7 @@ public partial class Chest : StaticBody2D, IInteractable
 		else
 		{
 			_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
-			_promptLabel.Position = new Vector2(-50, -35);
+			_promptLabel.Position = new Vector2(-50, -24);
 		}
 
 		if (_sprite != null && ClosedTexture != null)
@@ -68,10 +68,54 @@ public partial class Chest : StaticBody2D, IInteractable
 		}
 	}
 
+	private bool IsCoopSession => NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+	private bool IsServerAuthority => !IsCoopSession || (NetworkManager.Instance != null && NetworkManager.Instance.IsServerAuthority);
+
 	public void Interact(Player player)
 	{
 		if (_isOpen) return;
 
+		if (IsCoopSession)
+		{
+			if (player == null || !player.IsLocalPlayer || player.IsDead) return;
+			if (!IsServerAuthority)
+			{
+				RpcId(1, nameof(RpcRequestOpenChest));
+				return;
+			}
+			OpenChestOnServer();
+			return;
+		}
+
+		ApplyChestOpenState(player);
+		SpawnWeaponReward();
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcRequestOpenChest()
+	{
+		if (!IsServerAuthority || _isOpen) return;
+		OpenChestOnServer();
+	}
+
+	private void OpenChestOnServer()
+	{
+		if (_isOpen) return;
+		Rpc(nameof(RpcOpenChestVisuals));
+		SpawnWeaponReward();
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcOpenChestVisuals()
+	{
+		int sender = Multiplayer.GetRemoteSenderId();
+		if (IsCoopSession && sender != 0 && sender != 1) return;
+		ApplyChestOpenState(NetworkManager.GetLocalPlayer(GetTree()));
+	}
+
+	private void ApplyChestOpenState(Player playerToUnregister)
+	{
+		if (_isOpen) return;
 		_isOpen = true;
 		OpenedChestsCount++;
 
@@ -97,25 +141,40 @@ public partial class Chest : StaticBody2D, IInteractable
 			}
 		}
 
-		player.UnregisterInteractable(this);
+		playerToUnregister?.UnregisterInteractable(this);
+	}
 
-		// Spawn weapon
-		SpawnWeaponReward();
+	private string PickChestWeaponPath()
+	{
+		string weaponPath = "res://data/waepons/revolver.tres";
+		if (OpenedChestsCount >= 2)
+		{
+			string[] chestPool = new[]
+			{
+				"res://data/waepons/shotgun.tres",
+				"res://data/waepons/laser_cannon.tres",
+				"res://data/waepons/katana.tres",
+				"res://data/waepons/magic_staff.tres"
+			};
+			weaponPath = chestPool[GD.Randi() % chestPool.Length];
+		}
+		return weaponPath;
 	}
 
 	private void SpawnWeaponReward()
 	{
+		string weaponPath = PickChestWeaponPath();
+		if (IsCoopSession)
+		{
+			(GetTree().GetFirstNodeInGroup("Level") as Level)?.SpawnWeaponPickupAt(GlobalPosition + new Vector2(0, 10), weaponPath);
+			return;
+		}
+
 		var pickupPrefab = GD.Load<PackedScene>("res://scene/weapons/weapon_pickup.tscn");
 		if (pickupPrefab == null) return;
 
 		var pickup = pickupPrefab.Instantiate() as WeaponPickup;
 		if (pickup == null) return;
-
-		string weaponPath = "res://data/waepons/revolver.tres";
-		if (OpenedChestsCount >= 2)
-		{
-			weaponPath = "res://data/waepons/shotgun.tres";
-		}
 
 		pickup.WeaponToGive = GD.Load<WeaponData>(weaponPath);
 		pickup.GlobalPosition = GlobalPosition + new Vector2(0, 10);
@@ -155,13 +214,14 @@ public partial class Chest : StaticBody2D, IInteractable
 	{
 		if (_isOpen) return;
 		Player player = node as Player;
-		if (player == null && node != null && node.IsInGroup("Player"))
+		if (player == null && node != null && node.IsInGroup("Player") && !IsCoopSession)
 		{
 			player = GetTree().GetFirstNodeInGroup("Player") as Player;
 		}
 
 		if (player != null)
 		{
+			if (IsCoopSession && (!player.IsLocalPlayer || player.IsDead)) return;
 			_playerInRange = entered;
 			if (entered)
 			{

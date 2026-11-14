@@ -5,10 +5,11 @@ using System.Collections.Generic;
 public partial class Fireball : Area2D
 {
 	public Vector2 Direction = Vector2.Right;
-	public float Speed = 600.0f;
-	public float Range = 400.0f;
+	public float Speed = 200.0f;
+	public float Range = 135.0f;
 	public float Damage = 10.0f;
 	public float ExplosionRadius = 45.0f;
+	public Player OwnerPlayer = null;
 
 	private Vector2 _startPos;
 	private CpuParticles2D _trail;
@@ -17,7 +18,7 @@ public partial class Fireball : Area2D
 
 	public override void _Ready()
 	{
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		_startPos = GlobalPosition;
 		Material = GameResourceCache.GetUnshadedMaterial();
 
@@ -51,12 +52,12 @@ public partial class Fireball : Area2D
 			_trail.LocalCoords = false;
 			_trail.Gravity = Vector2.Zero;
 			_trail.Spread = 20f;
-			_trail.InitialVelocityMin = 10f;
-			_trail.InitialVelocityMax = 30f;
+			_trail.InitialVelocityMin = 4f;
+			_trail.InitialVelocityMax = 10f;
 
 			var scaleCurve = new Curve();
-			scaleCurve.AddPoint(new Vector2(0f, 1.2f));
-			scaleCurve.AddPoint(new Vector2(1f, 0.2f));
+			scaleCurve.AddPoint(new Vector2(0f, 0.7f));
+			scaleCurve.AddPoint(new Vector2(1f, 0.1f));
 			_trail.ScaleAmountCurve = scaleCurve;
 
 			var gradient = new Gradient();
@@ -146,7 +147,11 @@ public partial class Fireball : Area2D
 		{
 			if (_hitTargets.Add(enemy.GetInstanceId()))
 			{
-				enemy.TakeDamage(Damage, GlobalPosition, 8.0f, false);
+				if (NetworkManager.Instance == null || NetworkManager.Instance.IsServerAuthority)
+				{
+					enemy.TakeDamage(Damage, GlobalPosition, 8.0f, false, false, OwnerPlayer);
+					enemy.ApplyStatusEffect(StatusEffectType.Burn, 3.0f, MathF.Max(4.0f, Damage * 0.35f));
+				}
 			}
 			return;
 		}
@@ -174,29 +179,33 @@ public partial class Fireball : Area2D
 		var explosion = new FireballExplosion();
 		explosion.GlobalPosition = GlobalPosition;
 		GetParent().AddChild(explosion);
-		DungeonVisuals.SpawnMuzzleFlash(GetParent(), GlobalPosition, new Color(1.0f, 0.72f, 0.24f), 22.0f);
+		DungeonVisuals.SpawnMuzzleFlash(GetParent(), GlobalPosition, new Color(1.0f, 0.72f, 0.24f), 7.5f);
 		DungeonVisuals.SpawnImpactSparks(
 			GetParent(),
 			GlobalPosition,
 			Vector2.Up,
 			new Color(1.0f, 0.72f, 0.22f),
 			18,
-			210.0f,
+			70.0f,
 			180.0f,
-			2.0f);
+			1.1f);
 
 		// Наносим АОЕ урон врагам в радиусе взрыва (избегая двойного полного урона по уже пробитым целям)
-		var enemies = GetTree().GetNodesInGroup("Enemies");
-		foreach (Node enemyNode in enemies)
+		if (NetworkManager.Instance == null || NetworkManager.Instance.IsServerAuthority)
 		{
-			if (enemyNode is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
+			var enemies = GetTree().GetNodesInGroup("Enemies");
+			foreach (Node enemyNode in enemies)
 			{
-				float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
-				if (dist <= ExplosionRadius * World.Scale)
+				if (enemyNode is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
 				{
-					if (_hitTargets.Add(enemy.GetInstanceId()))
+					float dist = GlobalPosition.DistanceTo(enemy.GlobalPosition);
+					if (dist <= ExplosionRadius)
 					{
-						enemy.TakeDamage(Damage, GlobalPosition, 12.0f, false);
+						if (_hitTargets.Add(enemy.GetInstanceId()))
+						{
+							enemy.TakeDamage(Damage, GlobalPosition, 12.0f, false, false, OwnerPlayer);
+							enemy.ApplyStatusEffect(StatusEffectType.Burn, 3.0f, MathF.Max(4.0f, Damage * 0.35f));
+						}
 					}
 				}
 			}
@@ -219,7 +228,7 @@ public partial class FireballExplosion : CpuParticles2D
 {
 	public override void _Ready()
 	{
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		Texture = DungeonVisuals.GetPixelSquareTexture();
 		Material = GameResourceCache.GetUnshadedMaterial();
 		Emitting = true;
@@ -229,11 +238,11 @@ public partial class FireballExplosion : CpuParticles2D
 		Lifetime = 0.45f;
 		Spread = 180f;
 		Gravity = Vector2.Zero;
-		InitialVelocityMin = 180f;
-		InitialVelocityMax = 330f;
+		InitialVelocityMin = 60f;
+		InitialVelocityMax = 110f;
 
 		var scaleCurve = new Curve();
-		scaleCurve.AddPoint(new Vector2(0f, 1.5f));
+		scaleCurve.AddPoint(new Vector2(0f, 0.8f));
 		scaleCurve.AddPoint(new Vector2(1f, 0.1f));
 		ScaleAmountCurve = scaleCurve;
 

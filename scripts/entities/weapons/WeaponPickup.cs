@@ -13,17 +13,22 @@ public partial class WeaponPickup : Node2D, IInteractable
 	private float _bobTime = 0.0f;
 	private bool _playerInRange = false;
 	private Player _player;
+	private bool _consumed = false;
+	private bool _appliedPickup = false;
+
+	private bool IsCoopSession => NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+	private bool IsServerAuthority => !IsCoopSession || (NetworkManager.Instance != null && NetworkManager.Instance.IsServerAuthority);
 
 	public bool IsPlayerInRange => _playerInRange;
 
 	public bool IsHoveredByMouse(Vector2 worldMousePos)
 	{
-		return WeaponToGive != null && GlobalPosition.DistanceTo(worldMousePos) <= 28.0f;
+		return WeaponToGive != null && GlobalPosition.DistanceTo(worldMousePos) <= 10.0f;
 	}
 
 	public override void _Ready()
 	{
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		AddToGroup("WeaponPickup");
 		_pickupArea = GetNode<Area2D>("Area2D");
 		_nameLabel = GetNode<Label>("NameLabel");
@@ -99,7 +104,19 @@ public partial class WeaponPickup : Node2D, IInteractable
 
 	public void Interact(Player player)
 	{
-		if (WeaponToGive == null) return;
+		if (WeaponToGive == null || _consumed) return;
+
+		if (IsCoopSession)
+		{
+			if (player == null || !player.IsLocalPlayer || player.IsDead) return;
+			if (!IsServerAuthority)
+			{
+				RpcId(1, nameof(RpcRequestPickupWeapon), (long)player.PeerId, player.CurrentSlotIndex);
+				return;
+			}
+			ProcessWeaponPickupOnServer(player.PeerId, player.CurrentSlotIndex);
+			return;
+		}
 
 		// Ищем первый пустой слот (null)
 		int emptySlotIndex = -1;
@@ -207,6 +224,10 @@ public partial class WeaponPickup : Node2D, IInteractable
 
 	private void SetPlayerInRange(Player player, bool inRange)
 	{
+		if (IsCoopSession && (player == null || !player.IsLocalPlayer || player.IsDead))
+		{
+			return;
+		}
 		_playerInRange = inRange;
 		if (inRange) {
 			_player = player;
@@ -214,10 +235,78 @@ public partial class WeaponPickup : Node2D, IInteractable
 				_player.RegisterInteractable(this);
 			}
 		} else {
-			if (_player != null) {
+			if (_player != null && _player == player) {
 				_player.UnregisterInteractable(this);
+				_player = null;
 			}
-			_player = null;
 		}
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcRequestPickupWeapon(long peerId, int preferredActiveSlot)
+	{
+		if (!IsServerAuthority) return;
+		if (Multiplayer.GetRemoteSenderId() != (int)peerId) return;
+		ProcessWeaponPickupOnServer((int)peerId, preferredActiveSlot);
+	}
+
+	private void ProcessWeaponPickupOnServer(int peerId, int preferredActiveSlot)
+	{
+		if (_consumed || WeaponToGive == null) return;
+		Player target = NetworkManager.GetPlayerByPeerId(GetTree(), peerId);
+		if (target == null || target.IsDead || target.WeaponSlots.Count == 0) return;
+
+		int emptySlotIndex = -1;
+		for (int i = 0; i < target.WeaponSlots.Count; i++)
+		{
+			if (target.WeaponSlots[i].CurrentWeapon == null)
+			{
+				emptySlotIndex = i;
+				break;
+			}
+		}
+
+		int targetSlot = emptySlotIndex != -1
+			? emptySlotIndex
+			: Mathf.Clamp(preferredActiveSlot, 0, target.WeaponSlots.Count - 1);
+
+		string oldWeaponPath = emptySlotIndex == -1
+			? (target.WeaponSlots[targetSlot]?.CurrentWeapon?.GetEffectiveResourcePath() ?? "")
+			: "";
+
+		_consumed = true;
+		Vector2 dropPos = target.GlobalPosition;
+		Rpc(nameof(RpcCompleteWeaponPickup), (long)peerId, targetSlot);
+
+		if (!string.IsNullOrEmpty(oldWeaponPath))
+		{
+			(GetTree().GetFirstNodeInGroup("Level") as Level)?.SpawnWeaponPickupAt(dropPos, oldWeaponPath);
+		}
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcCompleteWeaponPickup(long peerId, int slotIndex)
+	{
+		int sender = Multiplayer.GetRemoteSenderId();
+		if (IsCoopSession && sender != 0 && sender != 1) return;
+		if (_appliedPickup) return;
+		_appliedPickup = true;
+		_consumed = true;
+
+		Player target = NetworkManager.GetPlayerByPeerId(GetTree(), peerId);
+		if (target != null && WeaponToGive != null && slotIndex >= 0 && slotIndex < target.WeaponSlots.Count)
+		{
+			if (target.WeaponSlots[slotIndex].CurrentWeapon != null)
+			{
+				target.WeaponSlots[slotIndex].Deactivate();
+			}
+			target.WeaponSlots[slotIndex].CurrentWeapon = WeaponToGive;
+			target.SelectSlot(slotIndex);
+			target.WeaponSlots[slotIndex].ApplyWeaponSettings();
+			target.UnregisterInteractable(this);
+		}
+
+		NetworkManager.GetLocalPlayer(GetTree())?.UnregisterInteractable(this);
+		QueueFree();
 	}
 }

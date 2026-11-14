@@ -15,24 +15,24 @@ public partial class AbilitySlotUI : Control
 	{
 		_abilityId = abilityId;
 		_hud = hud;
-		CustomMinimumSize = new Vector2(26, 26);
-		Size = new Vector2(26, 26);
+		CustomMinimumSize = new Vector2(46, 46);
+		Size = new Vector2(46, 46);
 	}
 
 	public override void _Ready()
 	{
-		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+		_player = NetworkManager.GetLocalPlayer(GetTree());
 
 		_circle = new AbilityCircle(_abilityId, this);
-		_circle.Size = new Vector2(24, 24);
+		_circle.Size = new Vector2(46, 46);
 		_circle.Position = Vector2.Zero;
-		_circle.Scale = new Vector2(0.84f * 1.3f, 0.84f * 1.3f);
+		_circle.Scale = Vector2.One;
 		AddChild(_circle);
 
 		_upgradeButton = new AbilityUpgradeButton();
-		_upgradeButton.CustomMinimumSize = new Vector2(21, 12);
-		_upgradeButton.Size = new Vector2(21, 12);
-		_upgradeButton.Position = new Vector2(2.5f, -14);
+		_upgradeButton.CustomMinimumSize = new Vector2(36, 21);
+		_upgradeButton.Size = new Vector2(36, 21);
+		_upgradeButton.Position = new Vector2(5, -24);
 
 		var styleEmpty = new StyleBoxEmpty();
 		_upgradeButton.AddThemeStyleboxOverride("normal", styleEmpty);
@@ -51,9 +51,9 @@ public partial class AbilitySlotUI : Control
 
 	public void UpdateState()
 	{
-		if (!GodotObject.IsInstanceValid(_player))
+		if (!GodotObject.IsInstanceValid(_player) || _player.IsQueuedForDeletion())
 		{
-			_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+			_player = NetworkManager.GetLocalPlayer(GetTree());
 		}
 
 		if (_player == null || _upgradeButton == null || _circle == null) return;
@@ -105,6 +105,7 @@ public partial class AbilitySlotUI : Control
 			_player.Ability2Level = GameLogic.ClampAbilityLevel(_player.Ability2Level + 1);
 		}
 
+		_player.BroadcastCoopBuildSync();
 		_hud.UpdateAbilitiesUI();
 	}
 }
@@ -123,14 +124,14 @@ public partial class AbilityCircle : Control
 
 	public override void _Ready()
 	{
-		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+		_player = NetworkManager.GetLocalPlayer(GetTree());
 	}
 
 	public override void _Draw()
 	{
-		if (!GodotObject.IsInstanceValid(_player))
+		if (!GodotObject.IsInstanceValid(_player) || _player.IsQueuedForDeletion())
 		{
-			_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+			_player = NetworkManager.GetLocalPlayer(GetTree());
 		}
 
 		if (_player == null) return;
@@ -139,21 +140,21 @@ public partial class AbilityCircle : Control
 		float cooldown = _abilityId == 1 ? _player.FireballCooldownTimer : _player.ShieldCooldownTimer;
 		float maxCooldown = _abilityId == 1 ? Player.FireballCooldownMax : Player.ShieldCooldownMax;
 
-		Vector2 center = new Vector2(12, 12);
-		float radius = 11.2f;
+		Vector2 center = new Vector2(23f, 23f);
+		float radius = 21.5f;
 		bool isUnlocked = lvl > 0;
 		bool isReady = isUnlocked && cooldown <= 0.0f;
 
 		// 1. Внешняя тень и обсидиановый медальон
-		DrawCircle(center + new Vector2(0.8f, 1.2f), radius + 0.4f, new Color(0f, 0f, 0f, 0.55f));
+		DrawCircle(center + new Vector2(1.5f, 2.3f), radius + 0.8f, new Color(0f, 0f, 0f, 0.55f));
 		DrawCircle(center, radius, new Color(0.06f, 0.065f, 0.10f, 0.96f));
-		DrawCircle(center, radius - 2.0f, isUnlocked ? new Color(0.11f, 0.115f, 0.17f, 0.95f) : new Color(0.08f, 0.08f, 0.11f, 0.9f));
+		DrawCircle(center, radius - 3.8f, isUnlocked ? new Color(0.11f, 0.115f, 0.17f, 0.95f) : new Color(0.08f, 0.08f, 0.11f, 0.9f));
 
 		// Мягкое фоновое свечение при готовности
 		if (isReady)
 		{
 			Color aura = _abilityId == 1 ? new Color(1.0f, 0.45f, 0.12f, 0.14f) : new Color(0.24f, 0.78f, 1.0f, 0.14f);
-			DrawCircle(center, radius - 2.2f, aura);
+			DrawCircle(center, radius - 4.2f, aura);
 		}
 
 		// 2. Двойная окантовка (бронза/циан при активности)
@@ -162,8 +163,8 @@ public partial class AbilityCircle : Control
 			: (_abilityId == 2 && _player.IsShieldActive
 				? new Color(0.32f, 0.96f, 1.0f)
 				: (isReady ? DungeonVisuals.BrassGold : DungeonVisuals.BrassDim));
-		DrawArc(center, radius, 0f, Mathf.Tau, 32, borderColor, 1.4f, false);
-		DrawArc(center, radius - 1.6f, 0f, Mathf.Tau, 28, new Color(1f, 1f, 1f, isReady ? 0.14f : 0.05f), 0.7f, false);
+		DrawArc(center, radius, 0f, Mathf.Tau, 32, borderColor, 2.6f, false);
+		DrawArc(center, radius - 3.0f, 0f, Mathf.Tau, 28, new Color(1f, 1f, 1f, isReady ? 0.14f : 0.05f), 1.3f, false);
 
 		// 3. Детализированные эмблемы способностей
 		if (_abilityId == 1)
@@ -171,13 +172,13 @@ public partial class AbilityCircle : Control
 			// Многослойное пламя огненного шара
 			Vector2[] outerFlame = new Vector2[]
 			{
-				new Vector2(12, 4.8f),
-				new Vector2(15.2f, 8.2f),
-				new Vector2(16.6f, 12.2f),
-				new Vector2(14.8f, 16.2f),
-				new Vector2(9.2f, 16.2f),
-				new Vector2(7.4f, 12.2f),
-				new Vector2(8.8f, 8.2f),
+				new Vector2(23.0f, 9.2f),
+				new Vector2(29.1f, 15.7f),
+				new Vector2(31.8f, 23.4f),
+				new Vector2(28.4f, 31.0f),
+				new Vector2(17.6f, 31.0f),
+				new Vector2(14.2f, 23.4f),
+				new Vector2(16.9f, 15.7f),
 			};
 			Color outerColor = isUnlocked ? new Color(0.98f, 0.38f, 0.08f) : new Color(0.38f, 0.36f, 0.38f);
 			DrawColoredPolygon(outerFlame, outerColor);
@@ -186,16 +187,16 @@ public partial class AbilityCircle : Control
 			{
 				Vector2[] midFlame = new Vector2[]
 				{
-					new Vector2(12, 7.0f),
-					new Vector2(14.5f, 10.6f),
-					new Vector2(13.8f, 15.2f),
-					new Vector2(10.2f, 15.2f),
-					new Vector2(9.5f, 10.6f),
+					new Vector2(23.0f, 13.4f),
+					new Vector2(27.8f, 20.3f),
+					new Vector2(26.5f, 29.1f),
+					new Vector2(19.5f, 29.1f),
+					new Vector2(18.2f, 20.3f),
 				};
 				DrawColoredPolygon(midFlame, new Color(1.0f, 0.72f, 0.18f));
 
-				DrawCircle(new Vector2(12, 13.0f), 1.8f, new Color(1.0f, 0.96f, 0.72f));
-				DrawCircle(new Vector2(9.0f, 7.6f), 0.8f, new Color(1.0f, 0.75f, 0.30f, 0.85f));
+				DrawCircle(new Vector2(23.0f, 24.9f), 3.4f, new Color(1.0f, 0.96f, 0.72f));
+				DrawCircle(new Vector2(17.2f, 14.6f), 1.5f, new Color(1.0f, 0.75f, 0.30f, 0.85f));
 			}
 		}
 		else
@@ -203,12 +204,12 @@ public partial class AbilityCircle : Control
 			// Щит Эгиды с руническим крестом
 			Vector2[] shieldOuter = new Vector2[]
 			{
-				new Vector2(12, 5.2f),
-				new Vector2(16.8f, 6.6f),
-				new Vector2(16.4f, 11.8f),
-				new Vector2(12, 16.8f),
-				new Vector2(7.6f, 11.8f),
-				new Vector2(7.2f, 6.6f),
+				new Vector2(23.0f, 10.0f),
+				new Vector2(32.2f, 12.6f),
+				new Vector2(31.4f, 22.6f),
+				new Vector2(23.0f, 32.2f),
+				new Vector2(14.6f, 22.6f),
+				new Vector2(13.8f, 12.6f),
 			};
 			Color shieldColor = isUnlocked ? new Color(0.16f, 0.52f, 0.90f) : new Color(0.35f, 0.38f, 0.44f);
 			DrawColoredPolygon(shieldOuter, shieldColor);
@@ -219,10 +220,10 @@ public partial class AbilityCircle : Control
 				{
 					shieldOuter[0], shieldOuter[1], shieldOuter[2], shieldOuter[3], shieldOuter[4], shieldOuter[5], shieldOuter[0]
 				};
-				DrawPolyline(outlinePts, new Color(0.65f, 0.92f, 1.0f), 1.0f, false);
+				DrawPolyline(outlinePts, new Color(0.65f, 0.92f, 1.0f), 1.9f, false);
 				// Внутренний светящийся крест
-				DrawLine(new Vector2(12, 7.2f), new Vector2(12, 14.8f), new Color(0.82f, 0.97f, 1.0f), 1.4f);
-				DrawLine(new Vector2(8.8f, 10.2f), new Vector2(15.2f, 10.2f), new Color(0.82f, 0.97f, 1.0f), 1.4f);
+				DrawLine(new Vector2(23.0f, 13.8f), new Vector2(23.0f, 28.4f), new Color(0.82f, 0.97f, 1.0f), 2.6f);
+				DrawLine(new Vector2(16.9f, 19.5f), new Vector2(29.1f, 19.5f), new Color(0.82f, 0.97f, 1.0f), 2.6f);
 			}
 		}
 
@@ -281,28 +282,28 @@ public partial class AbilityCircle : Control
 			var font = GameResourceCache.GetSilverFont();
 			if (font != null)
 			{
-				Vector2 textSize = font.GetStringSize(cdText, HorizontalAlignment.Center, -1, 10);
-				Vector2 textOrigin = center - new Vector2(textSize.X / 2.0f, -4);
-				DrawString(font, textOrigin + new Vector2(1, 1), cdText, HorizontalAlignment.Center, -1, 10, new Color(0, 0, 0, 0.9f));
-				DrawString(font, textOrigin, cdText, HorizontalAlignment.Center, -1, 10, Colors.White);
+				Vector2 textSize = font.GetStringSize(cdText, HorizontalAlignment.Center, -1, 19);
+				Vector2 textOrigin = center - new Vector2(textSize.X / 2.0f, -7.5f);
+				DrawString(font, textOrigin + new Vector2(1.5f, 1.5f), cdText, HorizontalAlignment.Left, -1, 19, new Color(0, 0, 0, 0.9f));
+				DrawString(font, textOrigin, cdText, HorizontalAlignment.Left, -1, 19, Colors.White);
 			}
 		}
 
-		// 6. Гнезда уровня (4 ячеек по низу, сдвинуты левее от клавиши)
+		// 6. Гнезда уровня (4 ячейки по низу, сдвинуты левее от клавиши)
 		if (isUnlocked)
 		{
 			const int maxLvl = 4;
-			float spacing = 3.2f;
-			float startX = 9.0f - ((maxLvl - 1) * spacing) * 0.5f;
-			float dotY = 20.5f;
+			float spacing = 6.1f;
+			float startX = 17.2f - ((maxLvl - 1) * spacing) * 0.5f;
+			float dotY = 39.3f;
 
 			for (int i = 0; i < maxLvl; i++)
 			{
 				float dotX = startX + i * spacing;
 				bool filled = i < lvl;
-				DrawRect(new Rect2(dotX - 1.3f, dotY - 1.3f, 2.6f, 2.6f), new Color(0.04f, 0.04f, 0.06f, 0.95f));
+				DrawRect(new Rect2(dotX - 2.5f, dotY - 2.5f, 5.0f, 5.0f), new Color(0.04f, 0.04f, 0.06f, 0.95f));
 				Color gemColor = filled ? new Color(0.32f, 0.95f, 0.52f) : new Color(0.22f, 0.24f, 0.30f);
-				DrawRect(new Rect2(dotX - 0.8f, dotY - 0.8f, 1.6f, 1.6f), gemColor);
+				DrawRect(new Rect2(dotX - 1.5f, dotY - 1.5f, 3.0f, 3.0f), gemColor);
 			}
 		}
 
@@ -316,11 +317,11 @@ public partial class AbilityCircle : Control
 				: (_abilityId == 1 ? "Q" : "V");
 			if (keyText.Length > 2) keyText = keyText.Substring(0, 2);
 
-			Rect2 badge = new Rect2(15.5f, 15.5f, 8.5f, 8.5f);
+			Rect2 badge = new Rect2(29.5f, 29.5f, 16.0f, 16.0f);
 			DrawRect(badge, new Color(0.05f, 0.055f, 0.085f, 0.95f));
-			DrawRect(badge, isReady ? DungeonVisuals.BrassGold : DungeonVisuals.IronBorder, false, 0.9f);
+			DrawRect(badge, isReady ? DungeonVisuals.BrassGold : DungeonVisuals.IronBorder, false, 1.6f);
 			Color keyColor = isReady ? DungeonVisuals.Parchment : new Color(0.58f, 0.60f, 0.68f);
-			DrawString(keyFont, new Vector2(19.8f, 22.2f), keyText, HorizontalAlignment.Center, -1, 8, keyColor);
+			DrawString(keyFont, new Vector2(29.5f, 42.0f), keyText, HorizontalAlignment.Center, 16.0f, 15, keyColor);
 		}
 	}
 }
@@ -329,25 +330,30 @@ public partial class AbilityUpgradeButton : Button
 {
 	public override void _Draw()
 	{
-		Color outer = new Color(0.10f, 0.07f, 0.02f, 0.95f);
-		Color bgColor = new Color(0.95f, 0.76f, 0.22f);
+		Color outer = new Color(0.09f, 0.06f, 0.02f, 0.98f);
+		Color rim = new Color(1.0f, 0.86f, 0.36f, 0.92f);
+		Color bgColor = new Color(0.86f, 0.62f, 0.14f);
 		if (IsPressed())
 		{
-			bgColor = new Color(0.75f, 0.56f, 0.12f);
+			bgColor = new Color(0.66f, 0.46f, 0.10f);
 		}
 		else if (IsHovered())
 		{
-			bgColor = new Color(1.0f, 0.88f, 0.38f);
+			bgColor = new Color(0.98f, 0.78f, 0.24f);
 		}
 
 		DrawRect(new Rect2(Vector2.Zero, Size), outer, true);
-		DrawRect(new Rect2(1, 1, Size.X - 2, Size.Y - 2), bgColor, true);
-		DrawRect(new Rect2(1, 1, Size.X - 2, 1), new Color(1f, 0.98f, 0.75f, 0.65f), true);
+		DrawRect(new Rect2(1, 1, Size.X - 2, Size.Y - 2), rim, false, 1.0f);
+		DrawRect(new Rect2(2, 2, Size.X - 4, Size.Y - 4), bgColor, true);
+		DrawRect(new Rect2(2, 2, Size.X - 4, 2), new Color(1f, 0.96f, 0.72f, 0.75f), true);
 
-		Color plusColor = new Color(0.08f, 0.05f, 0.02f);
-		float cx = Mathf.Floor(Size.X / 2.0f);
-		float cy = Mathf.Floor(Size.Y / 2.0f);
-		DrawRect(new Rect2(cx - 3, cy - 0.6f, 7, 1.6f), plusColor);
-		DrawRect(new Rect2(cx - 0.6f, cy - 3, 1.6f, 7), plusColor);
+		Color ink = new Color(0.09f, 0.05f, 0.02f);
+		float cx = Mathf.Floor(Size.X * 0.5f);
+		float cy = Mathf.Floor(Size.Y * 0.5f);
+		// Crisp bold upward pixel arrow (unambiguous Level-Up badge)
+		DrawRect(new Rect2(cx - 1.5f, cy - 6.0f, 3.0f, 2.0f), ink);
+		DrawRect(new Rect2(cx - 3.5f, cy - 4.0f, 7.0f, 2.0f), ink);
+		DrawRect(new Rect2(cx - 5.5f, cy - 2.0f, 11.0f, 2.0f), ink);
+		DrawRect(new Rect2(cx - 2.0f, cy + 0.0f, 4.0f, 5.5f), ink);
 	}
 }

@@ -43,14 +43,14 @@ public partial class BoomerangWeaponProjectile : Node2D
 		_ownerPlayer = owner;
 		_sourceSlot = sourceSlot;
 		_weaponTexture = weaponTexture;
-		_startPos = owner.GlobalPosition + new Vector2(0, -10);
+		_startPos = owner.GlobalPosition + new Vector2(0, -3.5f);
 		_forwardDir = direction == Vector2.Zero ? Vector2.Right : direction.Normalized();
 		// Перпендикулярный вектор для дугового отклонения бумеранга
 		_sideDir = new Vector2(-_forwardDir.Y, _forwardDir.X);
-		_maxDistance = Mathf.Max(15.0f, maxDistance);
+		_maxDistance = Mathf.Max(5.0f, maxDistance);
 		_curveWidth = _maxDistance * 0.20f;
 
-		float effectiveSpeed = Mathf.Max(80.0f, speed);
+		float effectiveSpeed = Mathf.Max(27.0f, speed);
 		_outboundDuration = Mathf.Clamp(_maxDistance / effectiveSpeed, 0.12f, 2.0f);
 		_returnDuration = Mathf.Clamp(_outboundDuration * 0.95f, 0.12f, 2.0f);
 
@@ -58,7 +58,7 @@ public partial class BoomerangWeaponProjectile : Node2D
 		_knockback = knockback;
 		_onReturnedCallback = onReturned;
 		GlobalPosition = _startPos;
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		ZIndex = 4;
 	}
 
@@ -125,7 +125,7 @@ public partial class BoomerangWeaponProjectile : Node2D
 			Vector2 basePos = _apexPos.Lerp(playerHandPos, returnFactor);
 			GlobalPosition = basePos - _sideDir * (_curveWidth * sideFactor);
 
-			if (_phaseProgress >= 1.0f || (_phaseProgress >= 0.35f && GlobalPosition.DistanceTo(playerHandPos) <= 26.0f))
+			if (_phaseProgress >= 1.0f || (_phaseProgress >= 0.35f && GlobalPosition.DistanceTo(playerHandPos) <= 9.0f))
 			{
 				RestoreOwnerWeapon();
 				QueueFree();
@@ -138,7 +138,9 @@ public partial class BoomerangWeaponProjectile : Node2D
 
 	private void CheckEnemyHits()
 	{
-		float hitRadius = 18.0f * World.Scale;
+		if (NetworkManager.Instance != null && !NetworkManager.Instance.IsServerAuthority) return;
+
+		float hitRadius = 18.0f;
 		var hitSet = _returning ? _returnHits : _outboundHits;
 
 		foreach (Node node in GetTree().GetNodesInGroup("Enemies"))
@@ -151,7 +153,20 @@ public partial class BoomerangWeaponProjectile : Node2D
 				if (GlobalPosition.DistanceTo(enemy.GlobalPosition) <= hitRadius)
 				{
 					hitSet.Add(id);
-					enemy.TakeDamage(_damage, GlobalPosition, _knockback, true);
+					Player ownerPlayer = GodotObject.IsInstanceValid(_ownerPlayer)
+						? _ownerPlayer
+						: (GetTree()?.GetFirstNodeInGroup("Player") as Player);
+					float finalDmg = _damage;
+					bool isCrit = false;
+					if (ownerPlayer != null)
+					{
+						(finalDmg, isCrit) = ownerPlayer.RollDamageCrit(_damage, true);
+					}
+					enemy.TakeDamage(finalDmg, GlobalPosition, _knockback, true, isCrit, ownerPlayer);
+					if (ownerPlayer != null)
+					{
+						enemy.ApplyPlayerHitRelicEffects(ownerPlayer, finalDmg, true, isCrit);
+					}
 				}
 			}
 		}

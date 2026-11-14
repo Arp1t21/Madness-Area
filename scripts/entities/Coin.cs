@@ -17,6 +17,17 @@ public partial class Coin : PickupItem
 
 	protected override void ApplyPickupEffect(Player player)
 	{
+		if (NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession)
+		{
+			if (NetworkManager.Instance.IsServerAuthority && player?.GetTree() != null)
+			{
+				foreach (var p in NetworkManager.GetAllPlayers(player.GetTree()))
+				{
+					p.Rpc(nameof(Player.RpcGrantCoins), 1);
+				}
+			}
+			return;
+		}
 		player.CoinCount++;
 	}
 }

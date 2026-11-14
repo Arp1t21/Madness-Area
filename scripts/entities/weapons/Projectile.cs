@@ -4,11 +4,15 @@ using System;
 public partial class Projectile : Node2D
 {
 	public float Damage = 10;
-	public float Speed = 300.0f;
+	public float Speed = 100.0f;
 	public float Range = 500.0f;
 	public Vector2 Direction = Vector2.Right;
 	public bool IsPlayerOwned = true;
 	public bool IsPiercing = false;
+	public bool IsBladeProjectile = false;
+	public int RemainingWallBounces = 0;
+	public Player OwnerPlayer = null;
+	public Enemy SourceEnemy = null;
 	public float KnockbackForce = 2.5f;
 
 	[Export] public bool EnableSoftGlow = false;
@@ -22,7 +26,7 @@ public partial class Projectile : Node2D
 
 	public override void _Ready()
 	{
-		Scale = new Vector2(3.0f, 3.0f);
+		Scale = Vector2.One;
 		_startPos = GlobalPosition;
 
 		var area = GetNodeOrNull<Area2D>("Area2D") ?? GetNodeOrNull<Area2D>(".");
@@ -104,10 +108,10 @@ public partial class Projectile : Node2D
 		trail.Gravity = Vector2.Zero;
 		trail.Direction = -Direction;
 		trail.Spread = 12f;
-		trail.InitialVelocityMin = 5f;
-		trail.InitialVelocityMax = 15f;
-		trail.ScaleAmountMin = 1.5f;
-		trail.ScaleAmountMax = 3.0f;
+		trail.InitialVelocityMin = 2f;
+		trail.InitialVelocityMax = 6f;
+		trail.ScaleAmountMin = 0.6f;
+		trail.ScaleAmountMax = 1.3f;
 
 		var gradient = new Gradient();
 		if (IsPlayerOwned)
@@ -136,7 +140,7 @@ public partial class Projectile : Node2D
 	{
 		Position += Direction * Speed * (float)delta;
 
-		if (GlobalPosition.DistanceTo(_startPos) >= Range * World.Scale)
+		if (GlobalPosition.DistanceTo(_startPos) >= Range)
 		{
 			QueueFree();
 		}
@@ -157,20 +161,37 @@ public partial class Projectile : Node2D
 	private void HandleCollision(Node hitNode)
 	{
 		if (_isDestroyed || hitNode == null || hitNode.IsQueuedForDeletion()) return;
+		bool isServerAuthority = NetworkManager.Instance == null || NetworkManager.Instance.IsServerAuthority;
 
 		if (IsPlayerOwned && hitNode is Enemy enemy && !_hitTargets.Contains(hitNode.GetInstanceId()))
 		{
 			_hitTargets.Add(hitNode.GetInstanceId());
-			enemy.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
+			if (isServerAuthority)
+			{
+				Player ownerPlayer = GodotObject.IsInstanceValid(OwnerPlayer)
+					? OwnerPlayer
+					: (GetTree()?.GetFirstNodeInGroup("Player") as Player);
+				float dmg = Damage;
+				bool isCrit = false;
+				if (ownerPlayer != null)
+				{
+					(dmg, isCrit) = ownerPlayer.RollDamageCrit(Damage, IsBladeProjectile);
+				}
+				enemy.TakeDamage(dmg, GlobalPosition, KnockbackForce, false, isCrit, ownerPlayer);
+				if (ownerPlayer != null)
+				{
+					enemy.ApplyPlayerHitRelicEffects(ownerPlayer, dmg, IsBladeProjectile, isCrit);
+				}
+			}
 			DungeonVisuals.SpawnImpactSparks(
 				GetTree().CurrentScene ?? GetTree().Root,
 				GlobalPosition,
 				-Direction,
 				GlowColor != default ? GlowColor : new Color(1.0f, 0.86f, 0.42f),
 				6,
-				135.0f,
+				45.0f,
 				70.0f,
-				1.45f);
+				0.8f);
 
 			if (!IsPiercing)
 			{
@@ -178,19 +199,26 @@ public partial class Projectile : Node2D
 				QueueFree();
 			}
 		}
-		else if (!IsPlayerOwned && hitNode is Player player && !_hitTargets.Contains(hitNode.GetInstanceId()))
+		else if (!IsPlayerOwned && hitNode is Player player && !player.IsDead && !_hitTargets.Contains(hitNode.GetInstanceId()))
 		{
 			_hitTargets.Add(hitNode.GetInstanceId());
-			player.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
+			if (isServerAuthority)
+			{
+				player.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
+				if (SourceEnemy != null && GodotObject.IsInstanceValid(SourceEnemy))
+				{
+					SourceEnemy.ApplyEliteOnHitToPlayer(player);
+				}
+			}
 			DungeonVisuals.SpawnImpactSparks(
 				GetTree().CurrentScene ?? GetTree().Root,
 				GlobalPosition,
 				-Direction,
 				new Color(1.0f, 0.35f, 0.28f),
 				6,
-				130.0f,
+				45.0f,
 				70.0f,
-				1.45f);
+				0.8f);
 
 			if (!IsPiercing)
 			{
@@ -205,12 +233,68 @@ public partial class Projectile : Node2D
 				 hitNode.Name.ToString().Contains("Wall") ||
 				 hitNode.Name.ToString().Contains("Floor"))
 		{
+			if (IsPlayerOwned && RemainingWallBounces > 0 && TryBounceOffWall())
+			{
+				return;
+			}
 			Node vfxHost = GetTree().CurrentScene ?? GetTree().Root;
 			Color wallSparkCol = IsPlayerOwned ? new Color(0.95f, 0.84f, 0.56f) : GlowColor;
-			DungeonVisuals.SpawnMuzzleFlash(vfxHost, GlobalPosition, wallSparkCol, 4.5f);
-			DungeonVisuals.SpawnImpactSparks(vfxHost, GlobalPosition, -Direction, wallSparkCol, 6, 115.0f, 80.0f, 1.3f);
+			DungeonVisuals.SpawnMuzzleFlash(vfxHost, GlobalPosition, wallSparkCol, 1.6f);
+			DungeonVisuals.SpawnImpactSparks(vfxHost, GlobalPosition, -Direction, wallSparkCol, 6, 40.0f, 80.0f, 0.75f);
 			_isDestroyed = true;
 			QueueFree();
 		}
+	}
+
+	private bool TryBounceOffWall()
+	{
+		var space = GetWorld2D()?.DirectSpaceState;
+		Vector2 normal = Vector2.Zero;
+		Vector2 hitPos = GlobalPosition;
+
+		if (space != null)
+		{
+			var excludeRids = new Godot.Collections.Array<Rid>();
+			foreach (Node n in GetTree().GetNodesInGroup("Enemies"))
+			{
+				if (n is CollisionObject2D co && GodotObject.IsInstanceValid(co)) excludeRids.Add(co.GetRid());
+			}
+			foreach (Node n in GetTree().GetNodesInGroup("Player"))
+			{
+				if (n is CollisionObject2D co && GodotObject.IsInstanceValid(co)) excludeRids.Add(co.GetRid());
+			}
+
+			var query = PhysicsRayQueryParameters2D.Create(
+				GlobalPosition - Direction * 12.0f,
+				GlobalPosition + Direction * 12.0f,
+				1u);
+			query.Exclude = excludeRids;
+			var res = space.IntersectRay(query);
+			if (res != null && res.Count > 0 && res.ContainsKey("normal"))
+			{
+				normal = res["normal"].AsVector2();
+				if (res.ContainsKey("position")) hitPos = res["position"].AsVector2();
+			}
+		}
+
+		if (normal == Vector2.Zero)
+		{
+			normal = Mathf.Abs(Direction.X) >= Mathf.Abs(Direction.Y)
+				? new Vector2(-Mathf.Sign(Direction.X), 0.0f)
+				: new Vector2(0.0f, -Mathf.Sign(Direction.Y));
+		}
+
+		Direction = Direction.Bounce(normal).Normalized();
+		Rotation = Direction.Angle();
+		GlobalPosition = hitPos + normal * 2.5f + Direction * 2.5f;
+		RemainingWallBounces--;
+		_hitTargets.Clear();
+
+		Node vfxHost = GetTree()?.CurrentScene ?? GetTree()?.Root;
+		if (vfxHost != null)
+		{
+			DungeonVisuals.SpawnImpactSparks(vfxHost, hitPos, normal, new Color(1.0f, 0.90f, 0.48f), 5, 35.0f, 65.0f, 0.65f);
+		}
+		return true;
 	}
 }

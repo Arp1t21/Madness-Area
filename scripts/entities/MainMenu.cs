@@ -91,33 +91,39 @@ public partial class MainMenu : CanvasLayer
 		}
 
 		var viewportSize = GetViewport().GetVisibleRect().Size;
-		var scaledSize = viewportSize / 3.5f;
 
 		var background = GetNodeOrNull<Control>("Background");
 		if (background != null) {
-			background.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-			background.Size = scaledSize;
-			background.Scale = new Vector2(3.5f, 3.5f);
-			EnhanceMenuBackground(background, scaledSize);
+			background.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+			background.Scale = Vector2.One;
+			EnhanceMenuBackground(background, viewportSize);
 		}
 
 		_menuRoot = GetNode<Control>("MenuRoot");
 		if (_menuRoot != null) {
-			_menuRoot.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-			_menuRoot.Size = scaledSize;
-			_menuRoot.Scale = new Vector2(3.5f, 3.5f);
+			_menuRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+			_menuRoot.Scale = Vector2.One;
 		}
 
-		BuildStyledMainMenu(scaledSize);
+		BuildStyledMainMenu(viewportSize);
 
 		// Подключаем кнопки	
 		GetNode<Button>("MenuRoot/VBoxContainer/PlayButton").Pressed += OnNewGamePressed;
 		GetNode<Button>("MenuRoot/VBoxContainer/LoadButton").Pressed += OnLoadPressed;
+		var coopBtn = GetNodeOrNull<Button>("MenuRoot/VBoxContainer/CoopButton");
+		if (coopBtn != null) coopBtn.Pressed += OnCoopPressed;
 		GetNode<Button>("MenuRoot/VBoxContainer/SettingsButton").Pressed += OnSettingsPressed;
 		GetNode<Button>("MenuRoot/VBoxContainer/ExitButton").Pressed += OnExitPressed;
 
 		// Подключаем звуки ко всем кнопкам в меню
 		ConnectButtonSounds(this);
+
+		if (NetworkManager.Instance != null && !string.IsNullOrEmpty(NetworkManager.Instance.PendingDisconnectNotice))
+		{
+			string notice = NetworkManager.Instance.PendingDisconnectNotice;
+			NetworkManager.Instance.PendingDisconnectNotice = "";
+			ShowDisconnectNoticeBanner(notice, viewportSize);
+		}
 	}	
 
 	private Control _mainTitleContainer = null;
@@ -131,7 +137,7 @@ public partial class MainMenu : CanvasLayer
 	private string _selectedCharacterName = "Knight";
 	private bool _isLoadSlotMode = false;
 
-	private void EnhanceMenuBackground(Control background, Vector2 scaledSize)
+	private void EnhanceMenuBackground(Control background, Vector2 viewSize)
 	{
 		// Rich dungeon darkness & vignette over tiled stone wall
 		var shade = new ColorRect
@@ -155,70 +161,89 @@ public partial class MainMenu : CanvasLayer
 			new Color(1.0f, 0.62f, 0.20f, 0.34f),
 			new Color(0.95f, 0.35f, 0.08f, 0.12f),
 			0.45f,
-			64,
+			112,
 			new Vector2(0.85f, 0.85f));
 
-		float[] torchXs = { scaledSize.X * 0.18f, scaledSize.X * 0.82f };
-		float torchY = scaledSize.Y * 0.42f;
+		float[] torchXs = { viewSize.X * 0.16f, viewSize.X * 0.84f };
+		float torchY = viewSize.Y * 0.42f;
+		Texture2D torchTex = DungeonVisuals.GetPixelTorchTexture();
 		foreach (float tx in torchXs)
 		{
 			var glow = new TextureRect
 			{
 				Texture = glowTex,
-				Size = new Vector2(128, 128),
-				Position = new Vector2(tx - 64, torchY - 64),
-				Modulate = new Color(1f, 0.9f, 0.7f, 0.65f),
+				Size = new Vector2(248, 248),
+				Position = new Vector2(tx - 124, torchY - 124),
+				Modulate = new Color(1f, 0.88f, 0.65f, 0.72f),
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			background.AddChild(glow);
 
+			// Physical pixel-art wall sconce + flickering torch mounted on the brick wall
+			var torchRect = new TextureRect
+			{
+				Texture = torchTex,
+				TextureFilter = Control.TextureFilterEnum.Nearest,
+				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
+				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+				Position = new Vector2(tx - 24, torchY - 24),
+				Size = new Vector2(48, 52),
+				Material = GameResourceCache.GetUnshadedMaterial(),
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			background.AddChild(torchRect);
+
+			var flameTween = torchRect.CreateTween().SetLoops();
+			flameTween.TweenProperty(torchRect, "modulate", new Color(1.0f, 0.90f, 0.78f, 1.0f), 0.35f).SetTrans(Tween.TransitionType.Sine);
+			flameTween.TweenProperty(torchRect, "modulate", new Color(1.0f, 1.0f, 1.0f, 1.0f), 0.42f).SetTrans(Tween.TransitionType.Sine);
+
 			var tween = glow.CreateTween().SetLoops();
-			tween.TweenProperty(glow, "modulate:a", 0.45f, 0.75f).SetTrans(Tween.TransitionType.Sine);
-			tween.TweenProperty(glow, "modulate:a", 0.78f, 0.65f).SetTrans(Tween.TransitionType.Sine);
+			tween.TweenProperty(glow, "modulate:a", 0.48f, 0.75f).SetTrans(Tween.TransitionType.Sine);
+			tween.TweenProperty(glow, "modulate:a", 0.84f, 0.65f).SetTrans(Tween.TransitionType.Sine);
 
 			var embers = new CpuParticles2D
 			{
-				Position = new Vector2(tx, torchY + 8),
+				Position = new Vector2(tx, torchY - 12),
 				Texture = DungeonVisuals.GetPixelSquareTexture(),
-				Amount = 10,
-				Lifetime = 2.6f,
+				Amount = 12,
+				Lifetime = 2.4f,
 				Direction = Vector2.Up,
-				Spread = 32.0f,
-				Gravity = new Vector2(0f, -6f),
-				InitialVelocityMin = 8f,
-				InitialVelocityMax = 18f,
-				ScaleAmountMin = 0.55f,
-				ScaleAmountMax = 1.0f,
-				Color = new Color(1.0f, 0.65f, 0.20f, 0.75f)
+				Spread = 28.0f,
+				Gravity = new Vector2(0f, -12f),
+				InitialVelocityMin = 12f,
+				InitialVelocityMax = 28f,
+				ScaleAmountMin = 0.8f,
+				ScaleAmountMax = 1.4f,
+				Color = new Color(1.0f, 0.68f, 0.22f, 0.85f)
 			};
 			var grad = new Gradient();
-			grad.SetColor(0, new Color(1.0f, 0.82f, 0.35f, 0.8f));
+			grad.SetColor(0, new Color(1.0f, 0.86f, 0.38f, 0.9f));
 			grad.SetColor(1, new Color(0.9f, 0.25f, 0.08f, 0f));
 			embers.ColorRamp = grad;
 			background.AddChild(embers);
 		}
 	}
 
-	private void BuildStyledMainMenu(Vector2 scaledSize)
+	private void BuildStyledMainMenu(Vector2 viewSize)
 	{
 		if (_menuRoot == null) return;
 
 		var silverFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
 		var mainFont = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
 
-		const float panelW = 148.0f;
-		const float panelH = 114.0f;
-		float panelTop = Mathf.Max(74.0f, (scaledSize.Y - panelH) * 0.56f);
-		float panelLeft = (scaledSize.X - panelW) * 0.5f;
+		const float panelW = 264.0f;
+		const float panelH = 256.0f;
+		float panelTop = Mathf.Max(136.0f, (viewSize.Y - panelH) * 0.56f);
+		float panelLeft = (viewSize.X - panelW) * 0.5f;
 
 		// Sculpted Title Header
 		_mainTitleContainer = new VBoxContainer
 		{
-			Position = new Vector2(0, Mathf.Max(8.0f, panelTop - 58.0f)),
-			Size = new Vector2(scaledSize.X, 54.0f),
+			Position = new Vector2(0, Mathf.Max(16.0f, panelTop - 108.0f)),
+			Size = new Vector2(viewSize.X, 100.0f),
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
-		_mainTitleContainer.AddThemeConstantOverride("separation", 1);
+		_mainTitleContainer.AddThemeConstantOverride("separation", 2);
 		_menuRoot.AddChild(_mainTitleContainer);
 
 		var badgeLabel = new Label
@@ -227,7 +252,7 @@ public partial class MainMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		badgeLabel.AddThemeFontOverride("font", mainFont);
-		badgeLabel.AddThemeFontSizeOverride("font_size", 6);
+		badgeLabel.AddThemeFontSizeOverride("font_size", 10);
 		badgeLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassDim.Lightened(0.35f));
 		DungeonVisuals.ApplyPixelOutline(badgeLabel, 1);
 		_mainTitleContainer.AddChild(badgeLabel);
@@ -238,10 +263,35 @@ public partial class MainMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		titleLabel.AddThemeFontOverride("font", silverFont);
-		titleLabel.AddThemeFontSizeOverride("font_size", 36);
+		titleLabel.AddThemeFontSizeOverride("font_size", 68);
 		titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
-		DungeonVisuals.ApplyPixelOutline(titleLabel, 3, new Color(0.05f, 0.03f, 0.02f, 1f), 2, 2);
+		DungeonVisuals.ApplyPixelOutline(titleLabel, 5, new Color(0.05f, 0.03f, 0.02f, 1f), 3, 3);
 		_mainTitleContainer.AddChild(titleLabel);
+
+		var crestRule = new ColorRect
+		{
+			CustomMinimumSize = new Vector2(220, 2),
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+			Color = new Color(DungeonVisuals.BrassGold.R, DungeonVisuals.BrassGold.G, DungeonVisuals.BrassGold.B, 0.55f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		_mainTitleContainer.AddChild(crestRule);
+
+		// Subtle controls footer hint
+		var footerHint = new Label
+		{
+			Text = "WASD MOVE   •   LMB ATTACK   •   Q / V ABILITIES   •   E INTERACT",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			Position = new Vector2(0, viewSize.Y - 28.0f),
+			Size = new Vector2(viewSize.X, 20.0f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		footerHint.AddThemeFontOverride("font", mainFont);
+		footerHint.AddThemeFontSizeOverride("font_size", 8);
+		footerHint.AddThemeColorOverride("font_color", new Color(0.55f, 0.58f, 0.65f, 0.72f));
+		DungeonVisuals.ApplyPixelOutline(footerHint, 1);
+		footerHint.Name = "MainFooterHint";
+		_menuRoot.AddChild(footerHint);
 
 		// Obsidian & Brass Card framing VBoxContainer
 		_mainMenuPanel = new Panel
@@ -251,23 +301,31 @@ public partial class MainMenu : CanvasLayer
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		_mainMenuPanel.AddThemeStyleboxOverride("panel",
-			DungeonVisuals.CreatePanelStyle(DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 2, 4, 8));
-		DungeonVisuals.AttachFrameAccent(_mainMenuPanel, DungeonVisuals.BrassGold, 4);
+			DungeonVisuals.CreatePanelStyle(DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 3, 6, 14));
+		DungeonVisuals.AttachFrameAccent(_mainMenuPanel, DungeonVisuals.BrassGold, 6);
 		_menuRoot.AddChild(_mainMenuPanel);
 
 		var vbox = GetNode<VBoxContainer>("MenuRoot/VBoxContainer");
 		if (vbox != null)
 		{
+			if (vbox.GetNodeOrNull<Button>("CoopButton") == null)
+			{
+				var coopButton = new Button { Name = "CoopButton", Text = "CO-OP" };
+				vbox.AddChild(coopButton);
+				vbox.MoveChild(coopButton, Math.Min(2, vbox.GetChildCount() - 1));
+			}
+
 			vbox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.TopLeft);
-			vbox.Position = new Vector2(panelLeft + 12.0f, panelTop + 10.0f);
-			vbox.Size = new Vector2(panelW - 24.0f, panelH - 20.0f);
-			vbox.AddThemeConstantOverride("separation", 5);
+			vbox.Position = new Vector2(panelLeft + 20.0f, panelTop + 17.0f);
+			vbox.Size = new Vector2(panelW - 40.0f, panelH - 34.0f);
+			vbox.AddThemeConstantOverride("separation", 9);
 			vbox.ZIndex = 2;
 
 			var btnSpecs = new System.Collections.Generic.Dictionary<string, (string Label, Color Accent)>
 			{
 				{ "PlayButton", ("NEW GAME", DungeonVisuals.BrassGold) },
 				{ "LoadButton", ("LOAD RUN", DungeonVisuals.ArcaneCyan) },
+				{ "CoopButton", ("CO-OP", DungeonVisuals.Emerald) },
 				{ "SettingsButton", ("SETTINGS", DungeonVisuals.IronBorder.Lightened(0.35f)) },
 				{ "ExitButton", ("EXIT", DungeonVisuals.Crimson) }
 			};
@@ -280,8 +338,8 @@ public partial class MainMenu : CanvasLayer
 						? s
 						: (Label: btn.Text.ToUpper(), Accent: DungeonVisuals.BrassGold);
 					btn.Text = spec.Label;
-					btn.CustomMinimumSize = new Vector2(panelW - 24.0f, 20.0f);
-					DungeonVisuals.StyleButton(btn, spec.Accent, mainFont, 9, 3, DungeonVisuals.ObsidianCard, 8, 3);
+					btn.CustomMinimumSize = new Vector2(panelW - 40.0f, 35.0f);
+					DungeonVisuals.StyleButton(btn, spec.Accent, mainFont, 16, 5, DungeonVisuals.ObsidianCard, 12, 5);
 				}
 			}
 		}
@@ -297,19 +355,60 @@ public partial class MainMenu : CanvasLayer
 		ShowSlotSelection(true);
 	}
 
+	private void OnCoopPressed()
+	{
+		HideMainMenu();
+		var lobby = new CoopLobbyOverlay(() =>
+		{
+			_activeOverlay = null;
+			ShowMainMenu();
+		});
+		_menuRoot.AddChild(lobby);
+		_activeOverlay = lobby;
+	}
+
+	private void ShowDisconnectNoticeBanner(string message, Vector2 viewSize)
+	{
+		var mainFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		var banner = new PanelContainer
+		{
+			Position = new Vector2(Mathf.Max(20f, (viewSize.X - 420f) * 0.5f), 14f),
+			CustomMinimumSize = new Vector2(420f, 34f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		banner.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			new Color(0.18f, 0.05f, 0.06f, 0.94f), DungeonVisuals.Crimson, 2, 4, 6));
+		var lbl = new Label
+		{
+			Text = message,
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center
+		};
+		if (mainFont != null) lbl.AddThemeFontOverride("font", mainFont);
+		lbl.AddThemeFontSizeOverride("font_size", 20);
+		lbl.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
+		banner.AddChild(lbl);
+		_menuRoot.AddChild(banner);
+
+		var tw = banner.CreateTween();
+		tw.TweenInterval(4.0);
+		tw.TweenProperty(banner, "modulate:a", 0.0f, 0.6);
+		tw.TweenCallback(Callable.From(banner.QueueFree));
+	}
+
 	private void ShowCharacterSelection()
 	{
 		HideMainMenu();
 
 		var charSelectRoot = new Control();
 		charSelectRoot.Name = "CharSelectRoot";
-		charSelectRoot.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		charSelectRoot.Size = _menuRoot.Size;
+		charSelectRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		_menuRoot.AddChild(charSelectRoot);
 		_activeOverlay = charSelectRoot;
 
-		float W = _menuRoot.Size.X;
-		float H = _menuRoot.Size.Y;
+		var viewSize = GetViewport().GetVisibleRect().Size;
+		float W = viewSize.X;
+		float H = viewSize.Y;
 
 		// Atmospheric dark dungeon background with vignette
 		var bgOverlay = new ColorRect
@@ -338,33 +437,33 @@ public partial class MainMenu : CanvasLayer
 		{
 			Text = "CHOOSE YOUR HERO",
 			HorizontalAlignment = HorizontalAlignment.Center,
-			Position = new Vector2(0, 8),
-			Size = new Vector2(W, 26)
+			Position = new Vector2(0, 14),
+			Size = new Vector2(W, 46)
 		};
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 28);
+		title.AddThemeFontSizeOverride("font_size", 48);
 		title.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
-		DungeonVisuals.ApplyPixelOutline(title, 2);
+		DungeonVisuals.ApplyPixelOutline(title, 3);
 		charSelectRoot.AddChild(title);
 
 		var subTitle = new Label
 		{
 			Text = "Select a hero card to inspect stats, or double-click to embark",
 			HorizontalAlignment = HorizontalAlignment.Center,
-			Position = new Vector2(0, 34),
-			Size = new Vector2(W, 16)
+			Position = new Vector2(0, 60),
+			Size = new Vector2(W, 28)
 		};
 		subTitle.AddThemeFontOverride("font", titleFont);
-		subTitle.AddThemeFontSizeOverride("font_size", 13);
+		subTitle.AddThemeFontSizeOverride("font_size", 22);
 		subTitle.AddThemeColorOverride("font_color", DungeonVisuals.MutedSlate);
 		charSelectRoot.AddChild(subTitle);
 
 		const int heroCount = 4;
-		float cardsStartX = 14.0f;
-		float cardsY = 54.0f;
-		float cardH = Mathf.Clamp(H - 102.0f, 118.0f, 198.0f);
-		float cardW = Mathf.Clamp((W - 210.0f) / heroCount - 6.0f, 64.0f, 78.0f);
-		float cardGap = 6.0f;
+		float cardsStartX = 24.0f;
+		float cardsY = 95.0f;
+		float cardH = Mathf.Clamp(H - 178.0f, 206.0f, 346.0f);
+		float cardW = Mathf.Clamp((W - 368.0f) / heroCount - 10.0f, 112.0f, 136.0f);
+		float cardGap = 10.0f;
 
 		Button[] cardButtons = new Button[heroCount];
 		Label[] statusLabels = new Label[heroCount];
@@ -404,48 +503,57 @@ public partial class MainMenu : CanvasLayer
 			{
 				Text = cardRoles[i],
 				HorizontalAlignment = HorizontalAlignment.Center,
-				Position = new Vector2(0, 7),
-				Size = new Vector2(cardW, 14)
+				Position = new Vector2(0, 12),
+				Size = new Vector2(cardW, 24)
 			};
 			roleLbl.AddThemeFontOverride("font", titleFont);
-			roleLbl.AddThemeFontSizeOverride("font_size", 11);
+			roleLbl.AddThemeFontSizeOverride("font_size", 19);
 			roleLbl.AddThemeColorOverride("font_color", accent);
-			DungeonVisuals.ApplyPixelOutline(roleLbl, 1);
+			DungeonVisuals.ApplyPixelOutline(roleLbl, 2);
 			btn.AddChild(roleLbl);
 
-			float portraitH = Mathf.Clamp(cardH - 96.0f, 52.0f, 96.0f);
+			float portraitH = Mathf.Clamp(cardH - 168.0f, 90.0f, 168.0f);
 			var portraitBg = new Panel
 			{
 				MouseFilter = Control.MouseFilterEnum.Ignore,
-				Position = new Vector2(8, 24),
-				Size = new Vector2(cardW - 16, portraitH)
+				Position = new Vector2(14, 42),
+				Size = new Vector2(cardW - 28, portraitH)
 			};
 			portraitBg.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
 				DungeonVisuals.ObsidianDeep,
 				new Color(accent.R, accent.G, accent.B, 0.28f),
-				1, 3, 2));
+				2, 5, 4));
 			btn.AddChild(portraitBg);
 
-			// Radial class pedestal glow behind animated sprite
+			// Radial class pedestal glow + stone plinth behind animated sprite
 			var auraRect = new TextureRect
 			{
 				MouseFilter = Control.MouseFilterEnum.Ignore,
 				Texture = GameResourceCache.GetRadialGlowTexture(
-					new Color(accent.R, accent.G, accent.B, 0.32f),
+					new Color(accent.R, accent.G, accent.B, 0.34f),
 					new Color(accent.R, accent.G, accent.B, 0.08f),
-					0.5f, 32, new Vector2(0.9f, 0.9f)),
-				Position = new Vector2((cardW - 16 - 52) * 0.5f, (portraitH - 52) * 0.5f + 6),
-				Size = new Vector2(52, 52)
+					0.5f, 56, new Vector2(0.9f, 0.9f)),
+				Position = new Vector2((cardW - 28 - 91) * 0.5f, (portraitH - 91) * 0.5f + 4),
+				Size = new Vector2(91, 91)
 			};
 			portraitBg.AddChild(auraRect);
+
+			var plinth = new ColorRect
+			{
+				MouseFilter = Control.MouseFilterEnum.Ignore,
+				Color = new Color(accent.R * 0.25f + 0.10f, accent.G * 0.25f + 0.10f, accent.B * 0.25f + 0.12f, 0.80f),
+				Position = new Vector2((cardW - 28) * 0.5f - 28, portraitH * 0.72f),
+				Size = new Vector2(56, 5)
+			};
+			portraitBg.AddChild(plinth);
 
 			if (cardAnims[i] != null)
 			{
 				var animSprite = new AnimatedSprite2D
 				{
 					SpriteFrames = cardAnims[i],
-					Position = new Vector2(cardW * 0.5f, 24 + portraitH * 0.54f),
-					Scale = new Vector2(2.3f, 2.3f),
+					Position = new Vector2(cardW * 0.5f, 42 + portraitH * 0.50f),
+					Scale = new Vector2(4.0f, 4.0f),
 					TextureFilter = CanvasItem.TextureFilterEnum.Nearest
 				};
 				btn.AddChild(animSprite);
@@ -459,56 +567,56 @@ public partial class MainMenu : CanvasLayer
 			{
 				Text = cardNames[i],
 				HorizontalAlignment = HorizontalAlignment.Center,
-				Position = new Vector2(0, 24 + portraitH + 10),
-				Size = new Vector2(cardW, 20)
+				Position = new Vector2(0, 42 + portraitH + 18),
+				Size = new Vector2(cardW, 35)
 			};
 			nameLbl.AddThemeFontOverride("font", titleFont);
-			nameLbl.AddThemeFontSizeOverride("font_size", 16);
+			nameLbl.AddThemeFontSizeOverride("font_size", 28);
 			nameLbl.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
-			DungeonVisuals.ApplyPixelOutline(nameLbl, 1);
+			DungeonVisuals.ApplyPixelOutline(nameLbl, 2);
 			btn.AddChild(nameLbl);
 
 			var statusLbl = new Label
 			{
 				HorizontalAlignment = HorizontalAlignment.Center,
-				Position = new Vector2(0, cardH - 28),
-				Size = new Vector2(cardW, 18)
+				Position = new Vector2(0, cardH - 49),
+				Size = new Vector2(cardW, 32)
 			};
 			statusLbl.AddThemeFontOverride("font", titleFont);
-			statusLbl.AddThemeFontSizeOverride("font_size", 11);
+			statusLbl.AddThemeFontSizeOverride("font_size", 19);
 			btn.AddChild(statusLbl);
 			statusLabels[i] = statusLbl;
 		}
 
 		// Right-side Hero Info Panel
-		float infoX = cardsStartX + heroCount * cardW + (heroCount - 1) * cardGap + 10.0f;
+		float infoX = cardsStartX + heroCount * cardW + (heroCount - 1) * cardGap + 18.0f;
 		var infoPanel = new Panel
 		{
 			Position = new Vector2(infoX, cardsY),
-			Size = new Vector2(Mathf.Max(140.0f, W - infoX - 14.0f), cardH)
+			Size = new Vector2(Mathf.Max(245.0f, W - infoX - 24.0f), cardH)
 		};
 		charSelectRoot.AddChild(infoPanel);
 
 		var infoStyle = DungeonVisuals.CreatePanelStyle(
-			DungeonVisuals.ObsidianPanel, DungeonVisuals.BrassDim, 2, 4, 6);
+			DungeonVisuals.ObsidianPanel, DungeonVisuals.BrassDim, 3, 6, 10);
 		infoPanel.AddThemeStyleboxOverride("panel", infoStyle);
-		DungeonVisuals.AttachFrameAccent(infoPanel, DungeonVisuals.BrassGold, 4);
+		DungeonVisuals.AttachFrameAccent(infoPanel, DungeonVisuals.BrassGold, 6);
 
 		var infoHeader = new Label
 		{
-			Position = new Vector2(12, 8),
-			Size = new Vector2(infoPanel.Size.X - 24, 22)
+			Position = new Vector2(20, 14),
+			Size = new Vector2(infoPanel.Size.X - 40, 38)
 		};
 		infoHeader.AddThemeFontOverride("font", titleFont);
-		infoHeader.AddThemeFontSizeOverride("font_size", 19);
+		infoHeader.AddThemeFontSizeOverride("font_size", 32);
 		infoHeader.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
-		DungeonVisuals.ApplyPixelOutline(infoHeader, 1);
+		DungeonVisuals.ApplyPixelOutline(infoHeader, 2);
 		infoPanel.AddChild(infoHeader);
 
 		var divider = new ColorRect
 		{
-			Position = new Vector2(12, 31),
-			Size = new Vector2(infoPanel.Size.X - 24, 1.5f),
+			Position = new Vector2(20, 54),
+			Size = new Vector2(infoPanel.Size.X - 40, 2.5f),
 			Color = new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.7f),
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
@@ -519,13 +627,13 @@ public partial class MainMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Left,
 			VerticalAlignment = VerticalAlignment.Top,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			Position = new Vector2(12, 36),
-			Size = new Vector2(infoPanel.Size.X - 24, cardH - 42)
+			Position = new Vector2(20, 64),
+			Size = new Vector2(infoPanel.Size.X - 40, cardH - 74)
 		};
 		infoText.AddThemeFontOverride("font", titleFont);
-		infoText.AddThemeFontSizeOverride("font_size", 13);
+		infoText.AddThemeFontSizeOverride("font_size", 22);
 		infoText.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
-		infoText.AddThemeConstantOverride("line_spacing", -1);
+		infoText.AddThemeConstantOverride("line_spacing", -2);
 		infoPanel.AddChild(infoText);
 
 		int currentCardIndex = 0;
@@ -555,7 +663,7 @@ public partial class MainMenu : CanvasLayer
 				var normalStyle = DungeonVisuals.CreatePanelStyle(
 					isSel ? new Color(accent.R * 0.14f + 0.05f, accent.G * 0.14f + 0.05f, accent.B * 0.14f + 0.07f, 0.98f) : DungeonVisuals.ObsidianPanel,
 					isSel ? accent : DungeonVisuals.IronBorder,
-					isSel ? 2 : 1, 4, isSel ? 6 : 2,
+					isSel ? 3 : 2, 6, isSel ? 10 : 4,
 					isSel ? new Color(accent.R, accent.G, accent.B, 0.3f) : null);
 				var hoverStyle = normalStyle.Duplicate() as StyleBoxFlat;
 				hoverStyle.BgColor = normalStyle.BgColor.Lightened(0.08f);
@@ -592,7 +700,8 @@ public partial class MainMenu : CanvasLayer
 					$"HEALTH: {hp} HP{hpRegen}\n" +
 					$"MANA: {mp} MP (+{mpRegen}/s)\n" +
 					$"SPEED: {spd} (Sprint x{runMult})\n" +
-					$"{weaponLabel}\n\n" +
+					$"{weaponLabel}\n" +
+					$"SKILLS: [Q] Fireball  •  [V] Shield Dash\n\n" +
 					$"SPECIALTY:\n" +
 					specialty;
 			}
@@ -655,11 +764,11 @@ public partial class MainMenu : CanvasLayer
 		var backBtn = new Button
 		{
 			Text = "< BACK",
-			Position = new Vector2(16, H - 38),
-			CustomMinimumSize = new Vector2(90, 26),
-			Size = new Vector2(90, 26)
+			Position = new Vector2(28, H - 66),
+			CustomMinimumSize = new Vector2(158, 46),
+			Size = new Vector2(158, 46)
 		};
-		DungeonVisuals.StyleButton(backBtn, DungeonVisuals.IronBorder.Lightened(0.35f), titleFont, 16, 3);
+		DungeonVisuals.StyleButton(backBtn, DungeonVisuals.IronBorder.Lightened(0.35f), titleFont, 28, 5);
 		charSelectRoot.AddChild(backBtn);
 
 		backBtn.Pressed += () =>
@@ -672,11 +781,11 @@ public partial class MainMenu : CanvasLayer
 		var confirmBtn = new Button
 		{
 			Text = "CONFIRM HERO >",
-			Position = new Vector2(W - 156, H - 38),
-			CustomMinimumSize = new Vector2(140, 26),
-			Size = new Vector2(140, 26)
+			Position = new Vector2(W - 273, H - 66),
+			CustomMinimumSize = new Vector2(245, 46),
+			Size = new Vector2(245, 46)
 		};
-		DungeonVisuals.StyleButton(confirmBtn, DungeonVisuals.BrassGold, titleFont, 16, 3, new Color(0.18f, 0.14f, 0.06f, 0.98f));
+		DungeonVisuals.StyleButton(confirmBtn, DungeonVisuals.BrassGold, titleFont, 28, 5, new Color(0.18f, 0.14f, 0.06f, 0.98f));
 		charSelectRoot.AddChild(confirmBtn);
 
 		confirmBtn.Pressed += confirmSelection;
@@ -694,10 +803,13 @@ public partial class MainMenu : CanvasLayer
 
 		var slotSelectRoot = new Control();
 		slotSelectRoot.Name = "SlotSelectRoot";
-		slotSelectRoot.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		slotSelectRoot.Size = _menuRoot.Size;
+		slotSelectRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		_menuRoot.AddChild(slotSelectRoot);
 		_activeOverlay = slotSelectRoot;
+
+		var viewSize = GetViewport().GetVisibleRect().Size;
+		float W = viewSize.X;
+		float H = viewSize.Y;
 
 		// Full dark atmospheric backdrop behind slots
 		var backdrop = new ColorRect
@@ -721,30 +833,30 @@ public partial class MainMenu : CanvasLayer
 		{
 			Text = isLoadMode ? "LOAD EXPEDITION (23 SLOTS)" : "CHOOSE SAVE SLOT (23 SLOTS)",
 			HorizontalAlignment = HorizontalAlignment.Center,
-			Position = new Vector2(0, 8),
-			Size = new Vector2(_menuRoot.Size.X, 26)
+			Position = new Vector2(0, 14),
+			Size = new Vector2(W, 46)
 		};
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 26);
+		title.AddThemeFontSizeOverride("font_size", 45);
 		title.AddThemeColorOverride("font_color", isLoadMode ? DungeonVisuals.ArcaneCyan : DungeonVisuals.BrassGold);
-		DungeonVisuals.ApplyPixelOutline(title, 2);
+		DungeonVisuals.ApplyPixelOutline(title, 3);
 		slotSelectRoot.AddChild(title);
 
-		float listHeight = Mathf.Max(95.0f, _menuRoot.Size.Y - 82.0f);
+		float listHeight = Mathf.Max(166.0f, H - 144.0f);
 
 		var listPanel = new Panel
 		{
-			Position = new Vector2(18, 40),
-			Size = new Vector2(182, listHeight)
+			Position = new Vector2(32, 70),
+			Size = new Vector2(318, listHeight)
 		};
 		listPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-			DungeonVisuals.ObsidianDeep, DungeonVisuals.IronBorder, 1, 4, 4));
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.IronBorder, 2, 6, 6));
 		slotSelectRoot.AddChild(listPanel);
 
 		var scroll = new ScrollContainer
 		{
-			Position = new Vector2(5, 5),
-			Size = new Vector2(172, listHeight - 10),
+			Position = new Vector2(9, 9),
+			Size = new Vector2(300, listHeight - 18),
 			HorizontalScrollMode = ScrollContainer.ScrollMode.Disabled
 		};
 		listPanel.AddChild(scroll);
@@ -753,17 +865,17 @@ public partial class MainMenu : CanvasLayer
 		{
 			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill
 		};
-		vbox.AddThemeConstantOverride("separation", 4);
+		vbox.AddThemeConstantOverride("separation", 7);
 		scroll.AddChild(vbox);
 
 		var infoPanel = new Panel
 		{
-			Position = new Vector2(210, 40),
-			Size = new Vector2(Mathf.Max(140.0f, _menuRoot.Size.X - 228), listHeight)
+			Position = new Vector2(368, 70),
+			Size = new Vector2(Mathf.Max(245.0f, W - 400), listHeight)
 		};
 		infoPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-			DungeonVisuals.ObsidianPanel, DungeonVisuals.BrassDim, 2, 4, 6));
-		DungeonVisuals.AttachFrameAccent(infoPanel, DungeonVisuals.BrassGold, 4);
+			DungeonVisuals.ObsidianPanel, DungeonVisuals.BrassDim, 3, 6, 10));
+		DungeonVisuals.AttachFrameAccent(infoPanel, DungeonVisuals.BrassGold, 6);
 		slotSelectRoot.AddChild(infoPanel);
 
 		_infoLabel = new Label
@@ -774,11 +886,11 @@ public partial class MainMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Center,
 			VerticalAlignment = VerticalAlignment.Top,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			Position = new Vector2(12, 12),
-			Size = new Vector2(infoPanel.Size.X - 24, listHeight - 24)
+			Position = new Vector2(20, 20),
+			Size = new Vector2(infoPanel.Size.X - 40, listHeight - 40)
 		};
 		_infoLabel.AddThemeFontOverride("font", titleFont);
-		_infoLabel.AddThemeFontSizeOverride("font_size", 14);
+		_infoLabel.AddThemeFontSizeOverride("font_size", 24);
 		_infoLabel.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
 		_infoLabel.AddThemeConstantOverride("line_spacing", 0);
 		infoPanel.AddChild(_infoLabel);
@@ -794,7 +906,7 @@ public partial class MainMenu : CanvasLayer
 
 			var btn = new Button
 			{
-				CustomMinimumSize = new Vector2(160, 23),
+				CustomMinimumSize = new Vector2(280, 40),
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				Alignment = HorizontalAlignment.Left
 			};
@@ -803,13 +915,13 @@ public partial class MainMenu : CanvasLayer
 			if (occupied)
 			{
 				btn.Text = $"#{slotId} {slotSave.CharacterName} (F{slotSave.CurrentLevelIndex})";
-				DungeonVisuals.StyleButton(btn, DungeonVisuals.BrassGold, titleFont, 14, 3, DungeonVisuals.ObsidianCard, 8, 2);
+				DungeonVisuals.StyleButton(btn, DungeonVisuals.BrassGold, titleFont, 24, 5, DungeonVisuals.ObsidianCard, 14, 4);
 			}
 			else
 			{
 				btn.Text = $"#{slotId} — EMPTY —";
 				if (isLoadMode) btn.Disabled = true;
-				DungeonVisuals.StyleButton(btn, DungeonVisuals.IronBorder, titleFont, 14, 3, DungeonVisuals.ObsidianDeep, 8, 2);
+				DungeonVisuals.StyleButton(btn, DungeonVisuals.IronBorder, titleFont, 24, 5, DungeonVisuals.ObsidianDeep, 14, 4);
 			}
 
 			_slotButtons.Add((slotId, btn, occupied));
@@ -820,11 +932,11 @@ public partial class MainMenu : CanvasLayer
 		var backBtn = new Button
 		{
 			Text = "< BACK",
-			Position = new Vector2(18, _menuRoot.Size.Y - 32),
-			CustomMinimumSize = new Vector2(78, 22),
-			Size = new Vector2(78, 22)
+			Position = new Vector2(32, H - 56),
+			CustomMinimumSize = new Vector2(136, 38),
+			Size = new Vector2(136, 38)
 		};
-		DungeonVisuals.StyleButton(backBtn, DungeonVisuals.IronBorder.Lightened(0.35f), titleFont, 15, 3);
+		DungeonVisuals.StyleButton(backBtn, DungeonVisuals.IronBorder.Lightened(0.35f), titleFont, 26, 5);
 		slotSelectRoot.AddChild(backBtn);
 
 		backBtn.Pressed += () => {
@@ -844,12 +956,12 @@ public partial class MainMenu : CanvasLayer
 		_deleteBtn = new Button
 		{
 			Text = "DELETE SLOT",
-			Position = new Vector2(_menuRoot.Size.X - 106, _menuRoot.Size.Y - 32),
-			CustomMinimumSize = new Vector2(88, 22),
-			Size = new Vector2(88, 22),
+			Position = new Vector2(W - 186, H - 56),
+			CustomMinimumSize = new Vector2(154, 38),
+			Size = new Vector2(154, 38),
 			Visible = false
 		};
-		DungeonVisuals.StyleButton(_deleteBtn, DungeonVisuals.Crimson, titleFont, 14, 3, new Color(0.18f, 0.05f, 0.06f, 0.95f));
+		DungeonVisuals.StyleButton(_deleteBtn, DungeonVisuals.Crimson, titleFont, 24, 5, new Color(0.18f, 0.05f, 0.06f, 0.95f));
 		slotSelectRoot.AddChild(_deleteBtn);
 
 		_deleteBtn.Pressed += () => {
@@ -882,7 +994,7 @@ public partial class MainMenu : CanvasLayer
 			Color bg = isSelected
 				? new Color(0.14f, 0.18f, 0.26f, 0.98f)
 				: (entry.Occupied ? DungeonVisuals.ObsidianCard : DungeonVisuals.ObsidianDeep);
-			DungeonVisuals.StyleButton(entry.Btn, accent, titleFont, 14, 3, bg, 8, 2);
+			DungeonVisuals.StyleButton(entry.Btn, accent, titleFont, 24, 5, bg, 14, 4);
 		}
 
 		ulong now = Time.GetTicksMsec();
@@ -922,13 +1034,13 @@ public partial class MainMenu : CanvasLayer
 							 $"GOLD COINS: {slotSave.Coins}\n" +
 							 $"WEAPONS: {weapons}";
 			_infoLabel.HorizontalAlignment = HorizontalAlignment.Left;
-			_infoLabel.Position = new Vector2(12, 12);
+			_infoLabel.Position = new Vector2(20, 20);
 		}
 		else
 		{
 			_infoLabel.Text = $"SLOT #{slotId} — EMPTY\n\nDouble-click this slot\nto start a new run.";
 			_infoLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_infoLabel.Position = new Vector2(12, 12);
+			_infoLabel.Position = new Vector2(20, 20);
 		}
 	}
 
@@ -973,6 +1085,8 @@ public partial class MainMenu : CanvasLayer
 		if (vbox != null) vbox.Visible = false;
 		if (_mainMenuPanel != null) _mainMenuPanel.Visible = false;
 		if (_mainTitleContainer != null) _mainTitleContainer.Visible = false;
+		var hint = GetNodeOrNull<Control>("MenuRoot/MainFooterHint");
+		if (hint != null) hint.Visible = false;
 	}
 
 	private void ShowMainMenu()
@@ -981,6 +1095,8 @@ public partial class MainMenu : CanvasLayer
 		if (vbox != null) vbox.Visible = true;
 		if (_mainMenuPanel != null) _mainMenuPanel.Visible = true;
 		if (_mainTitleContainer != null) _mainTitleContainer.Visible = true;
+		var hint = GetNodeOrNull<Control>("MenuRoot/MainFooterHint");
+		if (hint != null) hint.Visible = true;
 	}
 
 	private void OnSettingsPressed()
@@ -1010,6 +1126,10 @@ public partial class MainMenu : CanvasLayer
 
 		if (@event.IsActionPressed("ui_cancel") && _activeOverlay != null && GodotObject.IsInstanceValid(_activeOverlay))
 		{
+			if (_activeOverlay is CoopLobbyOverlay)
+			{
+				return;
+			}
 			string overlayName = _activeOverlay.Name;
 			_activeOverlay.QueueFree();
 			_activeOverlay = null;

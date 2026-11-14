@@ -265,7 +265,7 @@ public static class DungeonVisuals
 	public static Texture2D GetPixelSquareTexture()
 	{
 		if (_pixelSquareTex != null) return _pixelSquareTex;
-		var img = Image.CreateEmpty(3, 3, false, Image.Format.Rgba8);
+		var img = Image.CreateEmpty(2, 2, false, Image.Format.Rgba8);
 		img.Fill(Colors.White);
 		_pixelSquareTex = ImageTexture.CreateFromImage(img);
 		return _pixelSquareTex;
@@ -301,20 +301,28 @@ public static class DungeonVisuals
 			Code = @"shader_type canvas_item;
 uniform vec4 flash_color : source_color = vec4(1.0, 0.96, 0.92, 1.0);
 uniform float flash_amount : hint_range(0.0, 1.0) = 0.0;
+uniform float brightness : hint_range(0.5, 2.0) = 1.0;
+uniform float shadow_lift : hint_range(0.0, 0.25) = 0.0;
 
 void fragment() {
 	vec4 tex = texture(TEXTURE, UV) * COLOR;
-	vec3 col = mix(tex.rgb, flash_color.rgb, flash_amount);
+	float lum = dot(tex.rgb, vec3(0.299, 0.587, 0.114));
+	float mask = smoothstep(0.04, 0.22, lum);
+	vec3 lit = clamp(tex.rgb * brightness, vec3(0.0), vec3(1.0));
+	lit = clamp(lit + (vec3(1.0) - lit) * (shadow_lift * mask), vec3(0.0), vec3(1.0));
+	vec3 col = mix(lit, flash_color.rgb, flash_amount);
 	COLOR = vec4(col, tex.a);
 }"
 		};
 		return _hitFlashShader;
 	}
 
-	public static ShaderMaterial CreateHitFlashMaterial()
+	public static ShaderMaterial CreateHitFlashMaterial(float brightness = 1.0f, float shadowLift = 0.0f)
 	{
 		var mat = new ShaderMaterial { Shader = GetHitFlashShader() };
 		mat.SetShaderParameter("flash_amount", 0.0f);
+		mat.SetShaderParameter("brightness", brightness);
+		mat.SetShaderParameter("shadow_lift", shadowLift);
 		return mat;
 	}
 
@@ -369,9 +377,9 @@ void fragment() {
 		Vector2 direction,
 		Color color,
 		int count = 8,
-		float speed = 130.0f,
+		float speed = 45.0f,
 		float spreadDeg = 70.0f,
-		float particleScale = 1.6f)
+		float particleScale = 0.9f)
 	{
 		if (worldParent == null || !worldParent.IsInsideTree()) return;
 
@@ -388,7 +396,7 @@ void fragment() {
 			Lifetime = 0.22f,
 			Direction = direction == Vector2.Zero ? Vector2.Right : direction.Normalized(),
 			Spread = spreadDeg,
-			Gravity = new Vector2(0f, 120f),
+			Gravity = new Vector2(0f, 40f),
 			InitialVelocityMin = speed * 0.55f,
 			InitialVelocityMax = speed * 1.15f,
 			ScaleAmountMin = particleScale * 0.7f,
@@ -410,7 +418,7 @@ void fragment() {
 		};
 	}
 
-	public static void SpawnMuzzleFlash(Node worldParent, Vector2 worldPos, Color color, float radius = 8.0f)
+	public static void SpawnMuzzleFlash(Node worldParent, Vector2 worldPos, Color color, float radius = 3.0f)
 	{
 		if (worldParent == null || !worldParent.IsInsideTree()) return;
 
@@ -479,11 +487,11 @@ void fragment() {
 			Lifetime = 0.24f,
 			Direction = Vector2.Up,
 			Spread = 55.0f,
-			Gravity = new Vector2(0f, -15f),
-			InitialVelocityMin = 12f,
-			InitialVelocityMax = 28f,
-			ScaleAmountMin = 1.0f,
-			ScaleAmountMax = 1.7f,
+			Gravity = new Vector2(0f, -5f),
+			InitialVelocityMin = 4f,
+			InitialVelocityMax = 10f,
+			ScaleAmountMin = 0.5f,
+			ScaleAmountMax = 0.85f,
 			Color = c
 		};
 
@@ -510,10 +518,399 @@ void fragment() {
 			ZIndex = zIndex
 		};
 	}
+
+	private static readonly System.Collections.Generic.Dictionary<string, Texture2D> s_relicIconCache =
+		new System.Collections.Generic.Dictionary<string, Texture2D>(StringComparer.Ordinal);
+
+	/// <summary>
+	/// Returns a cached bespoke 16x16 crisp pixel-art icon for each passive Relic.
+	/// Shared between the Milestone Relic Sanctum cards and the HUD Relic tray.
+	/// </summary>
+	public static Texture2D GetRelicIconTexture(string relicId)
+	{
+		string key = string.IsNullOrEmpty(relicId) ? "default" : relicId;
+		if (s_relicIconCache.TryGetValue(key, out var cached) && cached != null)
+		{
+			return cached;
+		}
+
+		string[] pattern;
+		System.Collections.Generic.Dictionary<char, Color> palette;
+
+		switch (key)
+		{
+			case GameLogic.RelicVampiricFang:
+				pattern = new[]
+				{
+					"................",
+					"................",
+					"...dd......dd...",
+					"..dWWd....dWWd..",
+					"..dWCd....dWCd..",
+					"..dWcd....dWcd..",
+					"...dc......cd...",
+					"...dR......Rd...",
+					"....R..rr..R....",
+					"....r.rRRr.r....",
+					".....rRBBBr.....",
+					"......RBBb......",
+					"......rBbr......",
+					".......rr.......",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['d'] = new Color(0.18f, 0.08f, 0.10f),
+					['W'] = new Color(0.96f, 0.94f, 0.90f),
+					['C'] = new Color(0.84f, 0.80f, 0.78f),
+					['c'] = new Color(0.70f, 0.45f, 0.48f),
+					['R'] = new Color(0.92f, 0.16f, 0.24f),
+					['r'] = new Color(0.62f, 0.08f, 0.14f),
+					['B'] = new Color(1.00f, 0.42f, 0.46f),
+					['b'] = new Color(0.76f, 0.12f, 0.18f)
+				};
+				break;
+
+			case GameLogic.RelicPrismLens:
+				pattern = new[]
+				{
+					"................",
+					".......cc.......",
+					"......cWWc......",
+					".....cWCCWc.....",
+					"....cWCBBCWc....",
+					"...cWCBWWBCWc...",
+					"..cWCBWGGWBCWc..",
+					"..cWCBGGGGWBCc..",
+					"..cWCBWGGWBCWc..",
+					"...cWCBWWBCWc...",
+					"....cWCBBCWc....",
+					".....cWCCWc.....",
+					"...gg.cWWc.gg...",
+					"..g.....c....g..",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['c'] = new Color(0.14f, 0.56f, 0.82f),
+					['C'] = new Color(0.38f, 0.88f, 1.00f),
+					['B'] = new Color(0.68f, 0.96f, 1.00f),
+					['W'] = new Color(0.96f, 0.99f, 1.00f),
+					['G'] = new Color(0.45f, 1.00f, 0.76f),
+					['g'] = new Color(0.32f, 0.96f, 0.62f)
+				};
+				break;
+
+			case GameLogic.RelicRicochet:
+				pattern = new[]
+				{
+					"................",
+					"......yyyy......",
+					".....yWWWWy.....",
+					"..y..yYYYYy..y..",
+					"...yy.yyyy.yy...",
+					"....yYYYYYYy....",
+					"...yYWWCCWWYy...",
+					"..yYWCCCCCCWYy..",
+					"..yYWCCCCCCWYy..",
+					"...yYWWCCWWYy...",
+					"....yYYYYYYy....",
+					"...yy.yyyy.yy...",
+					"..y..yYYYYy..y..",
+					".....yWWWWy.....",
+					"......yyyy......",
+					"................"
+				};
+				palette = new()
+				{
+					['y'] = new Color(0.68f, 0.44f, 0.08f),
+					['Y'] = new Color(0.98f, 0.78f, 0.22f),
+					['C'] = new Color(0.45f, 0.88f, 1.00f),
+					['W'] = new Color(1.00f, 0.96f, 0.78f)
+				};
+				break;
+
+			case GameLogic.RelicEmberCore:
+				pattern = new[]
+				{
+					"................",
+					".......oo.......",
+					"......oYYo......",
+					"...oo.oWWo.oo...",
+					"..oRRooYYooRRo..",
+					".oRRRRYYYYRRRRo.",
+					".oRRRYYWWYYRRRo.",
+					".oRRRYYWWYYRRRo.",
+					"..oRRRYYYYRRRo..",
+					"...oRRRRRRRRo...",
+					"....oRRRRRRo....",
+					".....oRRRRo.....",
+					"......oRRo......",
+					".......oo.......",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['o'] = new Color(0.58f, 0.12f, 0.06f),
+					['R'] = new Color(0.96f, 0.28f, 0.12f),
+					['Y'] = new Color(1.00f, 0.68f, 0.18f),
+					['W'] = new Color(1.00f, 0.95f, 0.72f)
+				};
+				break;
+
+			case GameLogic.RelicVenomCoat:
+				pattern = new[]
+				{
+					"................",
+					"......dddd......",
+					"......dBBd......",
+					".......dd.......",
+					".....dgGGgd.....",
+					"....dGWWWWGd....",
+					"...dGWWWWWWGd...",
+					"...dGGWWWWGGd...",
+					"...dGGGGGGGGd...",
+					"....dGGggGGd....",
+					"..g..dggggd.....",
+					".gGg..dddd..g...",
+					"..g........gGg..",
+					"............g...",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['d'] = new Color(0.10f, 0.28f, 0.12f),
+					['B'] = new Color(0.56f, 0.36f, 0.18f),
+					['g'] = new Color(0.20f, 0.62f, 0.26f),
+					['G'] = new Color(0.32f, 0.92f, 0.38f),
+					['W'] = new Color(0.76f, 1.00f, 0.68f)
+				};
+				break;
+
+			case GameLogic.RelicCrimsonEdge:
+				pattern = new[]
+				{
+					"................",
+					"............dd..",
+					"...........dWWd.",
+					"..........dWCCd.",
+					".........dWCd...",
+					"........dWCd....",
+					".......dWCd.....",
+					"......dWCd......",
+					"..rr.dRRd.......",
+					"...rRRd.........",
+					"...bRRr.........",
+					"..bBBb.r........",
+					".bYYb...........",
+					".bbb............",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['d'] = new Color(0.24f, 0.06f, 0.08f),
+					['W'] = new Color(0.98f, 0.94f, 0.96f),
+					['C'] = new Color(0.84f, 0.86f, 0.92f),
+					['R'] = new Color(0.96f, 0.18f, 0.28f),
+					['r'] = new Color(0.68f, 0.08f, 0.14f),
+					['B'] = new Color(0.58f, 0.36f, 0.14f),
+					['Y'] = new Color(0.96f, 0.78f, 0.26f),
+					['b'] = new Color(0.32f, 0.18f, 0.08f)
+				};
+				break;
+
+			case GameLogic.RelicChainSpark:
+				pattern = new[]
+				{
+					"................",
+					".......ccccc....",
+					"......cWWWWc....",
+					".....cWWWWc.....",
+					"....cCCCCc......",
+					"...cCCCCccccc...",
+					"..cWWWWWWWWWcc..",
+					".....cccccWWc...",
+					"........cWWc....",
+					".......cCCc.....",
+					"......cCCc......",
+					".....cWWc.......",
+					"....cWWc........",
+					"....ccc.........",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['c'] = new Color(0.16f, 0.48f, 0.86f),
+					['C'] = new Color(0.42f, 0.82f, 1.00f),
+					['W'] = new Color(0.94f, 0.99f, 1.00f)
+				};
+				break;
+
+			case GameLogic.RelicFrostAegis:
+				pattern = new[]
+				{
+					"................",
+					"..bbbbbbbbbbbb..",
+					"..bCCCCCCCCCCb..",
+					"..bCCWCCCCWCCb..",
+					"..bCCCWWWWCCCb..",
+					"..bCCWWWWWWCCb..",
+					"...bCWWWWWWCb...",
+					"...bCCCWWCCCb...",
+					"....bCCWWCCb....",
+					"....bCCCCCCb....",
+					".....bCCCCb.....",
+					"......bCCb......",
+					".......bb.......",
+					"................",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['b'] = new Color(0.18f, 0.42f, 0.72f),
+					['C'] = new Color(0.32f, 0.78f, 0.98f),
+					['W'] = new Color(0.92f, 0.98f, 1.00f)
+				};
+				break;
+
+			case GameLogic.RelicVolatileSigil:
+				pattern = new[]
+				{
+					"................",
+					"...oo......oo...",
+					"..oYYo....oYYo..",
+					"...oYoo..ooYo...",
+					"....oYRRRRYo....",
+					"...oRYWWWWYRo...",
+					"..oRRWCCCCWRRo..",
+					"..oRRWCCCCWRRo..",
+					"...oRYWWWWYRo...",
+					"....oYRRRRYo....",
+					"...oYoo..ooYo...",
+					"..oYYo....oYYo..",
+					"...oo......oo...",
+					"................",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['o'] = new Color(0.58f, 0.18f, 0.06f),
+					['R'] = new Color(0.94f, 0.34f, 0.12f),
+					['Y'] = new Color(1.00f, 0.68f, 0.20f),
+					['W'] = new Color(1.00f, 0.94f, 0.68f),
+					['C'] = new Color(1.00f, 0.98f, 0.92f)
+				};
+				break;
+
+			default:
+				pattern = new[]
+				{
+					"................",
+					".......bb.......",
+					"......bYYb......",
+					".....bYWWYb.....",
+					"....bYWWWWYb....",
+					"....bYWWWWYb....",
+					".....bYWWYb.....",
+					"......bYYb......",
+					".......bb.......",
+					"................",
+					"................",
+					"................",
+					"................",
+					"................",
+					"................",
+					"................"
+				};
+				palette = new()
+				{
+					['b'] = new Color(0.58f, 0.40f, 0.10f),
+					['Y'] = new Color(0.98f, 0.78f, 0.24f),
+					['W'] = new Color(1.00f, 0.96f, 0.78f)
+				};
+				break;
+		}
+
+		var img = Image.CreateEmpty(16, 16, false, Image.Format.Rgba8);
+		for (int y = 0; y < 16 && y < pattern.Length; y++)
+		{
+			string row = pattern[y];
+			for (int x = 0; x < 16 && x < row.Length; x++)
+			{
+				char ch = row[x];
+				if (palette.TryGetValue(ch, out Color px))
+				{
+					img.SetPixel(x, y, px);
+				}
+			}
+		}
+
+		var tex = ImageTexture.CreateFromImage(img);
+		s_relicIconCache[key] = tex;
+		return tex;
+	}
+
+	private static Texture2D _menuTorchTex;
+
+	/// <summary>
+	/// Crisp procedural 16x16 pixel-art dungeon sconce torch for UI backdrops.
+	/// </summary>
+	public static Texture2D GetPixelTorchTexture()
+	{
+		if (_menuTorchTex != null) return _menuTorchTex;
+		string[] pattern =
+		{
+			".......oo.......",
+			"......oWWo......",
+			".....oWWWWo.....",
+			".....oYYYYo.....",
+			"......oYYo......",
+			".....dRRRRd.....",
+			".....dIIIIb.....",
+			"......dWWd......",
+			"......dBBd......",
+			"......dBBd......",
+			"......dBBd......",
+			".......bb.......",
+			".......dd.......",
+			".......dd.......",
+			"................",
+			"................"
+		};
+		var palette = new System.Collections.Generic.Dictionary<char, Color>
+		{
+			['W'] = new Color(1.00f, 0.96f, 0.72f),
+			['Y'] = new Color(1.00f, 0.74f, 0.20f),
+			['o'] = new Color(0.96f, 0.42f, 0.08f),
+			['R'] = new Color(0.72f, 0.22f, 0.06f),
+			['I'] = new Color(0.45f, 0.48f, 0.54f),
+			['d'] = new Color(0.18f, 0.14f, 0.16f),
+			['B'] = new Color(0.44f, 0.26f, 0.12f),
+			['b'] = new Color(0.28f, 0.16f, 0.08f)
+		};
+		var img = Image.CreateEmpty(16, 16, false, Image.Format.Rgba8);
+		for (int y = 0; y < 16; y++)
+		{
+			for (int x = 0; x < 16; x++)
+			{
+				if (palette.TryGetValue(pattern[y][x], out Color px)) img.SetPixel(x, y, px);
+			}
+		}
+		_menuTorchTex = ImageTexture.CreateFromImage(img);
+		return _menuTorchTex;
+	}
 }
 
 /// <summary>
-/// Draws crisp pixel brass corner rivets and inner top specular line on UI frames.
+/// Draws crisp pixel brass corner brackets, rivets and inner top specular line on UI frames.
 /// </summary>
 public partial class DungeonFrameOverlay : Control
 {
@@ -525,15 +922,29 @@ public partial class DungeonFrameOverlay : Control
 		Vector2 s = Size;
 		if (s.X < 20 || s.Y < 20) return;
 
-		Color c = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.85f);
-		Color highlight = new Color(1f, 1f, 1f, 0.08f);
+		Color c = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.88f);
+		Color bracket = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.42f);
+		Color highlight = new Color(1f, 1f, 1f, 0.09f);
 		DrawLine(new Vector2(6, 2), new Vector2(s.X - 6, 2), highlight, 1.0f);
 
 		float r = 2.0f;
+		float arm = 7.0f;
+		// Top-left bracket + rivet
 		DrawRect(new Rect2(Inset, Inset, r, r), c);
+		DrawLine(new Vector2(Inset + r + 1, Inset + 0.5f), new Vector2(Inset + r + arm, Inset + 0.5f), bracket, 1.0f);
+		DrawLine(new Vector2(Inset + 0.5f, Inset + r + 1), new Vector2(Inset + 0.5f, Inset + r + arm), bracket, 1.0f);
+		// Top-right bracket + rivet
 		DrawRect(new Rect2(s.X - Inset - r, Inset, r, r), c);
+		DrawLine(new Vector2(s.X - Inset - r - 1, Inset + 0.5f), new Vector2(s.X - Inset - r - arm, Inset + 0.5f), bracket, 1.0f);
+		DrawLine(new Vector2(s.X - Inset - 0.5f, Inset + r + 1), new Vector2(s.X - Inset - 0.5f, Inset + r + arm), bracket, 1.0f);
+		// Bottom-left bracket + rivet
 		DrawRect(new Rect2(Inset, s.Y - Inset - r, r, r), c);
+		DrawLine(new Vector2(Inset + r + 1, s.Y - Inset - 0.5f), new Vector2(Inset + r + arm, s.Y - Inset - 0.5f), bracket, 1.0f);
+		DrawLine(new Vector2(Inset + 0.5f, s.Y - Inset - r - 1), new Vector2(Inset + 0.5f, s.Y - Inset - r - arm), bracket, 1.0f);
+		// Bottom-right bracket + rivet
 		DrawRect(new Rect2(s.X - Inset - r, s.Y - Inset - r, r, r), c);
+		DrawLine(new Vector2(s.X - Inset - r - 1, s.Y - Inset - 0.5f), new Vector2(s.X - Inset - r - arm, s.Y - Inset - 0.5f), bracket, 1.0f);
+		DrawLine(new Vector2(s.X - Inset - 0.5f, s.Y - Inset - r - 1), new Vector2(s.X - Inset - 0.5f, s.Y - Inset - r - arm), bracket, 1.0f);
 	}
 }
 

@@ -5,7 +5,7 @@ using Godot;
 // - бьет в ближнем бою, но с умеренным отталкиванием (Knockback 2.5).
 public partial class Quagmire : Enemy
 {
-	[Export] public float SlowAuraRadius = 36.0f; // в тайлах, умножается на World.Scale
+	[Export] public float SlowAuraRadius = 19.0f; // в пикселях 1x-мира (~1.2 тайла радиус)
 	[Export] public float SlowStrength = 0.25f; // -25% скорости игрока в ауре
 	[Export] public float SlowRefreshInterval = 0.3f; // как часто обновляем ауру
 
@@ -27,43 +27,117 @@ public partial class Quagmire : Enemy
 		AddChild(_auraVisual);
 	}
 
-	public override void _PhysicsProcess(double delta)
+	private float _bossSlamCooldown = 4.5f;
+	private bool _inSlamTelegraph = false;
+	private float _slamTelegraphTimer = 0.0f;
+	private const float BossSlamRadius = 62.0f;
+
+	protected override void UpdateEnemyClientVisualTick(double delta)
 	{
 		AuraTime += delta;
+		_auraVisual?.QueueRedraw();
+	}
+
+	protected override void TickEnemyAI(double delta)
+	{
+		float dt = (float)delta;
+		if (_bossSlamCooldown > 0.0f) _bossSlamCooldown -= dt;
+
+		if (IsBoss && _inSlamTelegraph)
+		{
+			Velocity = Velocity.Lerp(Vector2.Zero, 0.25f);
+			MoveAndSlide();
+			_slamTelegraphTimer -= dt;
+			if (_slamTelegraphTimer <= 0.0f)
+			{
+				ExecuteBossToxicSlam();
+			}
+			return;
+		}
 
 		if (!StepEnemyActionState(delta))
 		{
 			MoveAndSlide();
-			if (_player != null && GodotObject.IsInstanceValid(_player) && Config != null && CurrentHealth > 0)
+			if (Config != null && CurrentHealth > 0)
 			{
-				UpdateSlowAura((float)delta, GlobalPosition.DistanceTo(_player.GlobalPosition));
+				UpdateSlowAura(dt);
 			}
-			_auraVisual?.QueueRedraw();
 			return;
 		}
 
 		float dist = GlobalPosition.DistanceTo(_player.GlobalPosition);
-		UpdateMeleeChaseVelocity(delta, 36.0f, 90.0f, 1.0f, 0.05f);
+		if (IsBoss && _bossSlamCooldown <= 0.0f && dist <= 135.0f)
+		{
+			_inSlamTelegraph = true;
+			_slamTelegraphTimer = 0.78f;
+			_bossSlamCooldown = 5.4f;
+			BroadcastBossTelegraphCircle(GlobalPosition, BossSlamRadius, _slamTelegraphTimer, new Color(0.82f, 0.92f, 0.22f));
+			PlayAnimationSafe(IdleAnimationName);
+			Velocity = Vector2.Zero;
+			MoveAndSlide();
+			return;
+		}
 
-		if (_cancelAttackCooldown <= 0 && dist < Config.AttackRange * World.Scale)
+		UpdateMeleeChaseVelocity(delta, 12.0f, 30.0f, 1.0f, 0.05f);
+
+		if (_cancelAttackCooldown <= 0 && dist < Config.AttackRange)
 		{
 			StartAttackPreparation();
 		}
 
 		MoveAndSlide();
-		UpdateSlowAura((float)delta, dist);
-		_auraVisual?.QueueRedraw();
+		UpdateSlowAura(dt);
 	}
 
-	private void UpdateSlowAura(float dt, float dist)
+	private void ExecuteBossToxicSlam()
+	{
+		_inSlamTelegraph = false;
+		if (CurrentHealth <= 0 || _hasDied) return;
+
+		BroadcastBossSlamVfx(GlobalPosition, BossSlamRadius, new Color(0.55f, 0.92f, 0.25f, 0.92f), 0.28f);
+
+		foreach (Player target in NetworkManager.GetAlivePlayers(GetTree()))
+		{
+			if (GlobalPosition.DistanceTo(target.GlobalPosition) <= BossSlamRadius)
+			{
+				target.TakeDamage(Config.Damage * DamageMultiplier * 1.15f, GlobalPosition, 12.0f, true);
+				target.ApplyStatusEffect(StatusEffectType.Poison, 3.0f, 3.0f);
+				target.ApplyStatusEffect(StatusEffectType.Slow, 2.0f, 0.35f);
+			}
+		}
+
+		RefreshNearestTarget();
+		if (_player != null && GodotObject.IsInstanceValid(_player) && !_player.IsDead)
+		{
+			float baseAngle = (_player.GlobalPosition - GlobalPosition).Angle();
+			BroadcastBossOrbs(
+				GlobalPosition,
+				10.0f,
+				3,
+				baseAngle - 0.38f,
+				0.38f,
+				108.0f,
+				180.0f,
+				Mathf.Max(5.0f, Config.Damage * DamageMultiplier * 0.55f),
+				new Color(0.52f, 0.96f, 0.28f, 1.0f));
+		}
+	}
+
+	public float GetEffectiveAuraRadius() => IsBoss ? SlowAuraRadius * 1.25f : SlowAuraRadius;
+
+	private void UpdateSlowAura(float dt)
 	{
 		_auraTimer -= dt;
 		if (_auraTimer <= 0)
 		{
 			_auraTimer = SlowRefreshInterval;
-			if (dist <= SlowAuraRadius * World.Scale)
+			float radius = GetEffectiveAuraRadius();
+			foreach (Player target in NetworkManager.GetAlivePlayers(GetTree()))
 			{
-				_player.ApplyStatusEffect(StatusEffectType.Slow, SlowRefreshInterval + 0.1f, SlowStrength);
+				if (GlobalPosition.DistanceTo(target.GlobalPosition) <= radius)
+				{
+					target.ApplyStatusEffect(StatusEffectType.Slow, SlowRefreshInterval + 0.1f, SlowStrength);
+				}
 			}
 		}
 	}
@@ -73,14 +147,20 @@ public partial class Quagmire : Enemy
 		_isPreparingAttack = false;
 		if (_warningLabel != null) _warningLabel.Visible = false;
 
-		if (_player != null && GodotObject.IsInstanceValid(_player) &&
-			GlobalPosition.DistanceTo(_player.GlobalPosition) <= (Config.AttackRange + 10.0f) * World.Scale)
+		if (Config != null)
 		{
-			// Knockback снижен с 5.0f до 2.5f (в диапазоне 0-4 для всех врагов кроме призрака)
-			_player.TakeDamage(Config.Damage * DamageMultiplier, GlobalPosition, 2.5f, true);
+			foreach (Player target in NetworkManager.GetAlivePlayers(GetTree()))
+			{
+				if (GlobalPosition.DistanceTo(target.GlobalPosition) <= Config.AttackRange + 10.0f)
+				{
+					// Knockback снижен с 5.0f до 2.5f (в диапазоне 0-4 для всех врагов кроме призрака)
+					target.TakeDamage(Config.Damage * DamageMultiplier, GlobalPosition, 2.5f, true);
+					target.ApplyStatusEffect(StatusEffectType.Poison, 1.6f, 2.0f);
+					ApplyEliteOnHitToPlayer(target);
+				}
+			}
+			TriggerStop(Config.StopDuration);
 		}
-
-		TriggerStop(Config.StopDuration);
 	}
 
 	/// <summary>
@@ -101,7 +181,8 @@ public partial class Quagmire : Enemy
 		{
 			if (_owner == null || !GodotObject.IsInstanceValid(_owner)) return;
 
-			float radius = _owner.SlowAuraRadius * World.Scale;
+			float invScale = 1.0f / Mathf.Max(0.1f, _owner.Scale.X);
+			float radius = _owner.GetEffectiveAuraRadius() * invScale;
 			float t = (float)_owner.AuraTime;
 			float breathe = 0.96f + Mathf.Sin(t * 1.5f) * 0.04f;
 			float curRadius = radius * breathe;
@@ -155,7 +236,7 @@ public partial class Quagmire : Enemy
 				Vector2 pos = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang) * 0.85f) * r + new Vector2(0, -phase * 7.0f);
 
 				float alpha = Mathf.Sin(phase * Mathf.Pi);
-				float bRadius = (2.2f + 2.2f * phase) * (World.Scale / 3.0f);
+				float bRadius = 1.6f + 1.6f * phase;
 				// Тело грязевого пузыря
 				DrawCircle(pos, bRadius, new Color(0.30f, 0.18f, 0.09f, 0.65f * alpha));
 				// Светящийся блик на шапке пузыря

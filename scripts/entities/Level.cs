@@ -21,6 +21,9 @@ public partial class Level : Node2D
 
 	private int _currentLevelIndex = 1;
 	public int CurrentLevelIndex => _currentLevelIndex;
+	public GameLogic.FloorEventType CurrentFloorEvent { get; private set; } = GameLogic.FloorEventType.None;
+	private CanvasModulate _canvasModulate;
+	private readonly List<Node> _arenaProps = new List<Node>();
 	public float LevelPlayedTime { get; private set; } = 0.0f;
 
 	// Возвращает накопленное время уровня и обнуляет его (чтобы время не задваивалось при повторных сейвах)
@@ -43,13 +46,24 @@ public partial class Level : Node2D
 
 	private double _spikesTimer = 0.0;
 	private double _playerSpikeInvulnerabilityTimer = 0.0;
+	private readonly Dictionary<long, double> _playerSpikeCooldowns = new Dictionary<long, double>();
 	private readonly Dictionary<ulong, double> _enemySpikeCooldowns = new Dictionary<ulong, double>();
+	private bool _coopPlayersSpawned = false;
+	private float _enemySyncTimer = 0.0f;
+	private bool IsCoopSession => NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+	private bool IsServerAuthority => NetworkManager.Instance == null || NetworkManager.Instance.IsServerAuthority;
 	private SpikePhase _currentSpikePhase = SpikePhase.Retracted;
 	private WaveManager _cachedWaveManager;
 	private Node2D _occludersContainer;
+	private Node2D _wallExtrasContainer;
+	private Texture2D _dungeonTilesetTexture;
 	private readonly List<ulong> _expiredSpikeIds = new List<ulong>();
+	private readonly List<long> _expiredPlayerSpikePeers = new List<long>();
 	private static OccluderPolygon2D _leftWallOccluderPolygon;
 	private static OccluderPolygon2D _rightWallOccluderPolygon;
+	private static OccluderPolygon2D _leftSeamOccluderPolygon;
+	private static OccluderPolygon2D _rightSeamOccluderPolygon;
+	private static OccluderPolygon2D _centerWallOccluderPolygon;
 	private static OccluderPolygon2D _topWallOccluderPolygon;
 	private static OccluderPolygon2D _bottomWallOccluderPolygon;
 	private static OccluderPolygon2D _columnOccluderPolygon;
@@ -103,7 +117,7 @@ public partial class Level : Node2D
 
 		var mapNode = GetNodeOrNull<Node2D>("Map");
 		if (mapNode != null) {
-			mapNode.Scale = new Vector2(3.0f, 3.0f);
+			mapNode.Scale = Vector2.One;
 		}
 
 		// 1. Черный фон viewport и CanvasModulate (затемненные стены/пол видны, void за картой чисто черный)
@@ -113,6 +127,7 @@ public partial class Level : Node2D
 		float ambient = GameLogic.CalculateAmbientLight(SettingsManager.Brightness);
 		modulate.Color = new Color(ambient, ambient, ambient, 1.0f);
 		AddChild(modulate);
+		_canvasModulate = modulate;
 
 		// 2. Находим слой тайлов карты (для генерации окклюдеров)
 		_floorLayer = GetNodeOrNull<TileMapLayer>("Map/Floor") ??
@@ -134,6 +149,16 @@ public partial class Level : Node2D
 			_columnsLayer.UseParentMaterial = false;
 		}
 
+		// Draw WallHorizontal trims AFTER WallsVertical so step-wall corners and inner brick seams get clean vertical stone borders.
+		if (_wallsHorizontalLayer != null && _wallsVerticalLayer != null &&
+			_wallsHorizontalLayer.GetParent() == _wallsVerticalLayer.GetParent() &&
+			_wallsHorizontalLayer.GetIndex() < _wallsVerticalLayer.GetIndex())
+		{
+			_wallsHorizontalLayer.GetParent().MoveChild(_wallsHorizontalLayer, _wallsVerticalLayer.GetIndex());
+		}
+
+		_dungeonTilesetTexture = GD.Load<Texture2D>("res://assets/objects/0x72_DungeonTilesetII_v1.7.png");
+
 		// Удаляем призрачные тайлы с несуществующим source_id в слоях стен (в map.tscn на слое WallHorizontal остались тайлы пола от копирования)
 		foreach (var layer in new[] { _wallsVerticalLayer, _wallsHorizontalLayer, _columnsLayer })
 		{
@@ -151,12 +176,35 @@ public partial class Level : Node2D
 		_spikesLayer = GetNodeOrNull<TileMapLayer>("Map/Spikes");
 
 		Node occluderHost = (Node)mapNode ?? _floorLayer?.GetParent() ?? this;
+		_wallExtrasContainer = new Node2D { Name = "WallExtras" };
+		occluderHost.AddChild(_wallExtrasContainer);
+		if (_wallsHorizontalLayer != null && _wallExtrasContainer.GetParent() == _wallsHorizontalLayer.GetParent())
+		{
+			_wallsHorizontalLayer.GetParent().MoveChild(_wallExtrasContainer, _wallsHorizontalLayer.GetIndex() + 1);
+		}
 		_occludersContainer = new Node2D { Name = "LightOccluders" };
 		occluderHost.AddChild(_occludersContainer);
 		RebuildLevelOccluders();
 
 		// 3. Находим игрока и слой лестницы
-		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+		var templatePlayer = GetNodeOrNull<Player>("Player") ?? GetTree().GetFirstNodeInGroup("Player") as Player;
+		if (IsCoopSession)
+		{
+			if (templatePlayer != null)
+			{
+				templatePlayer.RemoveFromGroup("Player");
+				if (templatePlayer.GetParent() == this)
+				{
+					RemoveChild(templatePlayer);
+				}
+				templatePlayer.QueueFree();
+			}
+			_player = null;
+		}
+		else
+		{
+			_player = templatePlayer;
+		}
 		_stairsLayer = GetNodeOrNull<TileMapLayer>("Map/Stairs");
 
 		if (_stairsLayer != null) {
@@ -198,14 +246,14 @@ public partial class Level : Node2D
 
 		// Загружаем сохраненную сгенерированную карту: тот же сид -> та же самая арена,
 		// что была до выхода из игры
-		if (SaveManager.CurrentSave != null && _currentLevelIndex > 1)
+		if (!IsCoopSession && SaveManager.CurrentSave != null && _currentLevelIndex > 1)
 		{
 			_rng.Seed = SaveManager.CurrentSave.LevelSeed;
 			GenerateRandomLevel(); // сам переместит игрока в центр и пересоберет все слои
 		}
 
 		// 4. Спавним входную лестницу под игроком на старте
-		if (_player != null) {
+		if (!IsCoopSession && _player != null) {
 			SpawnEntryLadder(_player.GlobalPosition);
 		}
 
@@ -213,7 +261,10 @@ public partial class Level : Node2D
 		//(для сгенерированных уровней это уже сделано внутри GenerateRandomLevel)
 		if (_currentLevelIndex == 1)
 		{
-			InitializeSpawnPositions();
+			if (!IsCoopSession)
+			{
+				InitializeSpawnPositions();
+			}
 			InitializeAStarGrid();
 		}
 
@@ -246,7 +297,7 @@ public partial class Level : Node2D
 		}
 
 		Chest.OpenedChestsCount = 0;
-		if (_currentLevelIndex == 1)
+		if (!IsCoopSession && _currentLevelIndex == 1)
 		{
 			GenerateSpikes();
 		}
@@ -279,7 +330,50 @@ public partial class Level : Node2D
 			SpawnDungeonTorches();
 		}
 
-		SetupDungeonAtmosphere();
+		if (!IsCoopSession)
+		{
+			RollAndApplyFloorEvent();
+			SpawnArenaProps();
+			SetupDungeonAtmosphere();
+		}
+		else
+		{
+			SetupDungeonAtmosphere();
+			NetworkManager.Instance.NotifyLocalLevelReady();
+		}
+	}
+
+	private void AttachDustMotesToPlayer(Player targetPlayer)
+	{
+		if (targetPlayer == null || !GodotObject.IsInstanceValid(targetPlayer)) return;
+		if (targetPlayer.GetNodeOrNull("DungeonDustMotes") != null) return;
+
+		var motes = new CpuParticles2D
+		{
+			Name = "DungeonDustMotes",
+			Scale = Vector2.One,
+			ZIndex = 4,
+			Texture = DungeonVisuals.GetPixelSquareTexture(),
+			Amount = 22,
+			Lifetime = 4.2f,
+			Preprocess = 2.0f,
+			LocalCoords = false,
+			EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle,
+			EmissionRectExtents = new Vector2(180.0f, 105.0f),
+			Direction = new Vector2(0.35f, -1.0f),
+			Spread = 35.0f,
+			Gravity = new Vector2(0.0f, -1.2f),
+			InitialVelocityMin = 1.5f,
+			InitialVelocityMax = 4.0f,
+			ScaleAmountMin = 0.25f,
+			ScaleAmountMax = 0.55f
+		};
+		var moteGrad = new Gradient();
+		moteGrad.SetColor(0, new Color(0.95f, 0.86f, 0.65f, 0.0f));
+		moteGrad.AddPoint(0.45f, new Color(0.95f, 0.86f, 0.65f, 0.22f));
+		moteGrad.SetColor(1, new Color(0.95f, 0.86f, 0.65f, 0.0f));
+		motes.ColorRamp = moteGrad;
+		targetPlayer.AddChild(motes);
 	}
 
 	private void SetupDungeonAtmosphere()
@@ -306,45 +400,26 @@ public partial class Level : Node2D
 		vigLayer.AddChild(vigRect);
 		AddChild(vigLayer);
 
-		if (_player != null && GodotObject.IsInstanceValid(_player))
+		if (_player != null && GodotObject.IsInstanceValid(_player) && _player.IsLocalPlayer)
 		{
-			var motes = new CpuParticles2D
-			{
-				Name = "DungeonDustMotes",
-				Scale = new Vector2(1.0f / 3.0f, 1.0f / 3.0f),
-				ZIndex = 4,
-				Texture = DungeonVisuals.GetPixelSquareTexture(),
-				Amount = 22,
-				Lifetime = 4.2f,
-				Preprocess = 2.0f,
-				LocalCoords = false,
-				EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle,
-				EmissionRectExtents = new Vector2(460.0f, 280.0f),
-				Direction = new Vector2(0.35f, -1.0f),
-				Spread = 35.0f,
-				Gravity = new Vector2(0.0f, -3.5f),
-				InitialVelocityMin = 4.0f,
-				InitialVelocityMax = 11.0f,
-				ScaleAmountMin = 0.7f,
-				ScaleAmountMax = 1.4f
-			};
-			var moteGrad = new Gradient();
-			moteGrad.SetColor(0, new Color(0.95f, 0.86f, 0.65f, 0.0f));
-			moteGrad.AddPoint(0.45f, new Color(0.95f, 0.86f, 0.65f, 0.22f));
-			moteGrad.SetColor(1, new Color(0.95f, 0.86f, 0.65f, 0.0f));
-			motes.ColorRamp = moteGrad;
-			_player.AddChild(motes);
+			AttachDustMotesToPlayer(_player);
 		}
 	}
 
 	private void SpawnEntryLadder(Vector2 position)
 	{
+		if (GodotObject.IsInstanceValid(_entryLadder))
+		{
+			_entryLadder.GetParent()?.RemoveChild(_entryLadder);
+			_entryLadder.QueueFree();
+			_entryLadder = null;
+		}
 		_entryLadder = new Sprite2D();
 		_entryLadder.Name = "EntryLadder";
 		_entryLadder.Texture = GD.Load<Texture2D>("res://assets/objects/0x72_DungeonTilesetII_v1.7.png");
 		_entryLadder.RegionEnabled = true;
 		_entryLadder.RegionRect = new Rect2(144, 80, 16, 16);
-		_entryLadder.Scale = new Vector2(1.2f, 1.2f);
+		_entryLadder.Scale = new Vector2(0.85f, 0.85f);
 		_entryLadder.GlobalPosition = position;
 		_entryLadder.ZIndex = -1;
 		AddChild(_entryLadder);
@@ -375,12 +450,13 @@ public partial class Level : Node2D
 	{
 		if (GodotObject.IsInstanceValid(_supplyAltar))
 		{
+			_supplyAltar.GetParent()?.RemoveChild(_supplyAltar);
 			_supplyAltar.QueueFree();
 			_supplyAltar = null;
 		}
 
-		Vector2 basePos = _hasStairs ? _stairsPosition : (_player != null ? _player.GlobalPosition : Vector2.Zero);
-		Vector2 altarPos = basePos + new Vector2(0, -48);
+		Vector2 basePos = _hasStairs ? _stairsPosition : (_player != null && GodotObject.IsInstanceValid(_player) ? _player.GlobalPosition : Vector2.Zero);
+		Vector2 altarPos = basePos + new Vector2(0, -16);
 		if (_floorLayer != null)
 		{
 			Vector2I baseCell = _floorLayer.LocalToMap(_floorLayer.ToLocal(basePos));
@@ -401,7 +477,7 @@ public partial class Level : Node2D
 			}
 		}
 
-		_supplyAltar = new SupplyAltar();
+		_supplyAltar = new SupplyAltar { Name = "SupplyAltar" };
 		_supplyAltar.Setup(this);
 		_supplyAltar.GlobalPosition = altarPos;
 		CallDeferred("add_child", _supplyAltar);
@@ -409,7 +485,13 @@ public partial class Level : Node2D
 
 	private void SpawnExitLadderTrigger()
 	{
-		_exitLadder = new ExitLadder();
+		if (GodotObject.IsInstanceValid(_exitLadder))
+		{
+			_exitLadder.GetParent()?.RemoveChild(_exitLadder);
+			_exitLadder.QueueFree();
+			_exitLadder = null;
+		}
+		_exitLadder = new ExitLadder { Name = "ExitLadder" };
 		_exitLadder.Setup(this);
 		_exitLadder.GlobalPosition = _stairsPosition;
 		CallDeferred("add_child", _exitLadder);
@@ -417,12 +499,26 @@ public partial class Level : Node2D
 
 	public void DescendStairs()
 	{
-		// 1. Удаляем триггер взаимодействия и алтарь
+		if (IsCoopSession)
+		{
+			if (!IsServerAuthority) return;
+			int nextFloor = _currentLevelIndex + 1;
+			ulong nextSeed = NetworkManager.GenerateRandomSeed();
+			NetworkManager.Instance.CurrentRunFloorIndex = nextFloor;
+			NetworkManager.Instance.CurrentFloorSeed = nextSeed;
+			ServerInitializeCoopFloor(nextFloor, nextSeed);
+			return;
+		}
+
+		// 1. Удаляем триггер взаимодействия, алтарь и интерактивные объекты
+		ClearArenaProps();
 		if (GodotObject.IsInstanceValid(_exitLadder)) {
+			_exitLadder.GetParent()?.RemoveChild(_exitLadder);
 			_exitLadder.QueueFree();
 			_exitLadder = null;
 		}
 		if (GodotObject.IsInstanceValid(_supplyAltar)) {
+			_supplyAltar.GetParent()?.RemoveChild(_supplyAltar);
 			_supplyAltar.QueueFree();
 			_supplyAltar = null;
 		}
@@ -438,6 +534,8 @@ public partial class Level : Node2D
 		// сгенерировалась точно такая же карта
 		_rng.Seed = (ulong)(GD.Randi() << 32) | GD.Randi();
 		GenerateRandomLevel();
+		RollAndApplyFloorEvent();
+		SpawnArenaProps();
 
 		if (SaveManager.CurrentSave != null)
 		{
@@ -458,16 +556,28 @@ public partial class Level : Node2D
 		}
 
 		// 5. Запускаем следующую волну через countdown
+		StartNextFloorWaveCountdown();
+	}
+
+	private string BuildWaveAnnouncementMessage(int waveNum)
+	{
+		string baseMsg = (waveNum % 5 == 0)
+			? $"BOSS FLOOR {waveNum} IS COMING!"
+			: $"Wave {waveNum} is coming!";
+		string evtTitle = GameLogic.GetFloorEventTitle(CurrentFloorEvent);
+		return !string.IsNullOrEmpty(evtTitle) ? $"{baseMsg} [{evtTitle}]" : baseMsg;
+	}
+
+	private void StartNextFloorWaveCountdown()
+	{
 		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
 		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
-		if (hud != null) {
-			int nextWaveNum = _currentLevelIndex;
-			string msg = (nextWaveNum % 5 == 0)
-				? $"BOSS FLOOR {nextWaveNum} IS COMING!"
-				: $"Wave {nextWaveNum} is coming!";
-			hud.StartCountdown(5.0f, msg);
+		if (hud != null)
+		{
+			hud.StartCountdown(5.0f, BuildWaveAnnouncementMessage(_currentLevelIndex));
 		}
-		else if (waveManager != null) {
+		else if (waveManager != null && IsServerAuthority)
+		{
 			waveManager.StartNextWave();
 		}
 	}
@@ -477,6 +587,10 @@ public partial class Level : Node2D
 
 	public int GetExpectedMonsterCount()
 	{
+		if (IsCoopSession && NetworkManager.Instance != null)
+		{
+			return GameLogic.CalculateCoopWaveEnemyCount(_currentLevelIndex, DifficultyMultiplier, NetworkManager.Instance.CoopPlayerCount);
+		}
 		return GameLogic.CalculateWaveEnemyCount(_currentLevelIndex, DifficultyMultiplier);
 	}
 
@@ -488,8 +602,9 @@ public partial class Level : Node2D
 		// 1. Очистка старых объектов с предыдущего уровня
 		foreach (var child in GetChildren())
 		{
-			if (child is WeaponPickup || child is Coin || child is ManaCrystal || child is SupplyAltar || child is DungeonTorch)
+			if (child is WeaponPickup || child is Coin || child is ManaCrystal || child is SupplyAltar || child is DungeonTorch || child is Enemy || child is Projectile || child is Fireball)
 			{
+				RemoveChild(child);
 				child.QueueFree();
 			}
 		}
@@ -501,6 +616,13 @@ public partial class Level : Node2D
 		if (_columnsLayer != null) _columnsLayer.Clear();
 		if (_stairsLayer != null) _stairsLayer.Clear();
 		if (_spikesLayer != null) _spikesLayer.Clear();
+		if (_wallExtrasContainer != null)
+		{
+			foreach (Node child in _wallExtrasContainer.GetChildren())
+			{
+				child.QueueFree();
+			}
+		}
 
 		var door = GetNodeOrNull<Door>("Map/Door");
 		if (door != null)
@@ -651,9 +773,15 @@ public partial class Level : Node2D
 		int genMaxY = boundMaxY + 3;
 
 		// 5.1. Проход кирпичных стен (WallsVertical):
-		// Генерируем их первыми, чтобы боковые бортики (WallHorizontal) не перекрывали проходные ряды шапок нижних стен и кирпичные углы.
 		// Нижняя стена: 2 ряда (верхний ряд с тайлом пола под полупрозрачной шапкой).
 		// Верхняя стена: 2 ряда (нижний ряд - тело, верхний - шапка).
+		var floorTuples = new HashSet<(int x, int y)>(floorSet.Count);
+		foreach (var c in floorSet) floorTuples.Add((c.X, c.Y));
+		var lowerCapTuples = new HashSet<(int x, int y)>();
+		var upperCapTuples = new HashSet<(int x, int y)>();
+		var upperBrickTuples = new HashSet<(int x, int y)>();
+		var lowerBrickTuples = new HashSet<(int x, int y)>();
+
 		if (_wallsVerticalLayer != null)
 		{
 			for (int x = genMinX; x <= genMaxX; x++)
@@ -672,33 +800,33 @@ public partial class Level : Node2D
 					{
 						_floorLayer.SetCell(pos, 1, GetRandomFloorTile());
 						_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 0));
+						lowerCapTuples.Add((x, y));
 
 						Vector2I posBelow = new Vector2I(x, y + 1);
 						if (!floorSet.Contains(posBelow))
 						{
 							_wallsVerticalLayer.SetCell(posBelow, 0, new Vector2I(variantX, 1));
+							lowerBrickTuples.Add((posBelow.X, posBelow.Y));
 						}
 					}
 					// Верхняя стена (комната снизу)
 					else if (floorSouth && !floorNorth)
 					{
 						_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 1));
+						upperBrickTuples.Add((x, y));
 
 						Vector2I posAbove = new Vector2I(x, y - 1);
 						if (!floorSet.Contains(posAbove))
 						{
 							_wallsVerticalLayer.SetCell(posAbove, 0, new Vector2I(variantX, 0));
+							upperCapTuples.Add((posAbove.X, posAbove.Y));
 						}
 					}
 				}
 			}
 		}
 
-		// 5.2. Проход боковых стен (WallHorizontal):
-		// Проставляем вертикальные бортики слева (alt=1) и справа (alt=0) от комнат.
-		// Не ставим их поверх проходных нижних шапок (где уже уложен пол) и поверх сплошных 16x16 кирпичей (atlasY==1).
-		// На внешних углах продлеваем только в пустых колонках (без пола сверху/снизу на +-2 тайла):
-		// на 1 тайл вверх (вровень с телом верхней стены, не вылезая над 4px-шапкой) и на 2 тайла вниз (вдоль шапки и тела нижней стены).
+		// 5.2. Проход боковых стен и ступенчатых/внешних углов (WallHorizontal):
 		if (_wallsHorizontalLayer != null)
 		{
 			for (int x = genMinX; x <= genMaxX; x++)
@@ -706,54 +834,37 @@ public partial class Level : Node2D
 				for (int y = genMinY; y <= genMaxY; y++)
 				{
 					Vector2I pos = new Vector2I(x, y);
-					if (floorSet.Contains(pos)) continue;
-					if (_floorLayer != null && _floorLayer.GetCellSourceId(pos) != -1) continue;
-					if (_wallsVerticalLayer != null &&
-						_wallsVerticalLayer.GetCellSourceId(pos) != -1 &&
-						_wallsVerticalLayer.GetCellAtlasCoords(pos).Y == 1)
-					{
-						continue;
-					}
+					var side = GameLogic.ComputeHorizontalWallSide(
+						x, y, floorTuples, lowerCapTuples, upperBrickTuples, lowerBrickTuples);
 
-					bool leftBorder = floorSet.Contains(new Vector2I(x + 1, y));
-					bool rightBorder = floorSet.Contains(new Vector2I(x - 1, y));
-
-					if (!leftBorder && !rightBorder)
-					{
-						bool hasFloorInColumn =
-							floorSet.Contains(new Vector2I(x, y - 1)) ||
-							floorSet.Contains(new Vector2I(x, y - 2)) ||
-							floorSet.Contains(new Vector2I(x, y + 1)) ||
-							floorSet.Contains(new Vector2I(x, y + 2));
-
-						if (!hasFloorInColumn)
-						{
-							if (floorSet.Contains(new Vector2I(x + 1, y - 1)) ||
-								floorSet.Contains(new Vector2I(x + 1, y - 2)) ||
-								floorSet.Contains(new Vector2I(x + 1, y + 1)))
-							{
-								leftBorder = true;
-							}
-							else if (floorSet.Contains(new Vector2I(x - 1, y - 1)) ||
-									 floorSet.Contains(new Vector2I(x - 1, y - 2)) ||
-									 floorSet.Contains(new Vector2I(x - 1, y + 1)))
-							{
-								rightBorder = true;
-							}
-						}
-					}
-
-					if (leftBorder && !rightBorder)
+					if (side == GameLogic.HorizontalWallSide.RightEdgeOfLeftVoid)
 					{
 						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 1);
 					}
-					else if (rightBorder && !leftBorder)
+					else if (side == GameLogic.HorizontalWallSide.LeftEdgeOfRightVoid)
 					{
 						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 0);
 					}
-					else if (leftBorder && rightBorder)
+					else if (side == GameLogic.HorizontalWallSide.Both)
 					{
 						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 0);
+						AddWallExtraSprite(pos, new Rect2(32, 160, 16, 16), true, Vector2.Zero);
+					}
+
+					// Complete 4x4 stone corner caps at outer top-left / top-right wall corners above vertical trims.
+					if (side == GameLogic.HorizontalWallSide.None &&
+						upperCapTuples.Contains((x + 1, y)) &&
+						GameLogic.ComputeHorizontalWallSide(x, y + 1, floorTuples, lowerCapTuples, upperBrickTuples, lowerBrickTuples)
+							is GameLogic.HorizontalWallSide.RightEdgeOfLeftVoid or GameLogic.HorizontalWallSide.Both)
+					{
+						AddWallExtraSprite(pos, new Rect2(32, 12, 4, 4), false, new Vector2(6, 6));
+					}
+					if (side == GameLogic.HorizontalWallSide.None &&
+						upperCapTuples.Contains((x - 1, y)) &&
+						GameLogic.ComputeHorizontalWallSide(x, y + 1, floorTuples, lowerCapTuples, upperBrickTuples, lowerBrickTuples)
+							is GameLogic.HorizontalWallSide.LeftEdgeOfRightVoid or GameLogic.HorizontalWallSide.Both)
+					{
+						AddWallExtraSprite(pos, new Rect2(32, 12, 4, 4), true, new Vector2(-6, 6));
 					}
 				}
 			}
@@ -893,7 +1004,7 @@ public partial class Level : Node2D
 		RebuildLevelOccluders();
 
 		// 9. Перемещаем игрока в центр Vector2.Zero
-		if (_player != null)
+		if (!IsCoopSession && _player != null)
 		{
 			_player.GlobalPosition = Vector2.Zero;
 		}
@@ -903,6 +1014,150 @@ public partial class Level : Node2D
 		InitializeAStarGrid();
 		GenerateSpikes();
 		SpawnDungeonTorches();
+	}
+
+	private void ClearArenaProps()
+	{
+		foreach (var node in _arenaProps)
+		{
+			if (GodotObject.IsInstanceValid(node))
+			{
+				node.GetParent()?.RemoveChild(node);
+				node.QueueFree();
+			}
+		}
+		_arenaProps.Clear();
+		if (IsInsideTree())
+		{
+			foreach (Node n in GetTree().GetNodesInGroup("Enemies"))
+			{
+				if (n is MimicEnemy m && GodotObject.IsInstanceValid(m))
+				{
+					m.GetParent()?.RemoveChild(m);
+					m.QueueFree();
+				}
+			}
+		}
+	}
+
+	private void RollAndApplyFloorEvent()
+	{
+		int roll = _rng != null ? _rng.RandiRange(0, 99) : (int)(GD.Randi() % 100);
+		CurrentFloorEvent = GameLogic.RollFloorEvent(_currentLevelIndex, roll);
+
+		if (_canvasModulate != null && GodotObject.IsInstanceValid(_canvasModulate))
+		{
+			float ambient = GameLogic.CalculateAmbientLight(SettingsManager.Brightness);
+			if (CurrentFloorEvent == GameLogic.FloorEventType.PitchBlack)
+			{
+				ambient = Mathf.Max(0.20f, ambient * 0.65f);
+			}
+			_canvasModulate.Color = new Color(ambient, ambient, ambient, 1.0f);
+		}
+
+		CallDeferred(nameof(SyncFloorEventToHud));
+	}
+
+	private void SyncFloorEventToHud()
+	{
+		var hud = GetTree()?.GetFirstNodeInGroup("HUD") as HUD;
+		hud?.SetFloorEventUI(CurrentFloorEvent);
+	}
+
+	private void SpawnArenaProps()
+	{
+		ClearArenaProps();
+		if (_enemySpawnPositions == null || _enemySpawnPositions.Count < 4) return;
+
+		Vector2 playerPos = !IsCoopSession && _player != null && GodotObject.IsInstanceValid(_player)
+			? _player.GlobalPosition
+			: Vector2.Zero;
+		var usedPositions = new List<Vector2>();
+
+		bool IsFreeArenaSpot(Vector2 candidate, float minSpacing)
+		{
+			if (candidate.DistanceTo(playerPos) < 52.0f) return false;
+			if (_hasStairs && candidate.DistanceTo(_stairsPosition) < 42.0f) return false;
+			foreach (var p in usedPositions)
+			{
+				if (candidate.DistanceTo(p) < minSpacing) return false;
+			}
+			return true;
+		}
+
+		int bombTarget = Mathf.Clamp(2 + _currentLevelIndex / 3, 3, 5);
+		int bombsPlaced = 0;
+		for (int i = 0; i < _enemySpawnPositions.Count && bombsPlaced < bombTarget; i++)
+		{
+			Vector2 pos = _enemySpawnPositions[i];
+			if (!IsFreeArenaSpot(pos, 52.0f)) continue;
+
+			var bomb = new ExplosiveBomb
+			{
+				Name = $"Bomb_{bombsPlaced}",
+				GlobalPosition = pos,
+				BlastDamage = 28.0f + (_currentLevelIndex - 1) * 3.0f,
+				BlastRadius = 50.0f
+			};
+			AddChild(bomb);
+			_arenaProps.Add(bomb);
+			usedPositions.Add(pos);
+			bombsPlaced++;
+		}
+
+		// Trap Lever + 2-3 linked floor spike pads
+		for (int i = 0; i < _enemySpawnPositions.Count; i++)
+		{
+			Vector2 leverPos = _enemySpawnPositions[i];
+			if (!IsFreeArenaSpot(leverPos, 46.0f)) continue;
+
+			var lever = new TrapLever
+			{
+				Name = "TrapLever_0",
+				GlobalPosition = leverPos,
+				SurgeDamage = 20.0f + (_currentLevelIndex - 1) * 2.5f
+			};
+			AddChild(lever);
+			_arenaProps.Add(lever);
+			usedPositions.Add(leverPos);
+
+			int padsAdded = 0;
+			for (int j = 0; j < _enemySpawnPositions.Count && padsAdded < 3; j++)
+			{
+				Vector2 padPos = _enemySpawnPositions[j];
+				float d = padPos.DistanceTo(leverPos);
+				if (d < 24.0f || d > 84.0f || !IsFreeArenaSpot(padPos, 24.0f)) continue;
+
+				var pad = new SpikeTrapPad { Name = $"SpikePad_{padsAdded}", GlobalPosition = padPos };
+				AddChild(pad);
+				_arenaProps.Add(pad);
+				usedPositions.Add(padPos);
+				lever.LinkedPads.Add(pad);
+				padsAdded++;
+			}
+			break;
+		}
+
+		// Rare Mimic Chest starting Floor 2 (non-boss floors ~45% chance)
+		if (_currentLevelIndex >= 2 && _currentLevelIndex % 5 != 0 && _rng.Randf() < 0.45f)
+		{
+			for (int i = _enemySpawnPositions.Count - 1; i >= 0; i--)
+			{
+				Vector2 mimicPos = _enemySpawnPositions[i];
+				if (!IsFreeArenaSpot(mimicPos, 48.0f)) continue;
+
+				var mimicChest = new MimicChest
+				{
+					Name = "MimicChest_0",
+					GlobalPosition = mimicPos,
+					LevelIndex = _currentLevelIndex
+				};
+				AddChild(mimicChest);
+				_arenaProps.Add(mimicChest);
+				usedPositions.Add(mimicPos);
+				break;
+			}
+		}
 	}
 
 	private void SpawnDungeonTorches()
@@ -921,7 +1176,7 @@ public partial class Level : Node2D
 					_wallsVerticalLayer.GetCellSourceId(belowCell) == -1 &&
 					(_wallsHorizontalLayer == null || _wallsHorizontalLayer.GetCellSourceId(belowCell) == -1))
 				{
-					Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(wallCell)) + new Vector2(0, 14.0f);
+					Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(wallCell)) + new Vector2(0, 4.5f);
 					candidatePositions.Add(worldPos);
 				}
 			}
@@ -936,7 +1191,7 @@ public partial class Level : Node2D
 				if (_floorLayer.GetCellSourceId(belowCell) != -1 &&
 					_columnsLayer.GetCellSourceId(belowCell) == -1)
 				{
-					Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(colCell)) + new Vector2(0, 10.0f);
+					Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(colCell)) + new Vector2(0, 3.3f);
 					candidatePositions.Add(worldPos);
 				}
 			}
@@ -950,7 +1205,7 @@ public partial class Level : Node2D
 		}
 
 		var placedTorches = new List<Vector2>();
-		float minTorchSpacing = 220.0f;
+		float minTorchSpacing = 74.0f;
 		int maxTorches = Mathf.Clamp(6 + _currentLevelIndex * 2, 6, 20);
 
 		foreach (var pos in candidatePositions)
@@ -1009,7 +1264,7 @@ public partial class Level : Node2D
 
 	private int _spawnQuadrant = 0;
 
-	private Rect2 GetCameraWorldRect(Vector2 fallbackCenter, float margin = 24.0f)
+	private Rect2 GetCameraWorldRect(Vector2 fallbackCenter, float margin = 8.0f)
 	{
 		var viewport = GetViewport();
 		if (viewport != null)
@@ -1019,22 +1274,22 @@ public partial class Level : Node2D
 			Vector2 topLeft = invCanvas * visibleRect.Position;
 			Vector2 bottomRight = invCanvas * visibleRect.End;
 			Rect2 worldRect = new Rect2(topLeft, bottomRight - topLeft).Abs();
-			if (worldRect.Size.X > 10.0f && worldRect.Size.Y > 10.0f)
+			if (worldRect.Size.X > 4.0f && worldRect.Size.Y > 4.0f)
 			{
 				return worldRect.Grow(margin);
 			}
 		}
 
-		Vector2 halfSize = new Vector2(550.0f + margin, 300.0f + margin);
+		Vector2 halfSize = new Vector2(180.0f + margin, 100.0f + margin);
 		return new Rect2(fallbackCenter - halfSize, halfSize * 2.0f);
 	}
 
-	public Vector2 GetNextEnemySpawnPosition(Vector2 playerPos, float minPlayerDist = 140f)
+	public Vector2 GetNextEnemySpawnPosition(Vector2 playerPos, float minPlayerDist = 48.0f)
 	{
 		int targetQuad = _spawnQuadrant;
 		_spawnQuadrant = (_spawnQuadrant + 1) % 4;
 
-		Rect2 cameraRect = GetCameraWorldRect(playerPos, 24.0f);
+		Rect2 cameraRect = GetCameraWorldRect(playerPos, 8.0f);
 		Rect2 strictCameraRect = GetCameraWorldRect(playerPos, 0.0f);
 
 		if (_enemySpawnPositions == null || _enemySpawnPositions.Count == 0)
@@ -1044,12 +1299,26 @@ public partial class Level : Node2D
 			return playerPos + new Vector2(Mathf.Cos(baseAngle), Mathf.Sin(baseAngle)) * offscreenDist;
 		}
 
+		var alivePlayers = IsCoopSession ? NetworkManager.GetAlivePlayers(GetTree()) : null;
+		bool IsFarFromAlivePlayers(Vector2 candidate)
+		{
+			if (candidate.DistanceTo(playerPos) < minPlayerDist) return false;
+			if (alivePlayers != null)
+			{
+				foreach (var ap in alivePlayers)
+				{
+					if (candidate.DistanceTo(ap.GlobalPosition) < minPlayerDist) return false;
+				}
+			}
+			return true;
+		}
+
 		// 1. Сначала ищем точку строго вне камеры игрока (с запасом) в целевом квадранте
 		for (int i = 0; i < _enemySpawnPositions.Count; i++)
 		{
 			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
 			Vector2 pos = _enemySpawnPositions[idx];
-			if (cameraRect.HasPoint(pos) || pos.DistanceTo(playerPos) < minPlayerDist) continue;
+			if (cameraRect.HasPoint(pos) || !IsFarFromAlivePlayers(pos)) continue;
 
 			Vector2 rel = pos - playerPos;
 			int quad = (rel.X >= 0 ? 0 : 1) + (rel.Y >= 0 ? 0 : 2);
@@ -1065,7 +1334,7 @@ public partial class Level : Node2D
 		{
 			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
 			Vector2 pos = _enemySpawnPositions[idx];
-			if (!cameraRect.HasPoint(pos) && pos.DistanceTo(playerPos) >= minPlayerDist)
+			if (!cameraRect.HasPoint(pos) && IsFarFromAlivePlayers(pos))
 			{
 				_spawnPosIndex = (idx + 1) % _enemySpawnPositions.Count;
 				return pos;
@@ -1077,7 +1346,7 @@ public partial class Level : Node2D
 		{
 			int idx = (_spawnPosIndex + i) % _enemySpawnPositions.Count;
 			Vector2 pos = _enemySpawnPositions[idx];
-			if (!strictCameraRect.HasPoint(pos) && pos.DistanceTo(playerPos) >= minPlayerDist)
+			if (!strictCameraRect.HasPoint(pos) && IsFarFromAlivePlayers(pos))
 			{
 				_spawnPosIndex = (idx + 1) % _enemySpawnPositions.Count;
 				return pos;
@@ -1213,10 +1482,10 @@ public partial class Level : Node2D
 		{
 			if (node is Door door && !door.IsOpen)
 			{
-				SetCellSolid(door.GlobalPosition + new Vector2(-8 * World.Scale, -8 * World.Scale), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(8 * World.Scale, -8 * World.Scale), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(-8 * World.Scale, 8 * World.Scale), true);
-				SetCellSolid(door.GlobalPosition + new Vector2(8 * World.Scale, 8 * World.Scale), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(-8, -8), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(8, -8), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(-8, 8), true);
+				SetCellSolid(door.GlobalPosition + new Vector2(8, 8), true);
 			}
 		}
 	}
@@ -1288,8 +1557,11 @@ public partial class Level : Node2D
 		}
 
 		// Place each occluder behind the visible trim/brick face so room lights illuminate the wall face while still blocking light leak into the void.
-		var leftPoly = GetOrCreateRectOccluderPolygon(ref _leftWallOccluderPolygon, -8, -8, 2, 8);
-		var rightPoly = GetOrCreateRectOccluderPolygon(ref _rightWallOccluderPolygon, -2, -8, 8, 8);
+		var leftPoly = GetOrCreateRectOccluderPolygon(ref _leftWallOccluderPolygon, -8, -8, 3, 8);
+		var rightPoly = GetOrCreateRectOccluderPolygon(ref _rightWallOccluderPolygon, -3, -8, 8, 8);
+		var leftSeamPoly = GetOrCreateRectOccluderPolygon(ref _leftSeamOccluderPolygon, 2, -8, 4, 8);
+		var rightSeamPoly = GetOrCreateRectOccluderPolygon(ref _rightSeamOccluderPolygon, -4, -8, -2, 8);
+		var centerPoly = GetOrCreateRectOccluderPolygon(ref _centerWallOccluderPolygon, -3, -8, 3, 8);
 		var topPoly = GetOrCreateRectOccluderPolygon(ref _topWallOccluderPolygon, -8, -8, 8, 3);
 		var bottomPoly = GetOrCreateRectOccluderPolygon(ref _bottomWallOccluderPolygon, -8, 4, 8, 8);
 		var columnPoly = GetOrCreateRectOccluderPolygon(ref _columnOccluderPolygon, -6, -6, 6, 6);
@@ -1298,8 +1570,41 @@ public partial class Level : Node2D
 		{
 			foreach (var cell in _wallsHorizontalLayer.GetUsedCells())
 			{
-				var poly = _wallsHorizontalLayer.GetCellAlternativeTile(cell) == 1 ? leftPoly : rightPoly;
-				AddTileOccluder(_wallsHorizontalLayer, cell, poly);
+				bool isUpperBrick =
+					_wallsVerticalLayer != null &&
+					_floorLayer != null &&
+					_wallsVerticalLayer.GetCellSourceId(cell) != -1 &&
+					_wallsVerticalLayer.GetCellAtlasCoords(cell).Y == 1 &&
+					_floorLayer.GetCellSourceId(cell + Vector2I.Down) != -1 &&
+					_floorLayer.GetCellSourceId(cell + Vector2I.Up) == -1;
+
+				bool hasRightRoom = _floorLayer != null && _floorLayer.GetCellSourceId(cell + Vector2I.Right) != -1;
+				bool hasLeftRoom = _floorLayer != null && _floorLayer.GetCellSourceId(cell + Vector2I.Left) != -1;
+				bool isBothSides = hasRightRoom && hasLeftRoom;
+
+				if (isUpperBrick)
+				{
+					// Keep the front brick face lit from the room below while sealing horizontal light leaks at step corners.
+					if (isBothSides)
+					{
+						AddTileOccluder(_wallsHorizontalLayer, cell, leftSeamPoly);
+						AddTileOccluder(_wallsHorizontalLayer, cell, rightSeamPoly);
+					}
+					else
+					{
+						var seamPoly = _wallsHorizontalLayer.GetCellAlternativeTile(cell) == 1 ? leftSeamPoly : rightSeamPoly;
+						AddTileOccluder(_wallsHorizontalLayer, cell, seamPoly);
+					}
+				}
+				else if (isBothSides)
+				{
+					AddTileOccluder(_wallsHorizontalLayer, cell, centerPoly);
+				}
+				else
+				{
+					var poly = _wallsHorizontalLayer.GetCellAlternativeTile(cell) == 1 ? leftPoly : rightPoly;
+					AddTileOccluder(_wallsHorizontalLayer, cell, poly);
+				}
 			}
 		}
 
@@ -1330,6 +1635,21 @@ public partial class Level : Node2D
 				}
 			}
 		}
+	}
+
+	private void AddWallExtraSprite(Vector2I cell, Rect2 regionRect, bool flipH, Vector2 localOffset)
+	{
+		if (_wallExtrasContainer == null || _wallsHorizontalLayer == null || _dungeonTilesetTexture == null) return;
+
+		var sprite = new Sprite2D
+		{
+			Texture = _dungeonTilesetTexture,
+			RegionEnabled = true,
+			RegionRect = regionRect,
+			FlipH = flipH,
+			Position = _wallsHorizontalLayer.Position + _wallsHorizontalLayer.MapToLocal(cell) + localOffset
+		};
+		_wallExtrasContainer.AddChild(sprite);
 	}
 
 	private void AddTileOccluder(TileMapLayer layer, Vector2I cell, OccluderPolygon2D polygon)
@@ -1382,9 +1702,16 @@ public partial class Level : Node2D
 
 		if (_spikesLayer == null) return;
 
-		if (_playerSpikeInvulnerabilityTimer > 0)
+		if (_playerSpikeCooldowns.Count > 0)
 		{
-			_playerSpikeInvulnerabilityTimer -= delta;
+			_expiredPlayerSpikePeers.Clear();
+			_expiredPlayerSpikePeers.AddRange(_playerSpikeCooldowns.Keys);
+			foreach (long peerId in _expiredPlayerSpikePeers)
+			{
+				double remaining = _playerSpikeCooldowns[peerId] - delta;
+				if (remaining <= 0) _playerSpikeCooldowns.Remove(peerId);
+				else _playerSpikeCooldowns[peerId] = remaining;
+			}
 		}
 
 		if (_enemySpikeCooldowns.Count > 0)
@@ -1415,15 +1742,18 @@ public partial class Level : Node2D
 		}
 
 		// Урон наносим только во время активной фазы (и игроку, и наземным врагам)
-		if (_currentSpikePhase == SpikePhase.Active)
+		if (IsServerAuthority && _currentSpikePhase == SpikePhase.Active)
 		{
-			float spikeRadius = 12.0f * World.Scale;
+			float spikeRadius = 12.0f;
 
-			if (_playerSpikeInvulnerabilityTimer <= 0 && _player != null &&
-				TryGetHitSpikeCenter(_player.GlobalPosition, spikeRadius, out Vector2 playerSpikeCenter))
+			foreach (var p in NetworkManager.GetAlivePlayers(GetTree()))
 			{
-				_player.TakeDamage(5f, playerSpikeCenter, 2.5f, true);
-				_playerSpikeInvulnerabilityTimer = 1.0;
+				if (_playerSpikeCooldowns.ContainsKey(p.PeerId)) continue;
+				if (TryGetHitSpikeCenter(p.GlobalPosition, spikeRadius, out Vector2 playerSpikeCenter))
+				{
+					p.TakeDamage(5f, playerSpikeCenter, 2.5f, true);
+					_playerSpikeCooldowns[p.PeerId] = 1.0;
+				}
 			}
 
 			foreach (Node node in GetTree().GetNodesInGroup("Enemies"))
@@ -1439,6 +1769,63 @@ public partial class Level : Node2D
 						_enemySpikeCooldowns[id] = 1.0;
 					}
 				}
+			}
+		}
+
+		if (IsCoopSession && IsServerAuthority)
+		{
+			SyncEnemiesBatchOnServer((float)delta);
+		}
+	}
+
+	private void SyncEnemiesBatchOnServer(float dt)
+	{
+		_enemySyncTimer -= dt;
+		if (_enemySyncTimer > 0.0f) return;
+		_enemySyncTimer = 0.05f;
+
+		var enemies = GetTree().GetNodesInGroup("Enemies");
+		var netIds = new List<int>();
+		var positions = new List<Vector2>();
+		var hps = new List<float>();
+		var anims = new List<string>();
+		var flags = new List<int>();
+
+		foreach (Node node in enemies)
+		{
+			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.NetId > 0 && !enemy.HasDied && enemy.CurrentHealth > 0.0f)
+			{
+				netIds.Add(enemy.NetId);
+				positions.Add(enemy.GlobalPosition);
+				hps.Add(enemy.CurrentHealth);
+				anims.Add(enemy.GetCurrentAnimationName());
+				int f = (enemy.GetSpriteFlipH() ? 1 : 0) | (enemy.IsWarningVisible() ? 2 : 0);
+				flags.Add(f);
+			}
+		}
+
+		if (netIds.Count > 0)
+		{
+			Rpc(nameof(RpcSyncEnemiesBatch), netIds.ToArray(), positions.ToArray(), hps.ToArray(), anims.ToArray(), flags.ToArray());
+		}
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.UnreliableOrdered)]
+	private void RpcSyncEnemiesBatch(int[] netIds, Vector2[] positions, float[] hps, string[] anims, int[] flags)
+	{
+		if (!IsCoopSession || IsServerAuthority || Multiplayer.GetRemoteSenderId() != 1) return;
+		int count = netIds.Length;
+		for (int i = 0; i < count; i++)
+		{
+			var enemy = GetNodeOrNull<Enemy>($"Enemy_{netIds[i]}");
+			if (enemy != null && GodotObject.IsInstanceValid(enemy) && !enemy.HasDied)
+			{
+				enemy.ApplyNetworkSnapshot(
+					positions[i],
+					hps[i],
+					anims[i],
+					(flags[i] & 1) != 0,
+					(flags[i] & 2) != 0);
 			}
 		}
 	}
@@ -1529,9 +1916,9 @@ public partial class Level : Node2D
 		};
 
 		Vector2[] offsets = new Vector2[] {
-			new Vector2(-72, -144),
-			new Vector2(0, -144),
-			new Vector2(72, -144)
+			new Vector2(-24, -48),
+			new Vector2(0, -48),
+			new Vector2(24, -48)
 		};
 
 		var random = new Random();
@@ -1549,7 +1936,85 @@ public partial class Level : Node2D
 		}
 	}
 
+	public void ServerSpawnPickupDrop(Vector2 pos, bool isMana)
+	{
+		if (!IsServerAuthority) return;
+		Vector2 freePos = FindNearestFreeSpot(pos);
+		int netId = IsCoopSession && NetworkManager.Instance != null
+			? NetworkManager.Instance.AllocateEntityNetId()
+			: 0;
+		if (IsCoopSession)
+		{
+			Rpc(nameof(RpcSpawnPickupItem), netId, freePos, isMana);
+		}
+		else
+		{
+			RpcSpawnPickupItem(netId, freePos, isMana);
+		}
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcSpawnPickupItem(int netId, Vector2 pos, bool isMana)
+	{
+		int sender = Multiplayer.GetRemoteSenderId();
+		if (IsCoopSession && sender != 0 && sender != 1) return;
+
+		string path = isMana ? "res://scene/objects/mana_crystal.tscn" : "res://scene/objects/coin.tscn";
+		var prefab = GD.Load<PackedScene>(path);
+		if (prefab == null) return;
+
+		var drop = prefab.Instantiate() as Node2D;
+		if (drop == null) return;
+		if (netId > 0)
+		{
+			drop.Name = $"Pickup_{netId}";
+		}
+		drop.GlobalPosition = pos;
+		CallDeferred(MethodName.AddChild, drop);
+	}
+
 	public void SpawnWeaponPickupAt(Vector2 pos, string weaponPath)
+	{
+		if (IsCoopSession && !IsServerAuthority) return;
+		Vector2 freePos = FindNearestFreeSpot(pos);
+		if (IsCoopSession && NetworkManager.Instance != null)
+		{
+			int netId = NetworkManager.Instance.AllocateEntityNetId();
+			Rpc(nameof(RpcSpawnWeaponPickup), netId, freePos, weaponPath);
+		}
+		else
+		{
+			SpawnWeaponPickupLocal(0, freePos, weaponPath);
+		}
+	}
+
+	public void RequestSpawnWeaponPickup(Vector2 pos, string weaponPath)
+	{
+		if (string.IsNullOrEmpty(weaponPath)) return;
+		if (IsCoopSession && !IsServerAuthority)
+		{
+			RpcId(1, nameof(RpcRequestSpawnWeaponPickup), pos, weaponPath);
+			return;
+		}
+		SpawnWeaponPickupAt(pos, weaponPath);
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcRequestSpawnWeaponPickup(Vector2 pos, string weaponPath)
+	{
+		if (!IsServerAuthority || string.IsNullOrEmpty(weaponPath)) return;
+		SpawnWeaponPickupAt(pos, weaponPath);
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcSpawnWeaponPickup(int netId, Vector2 pos, string weaponPath)
+	{
+		int sender = Multiplayer.GetRemoteSenderId();
+		if (IsCoopSession && sender != 0 && sender != 1) return;
+		SpawnWeaponPickupLocal(netId, pos, weaponPath);
+	}
+
+	private void SpawnWeaponPickupLocal(int netId, Vector2 pos, string weaponPath)
 	{
 		var pickupPrefab = GD.Load<PackedScene>("res://scene/weapons/weapon_pickup.tscn");
 		if (pickupPrefab == null) return;
@@ -1557,9 +2022,13 @@ public partial class Level : Node2D
 		var pickup = pickupPrefab.Instantiate() as WeaponPickup;
 		if (pickup != null)
 		{
+			if (netId > 0)
+			{
+				pickup.Name = $"WeaponDrop_{netId}";
+			}
 			var weaponData = GD.Load<WeaponData>(weaponPath);
 			pickup.WeaponToGive = weaponData;
-			pickup.GlobalPosition = FindNearestFreeSpot(pos);
+			pickup.GlobalPosition = pos;
 			CallDeferred(MethodName.AddChild, pickup);
 		}
 	}
@@ -1603,6 +2072,17 @@ public partial class Level : Node2D
 	{
 		if (@event.IsActionPressed("ui_cancel"))
 		{
+			if (IsCoopSession)
+			{
+				if (GetTree().Root.GetNodeOrNull("CoopPauseMenu") == null)
+				{
+					var pauseMenu = new PauseMenu { Name = "CoopPauseMenu" };
+					GetTree().Root.AddChild(pauseMenu);
+					GetViewport().SetInputAsHandled();
+				}
+				return;
+			}
+
 			if (!GetTree().Paused)
 			{
 				GetTree().Paused = true;
@@ -1610,6 +2090,216 @@ public partial class Level : Node2D
 				GetTree().Root.AddChild(pauseMenu);
 				GetViewport().SetInputAsHandled();
 			}
+		}
+	}
+
+	private static readonly Vector2[] CoopSpawnOffsets = new[]
+	{
+		Vector2.Zero,
+		new Vector2(22.0f, 0.0f),
+		new Vector2(-22.0f, 0.0f),
+		new Vector2(0.0f, 22.0f)
+	};
+
+	public void ServerInitializeCoopFloor(int floorIndex, ulong floorSeed)
+	{
+		if (!IsCoopSession || !IsServerAuthority) return;
+
+		Rpc(nameof(RpcApplyCoopFloor), floorIndex, floorSeed);
+
+		if (!_coopPlayersSpawned)
+		{
+			var ordered = NetworkManager.Instance.GetOrderedLobbyPlayers();
+			int count = ordered.Count;
+			long[] peerIds = new long[count];
+			string[] names = new string[count];
+			string[] chars = new string[count];
+			Vector2[] positions = new Vector2[count];
+
+			for (int i = 0; i < count; i++)
+			{
+				peerIds[i] = ordered[i].PeerId;
+				names[i] = ordered[i].PlayerName;
+				chars[i] = ordered[i].CharacterName;
+				positions[i] = FindNearestFreeSpot(CoopSpawnOffsets[i % CoopSpawnOffsets.Length]);
+			}
+
+			Rpc(nameof(RpcSpawnCoopPlayers), peerIds, names, chars, positions);
+		}
+		else
+		{
+			var players = NetworkManager.GetAllPlayers(GetTree());
+			int count = players.Count;
+			long[] peerIds = new long[count];
+			Vector2[] positions = new Vector2[count];
+			float[] nextHps = new float[count];
+			float[] nextMps = new float[count];
+			int[] revivedFlags = new int[count];
+
+			for (int i = 0; i < count; i++)
+			{
+				Player p = players[i];
+				peerIds[i] = p.PeerId;
+				positions[i] = FindNearestFreeSpot(CoopSpawnOffsets[i % CoopSpawnOffsets.Length]);
+				if (p.IsDead)
+				{
+					nextHps[i] = GameLogic.CalculateCoopReviveHealth(p.MaxHealthEffective);
+					nextMps[i] = p.MaxManaEffective;
+					revivedFlags[i] = 1;
+				}
+				else
+				{
+					nextHps[i] = p.CurrentHealth;
+					nextMps[i] = p.CurrentMana;
+					revivedFlags[i] = 0;
+				}
+			}
+
+			Rpc(nameof(RpcPlaceAndReviveCoopPlayers), peerIds, positions, nextHps, nextMps, revivedFlags);
+		}
+
+		Rpc(nameof(RpcStartFloorCountdown), floorIndex, 5.0f, BuildWaveAnnouncementMessage(floorIndex));
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcApplyCoopFloor(int floorIndex, ulong floorSeed)
+	{
+		ClearArenaProps();
+		if (GodotObject.IsInstanceValid(_exitLadder))
+		{
+			_exitLadder.GetParent()?.RemoveChild(_exitLadder);
+			_exitLadder.QueueFree();
+			_exitLadder = null;
+		}
+		if (GodotObject.IsInstanceValid(_supplyAltar))
+		{
+			_supplyAltar.GetParent()?.RemoveChild(_supplyAltar);
+			_supplyAltar.QueueFree();
+			_supplyAltar = null;
+		}
+		if (floorIndex > 1 && _stairsLayer != null)
+		{
+			_stairsLayer.Visible = false;
+		}
+
+		_currentLevelIndex = floorIndex;
+		if (NetworkManager.Instance != null)
+		{
+			NetworkManager.Instance.CurrentRunFloorIndex = floorIndex;
+			NetworkManager.Instance.CurrentFloorSeed = floorSeed;
+		}
+
+		_rng.Seed = floorSeed;
+		_spikesTimer = 0.0;
+		_currentSpikePhase = SpikePhase.Retracted;
+
+		if (floorIndex == 1)
+		{
+			InitializeSpawnPositions();
+			GenerateSpikes();
+		}
+		else
+		{
+			GenerateRandomLevel();
+		}
+
+		RollAndApplyFloorEvent();
+		SpawnArenaProps();
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcSpawnCoopPlayers(long[] peerIds, string[] names, string[] chars, Vector2[] spawnPositions)
+	{
+		_coopPlayersSpawned = true;
+		var playerPrefab = GD.Load<PackedScene>("res://scene/actors/player.tscn");
+		int count = peerIds?.Length ?? 0;
+
+		for (int i = 0; i < count; i++)
+		{
+			string expectedName = $"Player_{peerIds[i]}";
+			if (GetNodeOrNull<Player>(expectedName) != null) continue;
+
+			var p = playerPrefab.Instantiate() as Player;
+			if (p == null) continue;
+
+			p.Name = expectedName;
+			p.PeerId = (int)peerIds[i];
+			p.PlayerDisplayName = names[i];
+			p.IsCoopSpawned = true;
+
+			string charPath = GameLogic.ResolveCharacterDataPath(chars[i]);
+			var loadedConfig = GD.Load<PlayerData>(charPath);
+			if (loadedConfig != null) p.Config = loadedConfig;
+
+			p.GlobalPosition = spawnPositions[i];
+			AddChild(p);
+
+			if (p.IsLocalPlayer)
+			{
+				_player = p;
+				AttachDustMotesToPlayer(p);
+				var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+				hud?.BindLocalPlayer(p);
+			}
+		}
+
+		SpawnEntryLadder(Vector2.Zero);
+		(GetTree().GetFirstNodeInGroup("HUD") as HUD)?.UpdatePartyRosterUI();
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcPlaceAndReviveCoopPlayers(long[] peerIds, Vector2[] spawnPositions, float[] nextHps, float[] nextMps, int[] revivedFlags)
+	{
+		int count = peerIds?.Length ?? 0;
+		for (int i = 0; i < count; i++)
+		{
+			Player p = NetworkManager.GetPlayerByPeerId(GetTree(), peerIds[i]);
+			if (p == null) continue;
+
+			if (revivedFlags[i] != 0)
+			{
+				p.ApplyFloorRevive(spawnPositions[i], nextHps[i], nextMps[i]);
+			}
+			else
+			{
+				p.TeleportForNewFloor(spawnPositions[i], nextHps[i], nextMps[i]);
+			}
+		}
+
+		SpawnEntryLadder(Vector2.Zero);
+		(GetTree().GetFirstNodeInGroup("HUD") as HUD)?.UpdatePartyRosterUI();
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcStartFloorCountdown(int floorIndex, float duration, string msg)
+	{
+		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+		hud?.SetLadderReadyBanner(false, 0, 1, 0.0f);
+		hud?.StartCountdown(duration, msg);
+	}
+
+	public void OnCoopPeerDisconnected(long peerId, string leavingName)
+	{
+		Player leaving = NetworkManager.GetPlayerByPeerId(GetTree(), peerId);
+		if (leaving != null)
+		{
+			leaving.RemoveFromGroup("Player");
+			leaving.GetParent()?.RemoveChild(leaving);
+			leaving.QueueFree();
+		}
+
+		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+		hud?.ShowToast($"{leavingName} left the run", new Color(1.0f, 0.55f, 0.25f));
+		hud?.UpdatePartyRosterUI();
+
+		var remaining = NetworkManager.GetAllPlayers(GetTree());
+		if (IsServerAuthority && remaining.Count > 0)
+		{
+			remaining[0].CheckTeamWipeOnServer();
+		}
+		if (IsServerAuthority)
+		{
+			GetNodeOrNull<ExitLadder>("ExitLadder")?.RefreshReadyCheckOnServer();
 		}
 	}
 }

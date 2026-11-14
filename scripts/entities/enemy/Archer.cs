@@ -4,7 +4,7 @@ public partial class Archer : Enemy
 {
 	protected override Color WarningLabelColor => new Color(1.0f, 0.5f, 0.1f);
 
-	public override void _PhysicsProcess(double delta)
+	protected override void TickEnemyAI(double delta)
 	{
 		if (StepEnemyActionState(delta))
 		{

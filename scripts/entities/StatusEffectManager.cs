@@ -1,7 +1,7 @@
 using Godot;
 using System.Collections.Generic;
 
-public enum StatusEffectType { Stun, Slow, Root, Disarm }
+public enum StatusEffectType { Stun, Slow, Root, Disarm, Burn, Bleed, Poison }
 
 public partial class StatusEffectManager : Node
 {
@@ -66,5 +66,10 @@ public partial class StatusEffectManager : Node
 	public float GetEffectStrength(StatusEffectType type)
 	{
 		return _activeEffects.ContainsKey(type) ? _activeEffects[type].strength : 0f;
+	}
+
+	public void ClearEffects()
+	{
+		_activeEffects.Clear();
 	}
 }

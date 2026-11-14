@@ -44,12 +44,7 @@ public partial class SettingsMenu : CanvasLayer
 
 		var rootControl = new Control();
 		AddChild(rootControl);
-
-		var viewportSize = GetViewport().GetVisibleRect().Size;
-		float uiScale = Mathf.Clamp(viewportSize.X / 960.0f, 1.0f, 3.0f);
-		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		rootControl.Size = viewportSize / uiScale;
-		rootControl.Scale = new Vector2(uiScale, uiScale);
+		rootControl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
 		var bgOverlay = new ColorRect();
 		bgOverlay.Color = new Color(0.025f, 0.028f, 0.042f, 0.94f);
@@ -258,6 +253,53 @@ public partial class SettingsMenu : CanvasLayer
 		DungeonVisuals.StyleButton(resetBtn, DungeonVisuals.Crimson, font, 16, 3, new Color(0.18f, 0.05f, 0.06f, 0.95f), 10, 3);
 		resetBtn.Pressed += OnResetSettingsPressed;
 		vbox.AddChild(CreateOptionRow("Reset Settings", resetBtn, font));
+
+		var spacer = new Control { CustomMinimumSize = new Vector2(0, 8) };
+		vbox.AddChild(spacer);
+
+		var refHeader = CreateLabel("QUICK EXPEDITION REFERENCE", font, 15);
+		refHeader.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(refHeader, 1);
+		vbox.AddChild(refHeader);
+
+		var refPanel = new PanelContainer();
+		refPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.IronBorder, 1, 4, 2));
+		var refMargin = new MarginContainer();
+		refMargin.AddThemeConstantOverride("margin_left", 12);
+		refMargin.AddThemeConstantOverride("margin_right", 12);
+		refMargin.AddThemeConstantOverride("margin_top", 10);
+		refMargin.AddThemeConstantOverride("margin_bottom", 10);
+		var refVBox = new VBoxContainer();
+		refVBox.AddThemeConstantOverride("separation", 6);
+		refMargin.AddChild(refVBox);
+		refPanel.AddChild(refMargin);
+		vbox.AddChild(refPanel);
+
+		string[][] tips =
+		{
+			new[] { "Combat & Aim", "WASD to move, Left-Click to attack toward cursor." },
+			new[] { "Arsenal Swap", "Keys 1-3 or Mouse Wheel to switch weapons cleanly." },
+			new[] { "Abilities", "[Q] Fireball  |  [V] Shield & Dash (upgrade with +)." },
+			new[] { "Progression", "[E] Interact with Supply Altar, Chests, Levers & Stairs." },
+			new[] { "Checkpoints", "Floor state saves automatically when descending to a new floor." },
+			new[] { "Milestones", "Every 5th floor offers a FREE Relic; Floor 21+ awakens Madness." }
+		};
+		foreach (var tip in tips)
+		{
+			var row = new HBoxContainer();
+			row.AddThemeConstantOverride("separation", 10);
+			var keyLbl = CreateLabel(tip[0], font, 13);
+			keyLbl.CustomMinimumSize = new Vector2(120, 0);
+			keyLbl.AddThemeColorOverride("font_color", DungeonVisuals.ArcaneCyan);
+			var valLbl = CreateLabel(tip[1], font, 12);
+			valLbl.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+			valLbl.AutowrapMode = TextServer.AutowrapMode.WordSmart;
+			valLbl.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
+			row.AddChild(keyLbl);
+			row.AddChild(valLbl);
+			refVBox.AddChild(row);
+		}
 	}
 
 	private void CreateGraphicsTab(Font font)

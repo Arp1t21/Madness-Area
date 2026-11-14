@@ -34,6 +34,11 @@ public partial class WeaponData : Resource
 	[Export] public int MaxAmmo = 10;
 	[Export] public float ReloadTime = 1.5f;
 
+	[ExportGroup("Laser Only")]
+	[Export] public bool IsContinuousLaser = false;
+	[Export] public float SplashRadius = 26.0f;
+	[Export] public Color LaserColor = new Color(0.24f, 0.92f, 1.0f, 1.0f);
+
 	// Путь к исходному .tres ресурсу при создании уникальной копии оружия для прокачки одного слота
 	public string OriginalResourcePath { get; set; } = "";
 

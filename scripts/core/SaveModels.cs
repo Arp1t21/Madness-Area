@@ -16,6 +16,8 @@ public class SavedWeaponStats
 	public float? BulletSpeed { get; set; }
 	public bool? IsPiercing { get; set; }
 	public bool? AllowMultiHit { get; set; }
+	public bool? IsContinuousLaser { get; set; }
+	public float? SplashRadius { get; set; }
 }
 
 public class SaveData
@@ -40,5 +42,6 @@ public class SaveData
 	public List<string> WeaponResourcePaths { get; set; } = new List<string>();
 	public List<SavedWeaponStats> WeaponSlotCustomStats { get; set; } = new List<SavedWeaponStats>();
 	public Dictionary<string, int> ShopPurchaseCounts { get; set; } = new Dictionary<string, int>();
+	public List<string> UnlockedRelics { get; set; } = new List<string>();
 	public string SaveDateString { get; set; } = "";
 }

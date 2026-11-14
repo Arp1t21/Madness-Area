@@ -20,7 +20,7 @@ public partial class DarkCultist : Enemy
 			78);
 	}
 
-	public override void _PhysicsProcess(double delta)
+	protected override void TickEnemyAI(double delta)
 	{
 		if (StepEnemyActionState(delta))
 		{

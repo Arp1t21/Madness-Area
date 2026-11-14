@@ -45,7 +45,7 @@ public partial class Door : StaticBody2D, IInteractable
 			_promptLabel = new Label();
 			_promptLabel.Text = "Press E to open";
 			_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_promptLabel.Position = new Vector2(-50, -35);
+			_promptLabel.Position = new Vector2(-50, -24);
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 			
@@ -58,7 +58,7 @@ public partial class Door : StaticBody2D, IInteractable
 			AddChild(_promptLabel);
 		} else {
 			_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
-			_promptLabel.Position = new Vector2(-50, -35);
+			_promptLabel.Position = new Vector2(-50, -24);
 		}
 
 		if (_interactArea != null) {
@@ -75,8 +75,12 @@ public partial class Door : StaticBody2D, IInteractable
 		ShowLockedDoor();
 	}
 
+	private bool IsCoopSession => NetworkManager.Instance != null && NetworkManager.Instance.IsCoopSession;
+	private bool IsServerAuthority => !IsCoopSession || (NetworkManager.Instance != null && NetworkManager.Instance.IsServerAuthority);
+
 	public void Interact(Player player)
 	{
+		if (IsCoopSession && (player == null || !player.IsLocalPlayer || player.IsDead)) return;
 		ToggleDoor();
 	}
 
@@ -95,13 +99,47 @@ public partial class Door : StaticBody2D, IInteractable
 
 	public void ToggleDoor()
 	{
-		IsOpen = !IsOpen;
+		if (IsCoopSession)
+		{
+			if (!IsServerAuthority)
+			{
+				RpcId(1, nameof(RpcRequestToggleDoor));
+				return;
+			}
+			Rpc(nameof(RpcSetDoorOpen), !IsOpen);
+			return;
+		}
+
+		ApplyDoorToggle(!IsOpen);
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = false, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcRequestToggleDoor()
+	{
+		if (!IsServerAuthority) return;
+		Rpc(nameof(RpcSetDoorOpen), !IsOpen);
+	}
+
+	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
+	private void RpcSetDoorOpen(bool open)
+	{
+		int sender = Multiplayer.GetRemoteSenderId();
+		if (IsCoopSession && sender != 0 && sender != 1) return;
+		ApplyDoorToggle(open);
+	}
+
+	private void ApplyDoorToggle(bool open)
+	{
+		IsOpen = open;
 		UpdateDoorState();
 		if (IsOpen && !_shopItemsSpawned)
 		{
 			_shopItemsSpawned = true;
-			var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
-			level?.SpawnShopItems();
+			if (!IsCoopSession || IsServerAuthority)
+			{
+				var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
+				level?.SpawnShopItems();
+			}
 		}
 	}
 
@@ -156,10 +194,10 @@ public partial class Door : StaticBody2D, IInteractable
 		if (_cachedLevel != null)
 		{
 			bool solid = _isLocked || !IsOpen;
-			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(-24, -24), solid);
-			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(24, -24), solid);
-			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(-24, 24), solid);
-			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(24, 24), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(-8, -8), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(8, -8), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(-8, 8), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(8, 8), solid);
 		}
 	}
 
@@ -171,11 +209,12 @@ public partial class Door : StaticBody2D, IInteractable
 	private void CheckPlayer(Node node, bool entered)
 	{
 		Player player = node as Player;
-		if (player == null && node != null && node.IsInGroup("Player")) {
+		if (player == null && node != null && node.IsInGroup("Player") && !IsCoopSession) {
 			player = GetTree().GetFirstNodeInGroup("Player") as Player;
 		}
 
 		if (player != null) {
+			if (IsCoopSession && (!player.IsLocalPlayer || player.IsDead)) return;
 			_playerInRange = entered;
 			if (entered) {
 				if (_isActive && !_isLocked) player.RegisterInteractable(this);
