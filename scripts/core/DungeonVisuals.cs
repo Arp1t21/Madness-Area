@@ -114,6 +114,121 @@ public static class DungeonVisuals
 		btn.AddThemeColorOverride("font_pressed_color", Colors.White);
 		btn.AddThemeColorOverride("font_disabled_color", new Color(0.45f, 0.45f, 0.50f, 0.8f));
 		btn.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
+
+		const string HoverAnimMeta = "_dv_hover_anim";
+		if (!btn.HasMeta(HoverAnimMeta))
+		{
+			btn.SetMeta(HoverAnimMeta, true);
+			btn.MouseEntered += () =>
+			{
+				if (!GodotObject.IsInstanceValid(btn) || btn.Disabled) return;
+				btn.PivotOffset = btn.Size * 0.5f;
+				var tw = btn.CreateTween();
+				tw.SetPauseMode(Tween.TweenPauseMode.Process);
+				tw.TweenProperty(btn, "scale", new Vector2(1.025f, 1.025f), 0.09f)
+					.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+			};
+			btn.MouseExited += () =>
+			{
+				if (!GodotObject.IsInstanceValid(btn)) return;
+				btn.PivotOffset = btn.Size * 0.5f;
+				var tw = btn.CreateTween();
+				tw.SetPauseMode(Tween.TweenPauseMode.Process);
+				tw.TweenProperty(btn, "scale", Vector2.One, 0.11f)
+					.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+			};
+			btn.ButtonDown += () =>
+			{
+				if (!GodotObject.IsInstanceValid(btn) || btn.Disabled) return;
+				btn.PivotOffset = btn.Size * 0.5f;
+				var tw = btn.CreateTween();
+				tw.SetPauseMode(Tween.TweenPauseMode.Process);
+				tw.TweenProperty(btn, "scale", new Vector2(0.975f, 0.975f), 0.05f)
+					.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+			};
+			btn.ButtonUp += () =>
+			{
+				if (!GodotObject.IsInstanceValid(btn) || btn.Disabled) return;
+				btn.PivotOffset = btn.Size * 0.5f;
+				var tw = btn.CreateTween();
+				tw.SetPauseMode(Tween.TweenPauseMode.Process);
+				tw.TweenProperty(btn, "scale", new Vector2(1.02f, 1.02f), 0.08f)
+					.SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+			};
+		}
+	}
+
+	private static AudioStream s_uiClickStream;
+
+	public static void PlayUiClickSound(Node context, float pitchScale = 1.0f)
+	{
+		if (context == null || !GodotObject.IsInstanceValid(context) || !context.IsInsideTree()) return;
+		s_uiClickStream ??= GD.Load<AudioStream>("res://assets/sounds/coin.wav");
+		if (s_uiClickStream != null)
+		{
+			GameResourceCache.PlayPooledSound(context.GetTree(), s_uiClickStream, "SFX");
+		}
+	}
+
+	/// <summary>
+	/// Styles an in-world interaction prompt label (e.g. "[E] Open") as a crisp, readable floating badge.
+	/// </summary>
+	public static void StyleWorldPromptLabel(Label label, Color accent, float centerYOffset = -23.0f)
+	{
+		if (label == null) return;
+		var font = GameResourceCache.GetSilverFont();
+		if (font != null)
+		{
+			label.AddThemeFontOverride("font", font);
+		}
+		label.AddThemeFontSizeOverride("font_size", 11);
+		label.AddThemeConstantOverride("letter_spacing", 0);
+		label.AddThemeColorOverride("font_color", accent.Lightened(0.22f));
+		ApplyPixelOutline(label, 2, new Color(0.02f, 0.02f, 0.04f, 0.98f), 1, 1);
+
+		var pill = CreatePillStyle(
+			new Color(0.04f, 0.045f, 0.075f, 0.88f),
+			new Color(accent.R, accent.G, accent.B, 0.72f),
+			1, 3, 5, 1);
+		pill.ShadowSize = 2;
+		pill.ShadowColor = new Color(0f, 0f, 0f, 0.65f);
+		label.AddThemeStyleboxOverride("normal", pill);
+
+		label.HorizontalAlignment = HorizontalAlignment.Center;
+		label.VerticalAlignment = VerticalAlignment.Center;
+		label.ZIndex = 15;
+		label.Size = new Vector2(68, 14);
+		label.Position = new Vector2(-34, centerYOffset);
+	}
+
+	/// <summary>
+	/// Smooth entrance pop and backdrop fade-in for modal panels and overlays (works while paused).
+	/// </summary>
+	public static void AnimateModalOpen(Control card, Control dimmer = null)
+	{
+		if (dimmer != null && GodotObject.IsInstanceValid(dimmer))
+		{
+			Color baseCol = dimmer.Modulate;
+			dimmer.Modulate = new Color(baseCol.R, baseCol.G, baseCol.B, 0.0f);
+			var dimTw = dimmer.CreateTween();
+			dimTw.SetPauseMode(Tween.TweenPauseMode.Process);
+			dimTw.TweenProperty(dimmer, "modulate:a", baseCol.A, 0.16f)
+				.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+		}
+
+		if (card != null && GodotObject.IsInstanceValid(card))
+		{
+			card.PivotOffset = card.Size * 0.5f;
+			card.Scale = new Vector2(0.94f, 0.94f);
+			card.Modulate = new Color(1f, 1f, 1f, 0f);
+			var tw = card.CreateTween();
+			tw.SetPauseMode(Tween.TweenPauseMode.Process);
+			tw.SetParallel(true);
+			tw.TweenProperty(card, "scale", Vector2.One, 0.18f)
+				.SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+			tw.TweenProperty(card, "modulate:a", 1.0f, 0.14f)
+				.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+		}
 	}
 
 	public static void ApplyPixelOutline(
@@ -988,6 +1103,19 @@ public partial class DungeonFrameOverlay : Control
 		DrawRect(new Rect2(s.X - Inset - r, s.Y - Inset - r, r, r), c);
 		DrawLine(new Vector2(s.X - Inset - r - 1, s.Y - Inset - 0.5f), new Vector2(s.X - Inset - r - arm, s.Y - Inset - 0.5f), bracket, 1.0f);
 		DrawLine(new Vector2(s.X - Inset - 0.5f, s.Y - Inset - r - 1), new Vector2(s.X - Inset - 0.5f, s.Y - Inset - r - arm), bracket, 1.0f);
+
+		// Center top/bottom ornamental brass studs on wide panels
+		if (s.X >= 120)
+		{
+			float midX = s.X * 0.5f;
+			DrawRect(new Rect2(midX - 1.5f, Inset - 0.5f, 3.0f, 2.0f), c);
+			DrawLine(new Vector2(midX - 16.0f, Inset + 0.5f), new Vector2(midX - 4.0f, Inset + 0.5f), bracket, 1.0f);
+			DrawLine(new Vector2(midX + 4.0f, Inset + 0.5f), new Vector2(midX + 16.0f, Inset + 0.5f), bracket, 1.0f);
+
+			DrawRect(new Rect2(midX - 1.5f, s.Y - Inset - 1.5f, 3.0f, 2.0f), c);
+			DrawLine(new Vector2(midX - 14.0f, s.Y - Inset - 0.5f), new Vector2(midX - 4.0f, s.Y - Inset - 0.5f), bracket, 1.0f);
+			DrawLine(new Vector2(midX + 4.0f, s.Y - Inset - 0.5f), new Vector2(midX + 14.0f, s.Y - Inset - 0.5f), bracket, 1.0f);
+		}
 	}
 }
 

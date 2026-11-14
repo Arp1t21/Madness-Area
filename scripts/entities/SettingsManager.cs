@@ -20,6 +20,7 @@ public static class SettingsManager
 	public static float MasterVolume = 80f;
 	public static float MusicVolume = 70f;
 	public static float SFXVolume = 70f;
+	public static string CoopPlayerName = "Adventurer";
 
 	public static Dictionary<string, Key> KeyBinds = new Dictionary<string, Key>()
 	{
@@ -69,6 +70,8 @@ public static class SettingsManager
 		MasterVolume = Mathf.Clamp((float)config.GetValue("Audio", "MasterVolume", 80f), 0f, 100f);
 		MusicVolume = Mathf.Clamp((float)config.GetValue("Audio", "MusicVolume", 70f), 0f, 100f);
 		SFXVolume = Mathf.Clamp((float)config.GetValue("Audio", "SFXVolume", 70f), 0f, 100f);
+		string loadedName = (string)config.GetValue("Coop", "PlayerName", "Adventurer");
+		CoopPlayerName = NetworkManager.SanitizePlayerName(loadedName, "Adventurer");
 
 		var actions = new List<string>(KeyBinds.Keys);
 		foreach (var action in actions)
@@ -99,6 +102,7 @@ public static class SettingsManager
 		config.SetValue("Audio", "MasterVolume", MasterVolume);
 		config.SetValue("Audio", "MusicVolume", MusicVolume);
 		config.SetValue("Audio", "SFXVolume", SFXVolume);
+		config.SetValue("Coop", "PlayerName", NetworkManager.SanitizePlayerName(CoopPlayerName, "Adventurer"));
 
 		foreach (var pair in KeyBinds)
 		{

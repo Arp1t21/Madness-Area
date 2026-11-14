@@ -249,6 +249,7 @@ public partial class Level : Node2D
 		if (!IsCoopSession && SaveManager.CurrentSave != null && _currentLevelIndex > 1)
 		{
 			_rng.Seed = SaveManager.CurrentSave.LevelSeed;
+			RollFloorEventOnly();
 			GenerateRandomLevel(); // сам переместит игрока в центр и пересоберет все слои
 		}
 
@@ -299,6 +300,8 @@ public partial class Level : Node2D
 		Chest.OpenedChestsCount = 0;
 		if (!IsCoopSession && _currentLevelIndex == 1)
 		{
+			_rng.Randomize();
+			RollFloorEventOnly();
 			GenerateSpikes();
 		}
 
@@ -332,7 +335,7 @@ public partial class Level : Node2D
 
 		if (!IsCoopSession)
 		{
-			RollAndApplyFloorEvent();
+			ApplyFloorEventVisuals();
 			SpawnArenaProps();
 			SetupDungeonAtmosphere();
 		}
@@ -533,8 +536,9 @@ public partial class Level : Node2D
 		// Новый сид для новой карты; сохраняем его, чтобы после загрузки сейва
 		// сгенерировалась точно такая же карта
 		_rng.Seed = (ulong)(GD.Randi() << 32) | GD.Randi();
+		RollFloorEventOnly();
 		GenerateRandomLevel();
-		RollAndApplyFloorEvent();
+		ApplyFloorEventVisuals();
 		SpawnArenaProps();
 
 		if (SaveManager.CurrentSave != null)
@@ -1040,11 +1044,15 @@ public partial class Level : Node2D
 		}
 	}
 
-	private void RollAndApplyFloorEvent()
+	private void RollFloorEventOnly()
 	{
-		int roll = _rng != null ? _rng.RandiRange(0, 99) : (int)(GD.Randi() % 100);
-		CurrentFloorEvent = GameLogic.RollFloorEvent(_currentLevelIndex, roll);
+		int eventRoll = _rng != null ? _rng.RandiRange(0, 99) : (int)(GD.Randi() % 100);
+		int spikeRoll = _rng != null ? _rng.RandiRange(0, 99) : (int)(GD.Randi() % 100);
+		CurrentFloorEvent = GameLogic.RollFloorEventWithSpike(_currentLevelIndex, eventRoll, spikeRoll);
+	}
 
+	private void ApplyFloorEventVisuals()
+	{
 		if (_canvasModulate != null && GodotObject.IsInstanceValid(_canvasModulate))
 		{
 			float ambient = GameLogic.CalculateAmbientLight(SettingsManager.Brightness);
@@ -1870,13 +1878,8 @@ public partial class Level : Node2D
 		if (_spikesLayer == null || _floorLayer == null) return;
 		_spikesLayer.Clear();
 
-		float spawnChance = 0.005f; // Baseline 1/200
-		if (_currentLevelIndex >= 2)
-		{
-			spawnChance = 0.005f * Mathf.Pow(1.5f, _currentLevelIndex - 2);
-		}
-
 		var floorCells = _floorLayer.GetUsedCells();
+		var eligibleCells = new List<Vector2I>(floorCells.Count);
 		foreach (var cell in floorCells)
 		{
 			// Exclude shop room
@@ -1893,10 +1896,24 @@ public partial class Level : Node2D
 			// Не спавним на лестнице
 			if (_stairsLayer != null && _stairsLayer.GetCellSourceId(cell) != -1) continue;
 
-			if (_rng.Randf() < spawnChance)
-			{
-				_spikesLayer.SetCell(cell, 0, new Vector2I(0, 3));
-			}
+			eligibleCells.Add(cell);
+		}
+
+		if (eligibleCells.Count == 0) return;
+
+		float targetRatio = GameLogic.CalculateSpikeFloorRatio(_currentLevelIndex, CurrentFloorEvent);
+		int targetCount = Mathf.Clamp(Mathf.RoundToInt(eligibleCells.Count * targetRatio), 0, eligibleCells.Count);
+		if (CurrentFloorEvent != GameLogic.FloorEventType.SpikeChamber)
+		{
+			int maxNormalCount = Mathf.FloorToInt(eligibleCells.Count * GameLogic.MaxNormalSpikeFloorRatio);
+			targetCount = Mathf.Min(targetCount, maxNormalCount);
+		}
+
+		for (int i = 0; i < targetCount; i++)
+		{
+			int swapIdx = _rng.RandiRange(i, eligibleCells.Count - 1);
+			(eligibleCells[i], eligibleCells[swapIdx]) = (eligibleCells[swapIdx], eligibleCells[i]);
+			_spikesLayer.SetCell(eligibleCells[i], 0, new Vector2I(0, 3));
 		}
 	}
 
@@ -2192,6 +2209,7 @@ public partial class Level : Node2D
 		_rng.Seed = floorSeed;
 		_spikesTimer = 0.0;
 		_currentSpikePhase = SpikePhase.Retracted;
+		RollFloorEventOnly();
 
 		if (floorIndex == 1)
 		{
@@ -2203,7 +2221,7 @@ public partial class Level : Node2D
 			GenerateRandomLevel();
 		}
 
-		RollAndApplyFloorEvent();
+		ApplyFloorEventVisuals();
 		SpawnArenaProps();
 	}
 

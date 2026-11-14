@@ -32,22 +32,22 @@ public partial class PauseMenu : CanvasLayer
 
 		var frame = new PanelContainer
 		{
-			CustomMinimumSize = new Vector2(210, 185)
+			CustomMinimumSize = new Vector2(248, 216)
 		};
 		frame.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-			DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 1, 3, 6));
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 2, 5, 10));
 		center.AddChild(frame);
 
 		var margin = new MarginContainer();
-		margin.AddThemeConstantOverride("margin_left", 18);
-		margin.AddThemeConstantOverride("margin_right", 18);
-		margin.AddThemeConstantOverride("margin_top", 14);
-		margin.AddThemeConstantOverride("margin_bottom", 14);
+		margin.AddThemeConstantOverride("margin_left", 22);
+		margin.AddThemeConstantOverride("margin_right", 22);
+		margin.AddThemeConstantOverride("margin_top", 16);
+		margin.AddThemeConstantOverride("margin_bottom", 16);
 		frame.AddChild(margin);
 
 		var vbox = new VBoxContainer();
 		vbox.Alignment = BoxContainer.AlignmentMode.Center;
-		vbox.AddThemeConstantOverride("separation", 8);
+		vbox.AddThemeConstantOverride("separation", 9);
 		margin.AddChild(vbox);
 
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
@@ -56,7 +56,7 @@ public partial class PauseMenu : CanvasLayer
 		title.Text = "PAUSED";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 38);
+		title.AddThemeFontSizeOverride("font_size", 40);
 		title.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
 		DungeonVisuals.ApplyPixelOutline(title, 2);
 		vbox.AddChild(title);
@@ -64,7 +64,7 @@ public partial class PauseMenu : CanvasLayer
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		var player = NetworkManager.GetLocalPlayer(GetTree());
 		string subText = level != null
-			? $"FLOOR {level.CurrentLevelIndex}  •  GOLD {player?.CoinCount ?? 0}"
+			? $"FLOOR {level.CurrentLevelIndex}   •   GOLD {player?.CoinCount ?? 0}"
 			: "RUN IN PROGRESS";
 		var subLabel = new Label
 		{
@@ -72,11 +72,12 @@ public partial class PauseMenu : CanvasLayer
 			HorizontalAlignment = HorizontalAlignment.Center
 		};
 		subLabel.AddThemeFontOverride("font", titleFont);
-		subLabel.AddThemeFontSizeOverride("font_size", 12);
+		subLabel.AddThemeFontSizeOverride("font_size", 16);
 		subLabel.AddThemeColorOverride("font_color", DungeonVisuals.MutedSlate);
+		DungeonVisuals.ApplyPixelOutline(subLabel, 1);
 		vbox.AddChild(subLabel);
 
-		DungeonVisuals.AddDivider(vbox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.7f), 1.0f);
+		DungeonVisuals.AddDivider(vbox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.7f), 1.5f);
 
 		var btnContinue = CreateMenuButton("CONTINUE", titleFont, vbox, DungeonVisuals.Emerald);
 		btnContinue.Pressed += OnContinuePressed;
@@ -88,8 +89,9 @@ public partial class PauseMenu : CanvasLayer
 		var btnSaveLeave = CreateMenuButton(isCoop ? "LEAVE SESSION" : "SAVE AND LEAVE", titleFont, vbox, DungeonVisuals.Crimson);
 		btnSaveLeave.Pressed += OnSaveLeavePressed;
 
-		DungeonVisuals.AttachFrameAccent(frame, DungeonVisuals.BrassGold, 4);
+		DungeonVisuals.AttachFrameAccent(frame, DungeonVisuals.BrassGold, 5);
 		MainMenu.ConnectButtonSounds(this);
+		DungeonVisuals.AnimateModalOpen(frame, bgOverlay);
 	}
 
 	private Button CreateMenuButton(string text, Font font, Control parent, Color accent)
@@ -97,8 +99,8 @@ public partial class PauseMenu : CanvasLayer
 		var btn = new Button();
 		btn.Text = text;
 		btn.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
-		btn.CustomMinimumSize = new Vector2(156, 26);
-		DungeonVisuals.StyleButton(btn, accent, font, 19, 2, DungeonVisuals.ObsidianCard, 10, 4);
+		btn.CustomMinimumSize = new Vector2(184, 30);
+		DungeonVisuals.StyleButton(btn, accent, font, 21, 4, DungeonVisuals.ObsidianCard, 12, 4);
 		parent.AddChild(btn);
 		return btn;
 	}

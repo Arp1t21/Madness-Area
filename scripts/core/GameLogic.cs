@@ -305,8 +305,12 @@ public static class GameLogic
 		None = 0,
 		PitchBlack = 1,
 		ImpFrenzy = 2,
-		MarksmanAmbush = 3
+		MarksmanAmbush = 3,
+		SpikeChamber = 4
 	}
+
+	public const float MaxNormalSpikeFloorRatio = 0.18f;
+	public const float SpikeChamberFloorRatio = 0.60f;
 
 	public static FloorEventType RollFloorEvent(int levelIndex, int roll0To99)
 	{
@@ -320,11 +324,40 @@ public static class GameLogic
 		return FloorEventType.MarksmanAmbush;
 	}
 
+	/// <summary>
+	/// Rolls a floor event including the 1% Spike Chamber (60% floor spikes) event.
+	/// </summary>
+	public static FloorEventType RollFloorEventWithSpike(int levelIndex, int eventRoll0To99, int spikeRoll0To99)
+	{
+		int spikeRoll = ((spikeRoll0To99 % 100) + 100) % 100;
+		if (levelIndex >= 1 && spikeRoll == 0)
+		{
+			return FloorEventType.SpikeChamber;
+		}
+		return RollFloorEvent(levelIndex, eventRoll0To99);
+	}
+
+	/// <summary>
+	/// Returns the target fraction of eligible floor tiles covered by spikes.
+	/// Slow progression on early floors, capped at 18% normally or 60% during Spike Chamber.
+	/// </summary>
+	public static float CalculateSpikeFloorRatio(int levelIndex, FloorEventType evt = FloorEventType.None)
+	{
+		if (evt == FloorEventType.SpikeChamber)
+		{
+			return SpikeChamberFloorRatio;
+		}
+		if (levelIndex <= 1) return 0.005f;
+		if (levelIndex == 2) return 0.007f;
+		return Math.Min(MaxNormalSpikeFloorRatio, 0.009f + (levelIndex - 3) * 0.011f);
+	}
+
 	public static string GetFloorEventTitle(FloorEventType evt) => evt switch
 	{
 		FloorEventType.PitchBlack => "PITCH BLACK (+50% GOLD)",
 		FloorEventType.ImpFrenzy => "IMP SWARM",
 		FloorEventType.MarksmanAmbush => "MARKSMAN AMBUSH",
+		FloorEventType.SpikeChamber => "SPIKE CHAMBER (60%)",
 		_ => ""
 	};
 

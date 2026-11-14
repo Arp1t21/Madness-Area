@@ -6,7 +6,7 @@
 script = ExtResource("1_jdw6m")
 EnemyName = "Orc"
 Speed = 40.0
-Damage = 10
+MaxHealth = 28
 AttackRange = 25.0
 StopDuration = 0.2
 CoinDropChance = 0.25

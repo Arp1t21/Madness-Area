@@ -5,8 +5,8 @@
 [resource]
 script = ExtResource("1_qgm")
 EnemyName = "Quagmire"
-Speed = 22.0
-MaxHealth = 60
+Speed = 38.0
+MaxHealth = 50
 Damage = 18.0
 AttackRange = 30.0
 PreAttackDelay = 1.2

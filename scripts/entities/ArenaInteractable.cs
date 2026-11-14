@@ -76,20 +76,10 @@ public partial class ExplosiveBomb : Node2D, IInteractable
 
 		_promptLabel = new Label
 		{
-			Text = "Fuse [E]",
-			HorizontalAlignment = HorizontalAlignment.Center,
-			Position = new Vector2(-40, -24),
-			Size = new Vector2(80, 14),
+			Text = "[E] Light Fuse",
 			Visible = false
 		};
-		var font = GameResourceCache.GetSilverFont();
-		if (font != null)
-		{
-			_promptLabel.AddThemeFontOverride("font", font);
-			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
-		}
-		_promptLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.78f, 0.35f));
-		DungeonVisuals.ApplyPixelOutline(_promptLabel, 2);
+		DungeonVisuals.StyleWorldPromptLabel(_promptLabel, new Color(1.0f, 0.65f, 0.22f), -24.0f);
 		AddChild(_promptLabel);
 
 		_interactArea = new Area2D
@@ -437,20 +427,10 @@ public partial class TrapLever : Node2D, IInteractable
 
 		_promptLabel = new Label
 		{
-			Text = "Trap Lever [E]",
-			HorizontalAlignment = HorizontalAlignment.Center,
-			Position = new Vector2(-46, -24),
-			Size = new Vector2(92, 14),
+			Text = "[E] Pull Lever",
 			Visible = false
 		};
-		var font = GameResourceCache.GetSilverFont();
-		if (font != null)
-		{
-			_promptLabel.AddThemeFontOverride("font", font);
-			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
-		}
-		_promptLabel.AddThemeColorOverride("font_color", new Color(0.55f, 0.95f, 1.0f));
-		DungeonVisuals.ApplyPixelOutline(_promptLabel, 2);
+		DungeonVisuals.StyleWorldPromptLabel(_promptLabel, DungeonVisuals.ArcaneCyan, -24.0f);
 		AddChild(_promptLabel);
 
 		var interactArea = new Area2D
@@ -483,7 +463,7 @@ public partial class TrapLever : Node2D, IInteractable
 			if (_cooldownRemaining <= 0.0f && _sprite != null)
 			{
 				_sprite.Texture = _offTex;
-				if (_promptLabel != null) _promptLabel.Text = "Trap Lever [E]";
+				if (_promptLabel != null) _promptLabel.Text = "[E] Pull Lever";
 			}
 		}
 	}

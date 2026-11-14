@@ -32,7 +32,15 @@ public partial class WeaponPickup : Node2D, IInteractable
 		AddToGroup("WeaponPickup");
 		_pickupArea = GetNode<Area2D>("Area2D");
 		_nameLabel = GetNode<Label>("NameLabel");
-		_nameLabel.Visible = false;
+		if (_nameLabel != null)
+		{
+			string wName = WeaponToGive != null && !string.IsNullOrEmpty(WeaponToGive.WeaponName)
+				? WeaponToGive.WeaponName
+				: "Weapon";
+			_nameLabel.Text = $"[E] {wName}";
+			DungeonVisuals.StyleWorldPromptLabel(_nameLabel, DungeonVisuals.ArcaneCyan, -22.0f);
+			_nameLabel.Visible = false;
+		}
 
 		// Маска 18: Слой 2 (игрок, значение 2) + Слой 5 (зона подбора, значение 16)
 		_pickupArea.CollisionMask = 18;
@@ -186,7 +194,11 @@ public partial class WeaponPickup : Node2D, IInteractable
 	{
 		if (_nameLabel != null)
 		{
-			_nameLabel.Visible = false;
+			if (show && WeaponToGive != null && !string.IsNullOrEmpty(WeaponToGive.WeaponName))
+			{
+				_nameLabel.Text = $"[E] {WeaponToGive.WeaponName}";
+			}
+			_nameLabel.Visible = show && !_consumed;
 		}
 	}
 

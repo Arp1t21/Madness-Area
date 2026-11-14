@@ -169,8 +169,10 @@ public partial class CoopLobbyOverlay : Control
 		nameLbl.CustomMinimumSize = new Vector2(115, 28);
 		nameRow.AddChild(nameLbl);
 
-		_nameInput = CreateStyledInput("Adventurer", innerW - 125);
+		_nameInput = CreateStyledInput(SettingsManager.CoopPlayerName, innerW - 125);
 		_nameInput.MaxLength = 14;
+		_nameInput.FocusExited += SaveCoopNameSetting;
+		_nameInput.TextSubmitted += _ => SaveCoopNameSetting();
 		nameRow.AddChild(_nameInput);
 
 		// Connection form (shown while disconnected)
@@ -348,8 +350,17 @@ public partial class CoopLobbyOverlay : Control
 		return edit;
 	}
 
+	private void SaveCoopNameSetting()
+	{
+		if (_nameInput == null) return;
+		string sanitized = NetworkManager.SanitizePlayerName(_nameInput.Text, "Adventurer");
+		SettingsManager.CoopPlayerName = sanitized;
+		SettingsManager.SaveSettings();
+	}
+
 	private void OnHostPressed()
 	{
+		SaveCoopNameSetting();
 		int port = ParsePort(_portHostInput.Text);
 		string name = _nameInput.Text;
 		_localReady = true;
@@ -362,6 +373,7 @@ public partial class CoopLobbyOverlay : Control
 
 	private void OnJoinPressed()
 	{
+		SaveCoopNameSetting();
 		int port = ParsePort(_portJoinInput.Text);
 		string ip = _ipJoinInput.Text;
 		string name = _nameInput.Text;
@@ -562,6 +574,7 @@ public partial class CoopLobbyOverlay : Control
 
 	private void CloseOverlay()
 	{
+		SaveCoopNameSetting();
 		NetworkManager.Instance?.Disconnect(returnToMenu: false);
 		_onClosed?.Invoke();
 		QueueFree();

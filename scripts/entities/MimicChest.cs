@@ -50,20 +50,10 @@ public partial class MimicChest : Node2D, IInteractable
 
 		_promptLabel = new Label
 		{
-			Text = "Open Chest [E]",
-			HorizontalAlignment = HorizontalAlignment.Center,
-			Position = new Vector2(-46, -24),
-			Size = new Vector2(92, 14),
+			Text = "[E] Open Chest",
 			Visible = false
 		};
-		var font = GameResourceCache.GetSilverFont();
-		if (font != null)
-		{
-			_promptLabel.AddThemeFontOverride("font", font);
-			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
-		}
-		_promptLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.35f));
-		DungeonVisuals.ApplyPixelOutline(_promptLabel, 2);
+		DungeonVisuals.StyleWorldPromptLabel(_promptLabel, DungeonVisuals.BrassGold, -25.0f);
 		AddChild(_promptLabel);
 
 		var interactArea = new Area2D

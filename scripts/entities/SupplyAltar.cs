@@ -142,22 +142,12 @@ public partial class SupplyAltar : Area2D, IInteractable
 			gradTex,
 			shadowEnabled: false);
 
-		_promptLabel = new Label();
-		_promptLabel.Text = "Shop [E]";
-		_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		_promptLabel.Position = new Vector2(-45, -24);
-		_promptLabel.Size = new Vector2(90, 15);
-		_promptLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.35f));
-
-		var font = GameResourceCache.GetSilverFont();
-		if (font != null)
+		_promptLabel = new Label
 		{
-			_promptLabel.AddThemeFontOverride("font", font);
-			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
-		}
-		_promptLabel.AddThemeConstantOverride("letter_spacing", 1);
-		DungeonVisuals.ApplyPixelOutline(_promptLabel, 2);
-		_promptLabel.Visible = false;
+			Text = "[E] Supply Shop",
+			Visible = false
+		};
+		DungeonVisuals.StyleWorldPromptLabel(_promptLabel, DungeonVisuals.BrassGold, -25.0f);
 		AddChild(_promptLabel);
 
 		RollFourRandomOffers();
@@ -687,11 +677,13 @@ public partial class SupplyAltar : Area2D, IInteractable
 			int floor = _level != null ? _level.CurrentLevelIndex : 1;
 			if (GameLogic.IsMilestoneRelicFloor(floor) && !HasClaimedMilestoneRelic)
 			{
-				_promptLabel.Text = "Relic Choice [E]";
+				_promptLabel.Text = "[E] Free Relic";
+				DungeonVisuals.StyleWorldPromptLabel(_promptLabel, DungeonVisuals.ArcaneCyan, -25.0f);
 			}
 			else
 			{
-				_promptLabel.Text = HasPurchased ? "Shop [Sold Out]" : "Shop [E]";
+				_promptLabel.Text = HasPurchased ? "Shop [Sold Out]" : "[E] Supply Shop";
+				DungeonVisuals.StyleWorldPromptLabel(_promptLabel, HasPurchased ? DungeonVisuals.MutedSlate : DungeonVisuals.BrassGold, -25.0f);
 			}
 		}
 	}
@@ -902,6 +894,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		RefreshUI();
 		MainMenu.ConnectButtonSounds(this);
+		DungeonVisuals.AnimateModalOpen(panel, bgOverlay);
 	}
 
 	private void RebuildDisplayedOffers()
@@ -966,6 +959,9 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		var cardNormalStyle = DungeonVisuals.CreatePanelStyle(
 			DungeonVisuals.ObsidianPanel, offer.AccentColor.Darkened(0.22f), 2, 5, 6);
+		var cardHoverStyle = DungeonVisuals.CreatePanelStyle(
+			DungeonVisuals.ObsidianElevated, offer.AccentColor.Lightened(0.15f), 2, 5, 10,
+			new Color(offer.AccentColor.R, offer.AccentColor.G, offer.AccentColor.B, 0.28f));
 
 		var cardSoldStyle = DungeonVisuals.CreatePanelStyle(
 			new Color(0.05f, 0.05f, 0.07f, 0.72f), new Color(0.22f, 0.22f, 0.26f, 0.6f), 2, 5, 1);
@@ -1079,6 +1075,21 @@ public partial class SupplyShopOverlay : CanvasLayer
 		btn.AddThemeStyleboxOverride("hover", btnHover);
 		btn.AddThemeStyleboxOverride("pressed", btnHover);
 		btn.AddThemeStyleboxOverride("disabled", btnDisabled);
+
+		btn.MouseEntered += () =>
+		{
+			if (!offer.IsPurchased && !btn.Disabled && GodotObject.IsInstanceValid(cardPanel))
+			{
+				cardPanel.AddThemeStyleboxOverride("panel", cardHoverStyle);
+			}
+		};
+		btn.MouseExited += () =>
+		{
+			if (!offer.IsPurchased && GodotObject.IsInstanceValid(cardPanel))
+			{
+				cardPanel.AddThemeStyleboxOverride("panel", cardNormalStyle);
+			}
+		};
 
 		btn.Pressed += () =>
 		{
@@ -1286,6 +1297,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		DungeonVisuals.AttachFrameAccent(modalPanel, offer.AccentColor, 5);
 		MainMenu.ConnectButtonSounds(_weaponChoiceModal);
+		DungeonVisuals.AnimateModalOpen(modalPanel, dim);
 	}
 
 	private void RefreshUI()

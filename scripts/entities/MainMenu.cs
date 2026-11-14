@@ -323,11 +323,11 @@ public partial class MainMenu : CanvasLayer
 
 			var btnSpecs = new System.Collections.Generic.Dictionary<string, (string Label, Color Accent)>
 			{
-				{ "PlayButton", ("NEW GAME", DungeonVisuals.BrassGold) },
-				{ "LoadButton", ("LOAD RUN", DungeonVisuals.ArcaneCyan) },
-				{ "CoopButton", ("CO-OP", DungeonVisuals.Emerald) },
+				{ "PlayButton", ("NEW EXPEDITION", DungeonVisuals.BrassGold) },
+				{ "LoadButton", ("CONTINUE / LOAD", DungeonVisuals.ArcaneCyan) },
+				{ "CoopButton", ("CO-OP LOBBY", DungeonVisuals.Emerald) },
 				{ "SettingsButton", ("SETTINGS", DungeonVisuals.IronBorder.Lightened(0.35f)) },
-				{ "ExitButton", ("EXIT", DungeonVisuals.Crimson) }
+				{ "ExitButton", ("QUIT TO DESKTOP", DungeonVisuals.Crimson) }
 			};
 
 			foreach (var node in vbox.GetChildren())
@@ -338,8 +338,8 @@ public partial class MainMenu : CanvasLayer
 						? s
 						: (Label: btn.Text.ToUpper(), Accent: DungeonVisuals.BrassGold);
 					btn.Text = spec.Label;
-					btn.CustomMinimumSize = new Vector2(panelW - 40.0f, 35.0f);
-					DungeonVisuals.StyleButton(btn, spec.Accent, mainFont, 16, 5, DungeonVisuals.ObsidianCard, 12, 5);
+					btn.CustomMinimumSize = new Vector2(panelW - 40.0f, 36.0f);
+					DungeonVisuals.StyleButton(btn, spec.Accent, silverFont, 26, 5, DungeonVisuals.ObsidianCard, 12, 4);
 				}
 			}
 		}
@@ -615,26 +615,110 @@ public partial class MainMenu : CanvasLayer
 
 		var divider = new ColorRect
 		{
-			Position = new Vector2(20, 54),
-			Size = new Vector2(infoPanel.Size.X - 40, 2.5f),
+			Position = new Vector2(20, 52),
+			Size = new Vector2(infoPanel.Size.X - 40, 2.0f),
 			Color = new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.7f),
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		infoPanel.AddChild(divider);
+
+		var infoVBox = new VBoxContainer
+		{
+			Position = new Vector2(18, 60),
+			Size = new Vector2(infoPanel.Size.X - 36, cardH - 68),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		infoVBox.AddThemeConstantOverride("separation", 5);
+		infoPanel.AddChild(infoVBox);
+
+		(Label valLbl, ProgressBar bar) CreateHeroStatRow(string statTitle, Color barCol, float maxVal)
+		{
+			var colBox = new VBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+			colBox.AddThemeConstantOverride("separation", 1);
+
+			var topRow = new HBoxContainer { MouseFilter = Control.MouseFilterEnum.Ignore };
+			var kLbl = new Label
+			{
+				Text = statTitle,
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			kLbl.AddThemeFontOverride("font", titleFont);
+			kLbl.AddThemeFontSizeOverride("font_size", 18);
+			kLbl.AddThemeColorOverride("font_color", DungeonVisuals.MutedSlate);
+			DungeonVisuals.ApplyPixelOutline(kLbl, 1);
+			topRow.AddChild(kLbl);
+
+			var vLbl = new Label
+			{
+				HorizontalAlignment = HorizontalAlignment.Right,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			vLbl.AddThemeFontOverride("font", titleFont);
+			vLbl.AddThemeFontSizeOverride("font_size", 18);
+			vLbl.AddThemeColorOverride("font_color", barCol.Lightened(0.25f));
+			DungeonVisuals.ApplyPixelOutline(vLbl, 1);
+			topRow.AddChild(vLbl);
+			colBox.AddChild(topRow);
+
+			var pBar = new ProgressBar
+			{
+				MinValue = 0,
+				MaxValue = maxVal,
+				ShowPercentage = false,
+				CustomMinimumSize = new Vector2(0, 7),
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			DungeonVisuals.StyleProgressBar(
+				pBar,
+				barCol,
+				new Color(0.04f, 0.04f, 0.06f, 0.95f),
+				new Color(barCol.R * 0.45f, barCol.G * 0.45f, barCol.B * 0.45f, 0.85f),
+				1, 2);
+			colBox.AddChild(pBar);
+			infoVBox.AddChild(colBox);
+			return (vLbl, pBar);
+		}
+
+		var hpStat = CreateHeroStatRow("VITALITY (HP)", DungeonVisuals.Crimson, 80.0f);
+		var mpStat = CreateHeroStatRow("ARCANE POOL (MP)", DungeonVisuals.ManaBlue, 180.0f);
+		var spdStat = CreateHeroStatRow("AGILITY (SPEED)", DungeonVisuals.Emerald, 85.0f);
+
+		var arsenalCard = new PanelContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		var arsenalStyle = DungeonVisuals.CreatePillStyle(
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.IronBorder, 1, 4, 10, 5);
+		arsenalCard.AddThemeStyleboxOverride("panel", arsenalStyle);
+		infoVBox.AddChild(arsenalCard);
 
 		var infoText = new Label
 		{
 			HorizontalAlignment = HorizontalAlignment.Left,
 			VerticalAlignment = VerticalAlignment.Top,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			Position = new Vector2(20, 64),
-			Size = new Vector2(infoPanel.Size.X - 40, cardH - 74)
+			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		infoText.AddThemeFontOverride("font", titleFont);
-		infoText.AddThemeFontSizeOverride("font_size", 22);
+		infoText.AddThemeFontSizeOverride("font_size", 19);
 		infoText.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
 		infoText.AddThemeConstantOverride("line_spacing", -2);
-		infoPanel.AddChild(infoText);
+		arsenalCard.AddChild(infoText);
+
+		var specialtyLbl = new Label
+		{
+			HorizontalAlignment = HorizontalAlignment.Left,
+			VerticalAlignment = VerticalAlignment.Top,
+			AutowrapMode = TextServer.AutowrapMode.WordSmart,
+			SizeFlagsVertical = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		specialtyLbl.AddThemeFontOverride("font", titleFont);
+		specialtyLbl.AddThemeFontSizeOverride("font_size", 19);
+		specialtyLbl.AddThemeColorOverride("font_color", new Color(0.84f, 0.88f, 0.95f));
+		specialtyLbl.AddThemeConstantOverride("line_spacing", -2);
+		infoVBox.AddChild(specialtyLbl);
 
 		int currentCardIndex = 0;
 		for (int i = 0; i < heroCount; i++)
@@ -674,36 +758,44 @@ public partial class MainMenu : CanvasLayer
 				cardButtons[i].AddThemeStyleboxOverride("pressed", hoverStyle);
 				cardButtons[i].AddThemeStyleboxOverride("focus", normalStyle);
 
-				statusLabels[i].Text = isSel ? "* SELECTED *" : "SELECT";
+				statusLabels[i].Text = isSel ? "✦ SELECTED ✦" : "SELECT";
 				statusLabels[i].AddThemeColorOverride("font_color", isSel ? accent.Lightened(0.25f) : DungeonVisuals.MutedSlate);
 			}
 
 			Color activeAccent = heroAccents[currentCardIndex];
 			infoStyle.BorderColor = activeAccent.Darkened(0.15f);
+			arsenalStyle.BorderColor = new Color(activeAccent.R, activeAccent.G, activeAccent.B, 0.45f);
 			infoHeader.AddThemeColorOverride("font_color", activeAccent.Lightened(0.18f));
 			divider.Color = new Color(activeAccent.R, activeAccent.G, activeAccent.B, 0.65f);
 
-			void SetHeroDetails(string header, PlayerData data, string weaponLabel, string specialty)
+			void SetHeroDetails(string header, PlayerData data, string weaponLabel, string rmbLabel, string specialty)
 			{
 				var inv = System.Globalization.CultureInfo.InvariantCulture;
+				float maxHp = data != null ? data.MaxHealth : 55f;
+				float maxMp = data != null ? data.MaxMana : 100f;
+				float spd = data != null ? data.WalkSpeed : 60f;
+				float runMult = data != null ? data.RunMultiplier : 1.5f;
+
 				string hpRegen = data != null && data.HealthRegen > 0.001f
 					? $" (+{data.HealthRegen.ToString("0.##", inv)}/s)"
 					: "";
-				string hp = data != null ? data.MaxHealth.ToString(inv) : "?";
-				string mp = data != null ? data.MaxMana.ToString(inv) : "?";
 				string mpRegen = data != null ? data.ManaRegen.ToString("0.##", inv) : "0";
-				string spd = data != null ? data.WalkSpeed.ToString("0.##", inv) : "?";
-				string runMult = data != null ? data.RunMultiplier.ToString("0.##", inv) : "1";
 
 				infoHeader.Text = header;
+				hpStat.valLbl.Text = $"{maxHp.ToString("0", inv)} HP{hpRegen}";
+				hpStat.bar.Value = maxHp;
+
+				mpStat.valLbl.Text = $"{maxMp.ToString("0", inv)} MP (+{mpRegen}/s)";
+				mpStat.bar.Value = maxMp;
+
+				spdStat.valLbl.Text = $"{spd.ToString("0", inv)} (Sprint x{runMult.ToString("0.##", inv)})";
+				spdStat.bar.Value = spd;
+
 				infoText.Text =
-					$"HEALTH: {hp} HP{hpRegen}\n" +
-					$"MANA: {mp} MP (+{mpRegen}/s)\n" +
-					$"SPEED: {spd} (Sprint x{runMult})\n" +
 					$"{weaponLabel}\n" +
-					$"SKILLS: [Q] Fireball  •  [V] Shield Dash\n\n" +
-					$"SPECIALTY:\n" +
-					specialty;
+					$"RMB SPECIAL: {rmbLabel}\n" +
+					$"ABILITIES: [Q] Fireball  •  [V] Shield Dash";
+				specialtyLbl.Text = specialty;
 			}
 
 			if (currentCardIndex == 0)
@@ -711,15 +803,17 @@ public partial class MainMenu : CanvasLayer
 				SetHeroDetails(
 					"KNIGHT — VANGUARD",
 					knightData,
-					"WEAPON: Battle Axe",
-					"Balanced frontline warrior with high durability and heavy cleaving strikes.");
+					"STARTING ARSENAL: Battle Axe",
+					"Whirlwind Spin (360° Cleave)",
+					"Balanced frontline warrior with high durability, +15% Melee Res, and heavy cleaving strikes.");
 			}
 			else if (currentCardIndex == 1)
 			{
 				SetHeroDetails(
 					"MAGICIAN — SCHOLAR",
 					magicianData,
-					"WEAPON: Magic Staff",
+					"STARTING ARSENAL: Magic Staff",
+					"Arcane Bolt Volley (Piercing)",
 					"Huge mana pool, fast mana regen, +15% Ranged Res & glowing piercing bolts.");
 			}
 			else if (currentCardIndex == 2)
@@ -727,7 +821,8 @@ public partial class MainMenu : CanvasLayer
 				SetHeroDetails(
 					"ROGUE — ASSASSIN",
 					rogueData,
-					"WEAPONS: Dagger + Revolver",
+					"STARTING ARSENAL: Dagger + Revolver",
+					"Shadow Step Strike (Backstab)",
 					"Fastest runner in the dungeon! Starts with two weapons & +10% All Resist.");
 			}
 			else
@@ -736,7 +831,8 @@ public partial class MainMenu : CanvasLayer
 				SetHeroDetails(
 					"BERSERKER — WARLORD",
 					berserkerData,
-					"WEAPON: Double Battle Axe",
+					"STARTING ARSENAL: Double Battle Axe",
+					"Returning Boomerang Throw",
 					$"Unstoppable dwarf juggernaut with {bHp} HP, passive HP regen & +20% Melee Res.");
 			}
 		};
@@ -794,6 +890,9 @@ public partial class MainMenu : CanvasLayer
 	}
 
 	private readonly System.Collections.Generic.List<(string SlotId, Button Btn, bool Occupied)> _slotButtons = new();
+	private Label _slotHeaderLabel = null;
+	private ColorRect _slotDivider = null;
+	private Button _launchSlotBtn = null;
 
 	private void ShowSlotSelection(bool isLoadMode)
 	{
@@ -878,24 +977,70 @@ public partial class MainMenu : CanvasLayer
 		DungeonVisuals.AttachFrameAccent(infoPanel, DungeonVisuals.BrassGold, 6);
 		slotSelectRoot.AddChild(infoPanel);
 
+		_slotHeaderLabel = new Label
+		{
+			Text = "EXPEDITION CHRONICLE",
+			HorizontalAlignment = HorizontalAlignment.Left,
+			Position = new Vector2(20, 14),
+			Size = new Vector2(infoPanel.Size.X - 40, 34)
+		};
+		_slotHeaderLabel.AddThemeFontOverride("font", titleFont);
+		_slotHeaderLabel.AddThemeFontSizeOverride("font_size", 30);
+		_slotHeaderLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(_slotHeaderLabel, 2);
+		infoPanel.AddChild(_slotHeaderLabel);
+
+		_slotDivider = new ColorRect
+		{
+			Position = new Vector2(20, 50),
+			Size = new Vector2(infoPanel.Size.X - 40, 2.0f),
+			Color = new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.65f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		infoPanel.AddChild(_slotDivider);
+
 		_infoLabel = new Label
 		{
 			Text = isLoadMode
-				? "Select a saved world on the left\nto inspect stats.\n\nDouble-click a slot to enter."
-				: "Select any slot on the left\nto inspect or overwrite.\n\nDouble-click a slot to begin.",
-			HorizontalAlignment = HorizontalAlignment.Center,
+				? "No saved expeditions found.\nStart a New Expedition from the main menu!"
+				: "Select any slot on the left\nto inspect or overwrite.",
+			HorizontalAlignment = HorizontalAlignment.Left,
 			VerticalAlignment = VerticalAlignment.Top,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
-			Position = new Vector2(20, 20),
-			Size = new Vector2(infoPanel.Size.X - 40, listHeight - 40)
+			Position = new Vector2(20, 62),
+			Size = new Vector2(infoPanel.Size.X - 40, listHeight - 122)
 		};
 		_infoLabel.AddThemeFontOverride("font", titleFont);
-		_infoLabel.AddThemeFontSizeOverride("font_size", 24);
+		_infoLabel.AddThemeFontSizeOverride("font_size", 23);
 		_infoLabel.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
-		_infoLabel.AddThemeConstantOverride("line_spacing", 0);
+		_infoLabel.AddThemeConstantOverride("line_spacing", -1);
 		infoPanel.AddChild(_infoLabel);
 
+		_launchSlotBtn = new Button
+		{
+			Text = isLoadMode ? "CONTINUE EXPEDITION >" : "START EXPEDITION >",
+			Position = new Vector2(20, listHeight - 54),
+			CustomMinimumSize = new Vector2(infoPanel.Size.X - 40, 38),
+			Size = new Vector2(infoPanel.Size.X - 40, 38),
+			Visible = false
+		};
+		DungeonVisuals.StyleButton(
+			_launchSlotBtn,
+			isLoadMode ? DungeonVisuals.ArcaneCyan : DungeonVisuals.BrassGold,
+			titleFont, 26, 5,
+			isLoadMode ? new Color(0.08f, 0.16f, 0.24f, 0.98f) : new Color(0.18f, 0.14f, 0.06f, 0.98f));
+		infoPanel.AddChild(_launchSlotBtn);
+		_launchSlotBtn.Pressed += () =>
+		{
+			if (!string.IsNullOrEmpty(_selectedSlotId))
+			{
+				LaunchSlot(_selectedSlotId, isLoadMode);
+			}
+		};
+
 		_selectedSlotId = "";
+		string firstOccupiedSlot = "";
+		string firstEmptySlot = "";
 
 		// 23 слота сохранения (3 базовых + 20 дополнительных)
 		for (int i = 1; i <= 23; i++)
@@ -903,6 +1048,8 @@ public partial class MainMenu : CanvasLayer
 			string slotId = i.ToString();
 			var slotSave = SaveManager.LoadSave(slotId);
 			bool occupied = slotSave != null;
+			if (occupied && string.IsNullOrEmpty(firstOccupiedSlot)) firstOccupiedSlot = slotId;
+			if (!occupied && string.IsNullOrEmpty(firstEmptySlot)) firstEmptySlot = slotId;
 
 			var btn = new Button
 			{
@@ -914,14 +1061,14 @@ public partial class MainMenu : CanvasLayer
 
 			if (occupied)
 			{
-				btn.Text = $"#{slotId} {slotSave.CharacterName} (F{slotSave.CurrentLevelIndex})";
-				DungeonVisuals.StyleButton(btn, DungeonVisuals.BrassGold, titleFont, 24, 5, DungeonVisuals.ObsidianCard, 14, 4);
+				btn.Text = $"#{slotId}  {slotSave.CharacterName.ToUpper()}  •  FLOOR {slotSave.CurrentLevelIndex}";
+				DungeonVisuals.StyleButton(btn, DungeonVisuals.BrassGold, titleFont, 23, 5, DungeonVisuals.ObsidianCard, 14, 4);
 			}
 			else
 			{
-				btn.Text = $"#{slotId} — EMPTY —";
+				btn.Text = $"#{slotId}  — EMPTY SLOT —";
 				if (isLoadMode) btn.Disabled = true;
-				DungeonVisuals.StyleButton(btn, DungeonVisuals.IronBorder, titleFont, 24, 5, DungeonVisuals.ObsidianDeep, 14, 4);
+				DungeonVisuals.StyleButton(btn, DungeonVisuals.IronBorder, titleFont, 23, 5, DungeonVisuals.ObsidianDeep, 14, 4);
 			}
 
 			_slotButtons.Add((slotId, btn, occupied));
@@ -973,14 +1120,56 @@ public partial class MainMenu : CanvasLayer
 			}
 		};
 
+		string initialSlot = isLoadMode
+			? firstOccupiedSlot
+			: (!string.IsNullOrEmpty(firstEmptySlot) ? firstEmptySlot : "1");
+		if (!string.IsNullOrEmpty(initialSlot))
+		{
+			_selectedSlotId = initialSlot;
+			_lastClickedSlot = initialSlot;
+			_lastClickTime = 0;
+			RefreshSlotHighlightAndDetails(initialSlot, isLoadMode);
+		}
+
 		ConnectButtonSounds(slotSelectRoot);
 	}
 
 	private void OnSlotClicked(string slotId, bool isLoadMode)
 	{
+		ulong now = Time.GetTicksMsec();
+		if (_lastClickedSlot == slotId && now - _lastClickTime < 400)
+		{
+			LaunchSlot(slotId, isLoadMode);
+			return;
+		}
+
 		_selectedSlotId = slotId;
-		if (_deleteBtn != null) {
-			_deleteBtn.Visible = (SaveManager.LoadSave(slotId) != null);
+		_lastClickTime = now;
+		_lastClickedSlot = slotId;
+		RefreshSlotHighlightAndDetails(slotId, isLoadMode);
+	}
+
+	private void RefreshSlotHighlightAndDetails(string slotId, bool isLoadMode)
+	{
+		var slotSave = SaveManager.LoadSave(slotId);
+		bool isOccupied = slotSave != null;
+		if (_deleteBtn != null)
+		{
+			_deleteBtn.Visible = isOccupied;
+		}
+		if (_launchSlotBtn != null)
+		{
+			_launchSlotBtn.Visible = !isLoadMode || isOccupied;
+			if (!isLoadMode)
+			{
+				_launchSlotBtn.Text = isOccupied
+					? $"OVERWRITE & START AS {_selectedCharacterName.ToUpper()} >"
+					: $"START EXPEDITION AS {_selectedCharacterName.ToUpper()} >";
+			}
+			else
+			{
+				_launchSlotBtn.Text = $"CONTINUE SLOT #{slotId} >";
+			}
 		}
 
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
@@ -994,53 +1183,52 @@ public partial class MainMenu : CanvasLayer
 			Color bg = isSelected
 				? new Color(0.14f, 0.18f, 0.26f, 0.98f)
 				: (entry.Occupied ? DungeonVisuals.ObsidianCard : DungeonVisuals.ObsidianDeep);
-			DungeonVisuals.StyleButton(entry.Btn, accent, titleFont, 24, 5, bg, 14, 4);
+			DungeonVisuals.StyleButton(entry.Btn, accent, titleFont, 23, 5, bg, 14, 4);
 		}
 
-		ulong now = Time.GetTicksMsec();
-		if (_lastClickedSlot == slotId && now - _lastClickTime < 400)
-		{
-			LaunchSlot(slotId, isLoadMode);
-		}
-		else
-		{
-			_lastClickTime = now;
-			_lastClickedSlot = slotId;
-			SelectSlotDetails(slotId);
-		}
+		SelectSlotDetails(slotId);
 	}
-
 
 	private void SelectSlotDetails(string slotId)
 	{
 		if (_infoLabel == null) return;
 
 		var slotSave = SaveManager.LoadSave(slotId);
-		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
-		
+
 		if (slotSave != null)
 		{
 			int mins = (int)(slotSave.PlayedTimeSeconds / 60);
 			int secs = (int)(slotSave.PlayedTimeSeconds % 60);
 			string timeStr = $"{mins:D2}:{secs:D2}";
-			
 			string weapons = GameLogic.FormatWeaponList(slotSave.WeaponResourcePaths);
+			int relicCount = slotSave.UnlockedRelics != null ? slotSave.UnlockedRelics.Count : 0;
 
-			_infoLabel.Text = $"SLOT #{slotId}  |  {slotSave.SaveDateString}\n" +
-							 $"-------------------------------\n" +
-							 $"HERO: {slotSave.CharacterName.ToUpper()}\n" +
-							 $"FLOOR REACHED: {slotSave.CurrentLevelIndex}\n" +
-							 $"PLAYED TIME: {timeStr}\n" +
-							 $"GOLD COINS: {slotSave.Coins}\n" +
-							 $"WEAPONS: {weapons}";
+			if (_slotHeaderLabel != null)
+			{
+				_slotHeaderLabel.Text = $"SLOT #{slotId}  —  {slotSave.CharacterName.ToUpper()}";
+				_slotHeaderLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+			}
+
+			_infoLabel.Text =
+				$"SAVED: {slotSave.SaveDateString}\n" +
+				$"FLOOR REACHED: Floor {slotSave.CurrentLevelIndex}\n" +
+				$"PLAYED TIME: {timeStr}   •   GOLD: {slotSave.Coins}\n" +
+				$"ABILITIES: [Q] Lv {slotSave.Ability1Level}/4  •  [V] Lv {slotSave.Ability2Level}/4   •   RELICS: {relicCount}\n" +
+				$"ARSENAL: {weapons}";
 			_infoLabel.HorizontalAlignment = HorizontalAlignment.Left;
-			_infoLabel.Position = new Vector2(20, 20);
 		}
 		else
 		{
-			_infoLabel.Text = $"SLOT #{slotId} — EMPTY\n\nDouble-click this slot\nto start a new run.";
-			_infoLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_infoLabel.Position = new Vector2(20, 20);
+			if (_slotHeaderLabel != null)
+			{
+				_slotHeaderLabel.Text = $"SLOT #{slotId}  —  NEW EXPEDITION";
+				_slotHeaderLabel.AddThemeColorOverride("font_color", DungeonVisuals.Emerald);
+			}
+			_infoLabel.Text =
+				$"HERO CHOSEN: {_selectedCharacterName.ToUpper()}\n" +
+				$"STARTING FLOOR: Floor 1\n\n" +
+				$"Ready to descend into the dungeon.\nClick the button below or double-click the slot to begin!";
+			_infoLabel.HorizontalAlignment = HorizontalAlignment.Left;
 		}
 	}
 

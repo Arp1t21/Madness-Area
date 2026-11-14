@@ -40,6 +40,8 @@ public partial class HUD : CanvasLayer
 	private Control _abilitiesContainer;
 	private AbilitySlotUI _ability1Slot;
 	private AbilitySlotUI _ability2Slot;
+	private PanelContainer _skillPointsBadge;
+	private Label _skillPointsLabel;
 	private Control _hudRoot;
 
 	// Новые элементы HUD: этаж/статус зачистки (сверху справа), слоты оружия (снизу справа), полоска здоровья Босса
@@ -54,7 +56,7 @@ public partial class HUD : CanvasLayer
 	private Label _bossNameLabel;
 	private ProgressBar _bossHealthBar;
 
-	private HBoxContainer _relicsContainer;
+	private Control _relicsContainer;
 	private Panel _eventBadgePanel;
 	private Label _eventBadgeLabel;
 	private Control _madnessContainer;
@@ -75,12 +77,33 @@ public partial class HUD : CanvasLayer
 	private PanelContainer _ladderReadyBanner;
 	private Label _ladderReadyLabel;
 
+	private PanelContainer _tabOverlay;
+	private VBoxContainer _tabPartySection;
+	private Label _relicsEmptyLabel;
+	private bool _isTabOpen = false;
+	private Tween _statsFadeTween;
+
+	private PanelContainer _statsPanel;
+	private StyleBoxFlat _statsPanelStyle;
+	private Label _tabHintLabel;
+	private Label _statDmgLabel;
+	private Label _statRofLabel;
+	private Label _statCritLabel;
+	private Label _statSpdLabel;
+	private Label _statHprLabel;
+	private Label _statMprLabel;
+	private Control _statMadRow;
+	private Label _statMadLabel;
+	private float _statsRefreshTimer = 0.0f;
+	private string _lastStatsKey = "";
+
 	public override void _Ready()
 	{
 		AddToGroup("HUD");
 		SettingsManager.ApplyFontQualityFixes();
 		_hudRoot = new Control();
 		_hudRoot.Name = "HUDRoot";
+		_hudRoot.MouseFilter = Control.MouseFilterEnum.Ignore;
 		AddChild(_hudRoot);
 
 		_hudRoot.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -257,8 +280,11 @@ public partial class HUD : CanvasLayer
 		CreateWeaponsUI(font);
 		CreateBossBarUI(font);
 		CreateCoopPartyAndBannersUI(font);
+		CreateStatsPanelUI(font);
+		CreateTabOverlayUI(font);
 		CallDeferred(nameof(UpdateRelicsUI));
 		CallDeferred(nameof(SyncInitialFloorEventUI));
+		CallDeferred(nameof(RefreshStatsImmediate));
 	}
 
 	private void SyncInitialFloorEventUI()
@@ -272,6 +298,11 @@ public partial class HUD : CanvasLayer
 		// Пилюля под таймером (центр сверху)
 		if (timerControl != null)
 		{
+			timerControl.MouseFilter = Control.MouseFilterEnum.Ignore;
+			timerControl.OffsetTop = 6;
+			timerControl.OffsetBottom = 36;
+			timerControl.OffsetLeft = -56;
+			timerControl.OffsetRight = 56;
 			var timerPill = new Panel
 			{
 				MouseFilter = Control.MouseFilterEnum.Ignore,
@@ -279,11 +310,12 @@ public partial class HUD : CanvasLayer
 			};
 			timerPill.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 			timerPill.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-				new Color(0.05f, 0.055f, 0.085f, 0.85f),
-				new Color(0.55f, 0.46f, 0.28f, 0.65f),
+				new Color(0.05f, 0.055f, 0.085f, 0.88f),
+				new Color(0.55f, 0.46f, 0.28f, 0.72f),
 				2, 4, 4));
 			timerControl.AddChild(timerPill);
 			timerControl.MoveChild(timerPill, 0);
+			DungeonVisuals.AttachFrameAccent(timerPill, DungeonVisuals.BrassDim, 2);
 
 			if (_timeLabel != null)
 			{
@@ -295,6 +327,11 @@ public partial class HUD : CanvasLayer
 		// Пилюля под монетами (слева сверху)
 		if (coinControl != null)
 		{
+			coinControl.MouseFilter = Control.MouseFilterEnum.Ignore;
+			coinControl.OffsetTop = 6;
+			coinControl.OffsetBottom = 36;
+			coinControl.OffsetLeft = 10;
+			coinControl.OffsetRight = 128;
 			var coinPill = new Panel
 			{
 				MouseFilter = Control.MouseFilterEnum.Ignore,
@@ -302,11 +339,12 @@ public partial class HUD : CanvasLayer
 			};
 			coinPill.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 			coinPill.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-				new Color(0.05f, 0.055f, 0.085f, 0.85f),
-				new Color(0.85f, 0.68f, 0.24f, 0.65f),
+				new Color(0.05f, 0.055f, 0.085f, 0.88f),
+				new Color(0.85f, 0.68f, 0.24f, 0.72f),
 				2, 4, 4));
 			coinControl.AddChild(coinPill);
 			coinControl.MoveChild(coinPill, 0);
+			DungeonVisuals.AttachFrameAccent(coinPill, DungeonVisuals.BrassGold, 2);
 
 			if (_coinLabel != null)
 			{
@@ -315,6 +353,7 @@ public partial class HUD : CanvasLayer
 		}
 
 		if (healthUI == null) return;
+		healthUI.MouseFilter = Control.MouseFilterEnum.Ignore;
 
 		// Темная обсидиановая панель-подложка под HP/MP
 		var vitalsCard = new Panel
@@ -324,11 +363,12 @@ public partial class HUD : CanvasLayer
 		};
 		vitalsCard.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		vitalsCard.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-			new Color(0.045f, 0.048f, 0.075f, 0.86f),
-			new Color(0.38f, 0.40f, 0.48f, 0.72f),
+			new Color(0.045f, 0.048f, 0.075f, 0.88f),
+			new Color(0.45f, 0.42f, 0.34f, 0.76f),
 			2, 4, 6));
 		healthUI.AddChild(vitalsCard);
 		healthUI.MoveChild(vitalsCard, 0);
+		DungeonVisuals.AttachFrameAccent(vitalsCard, DungeonVisuals.BrassDim, 2);
 
 		// Иконки сердца и кристалла маны слева от полосок
 		var heartTex = GD.Load<Texture2D>("res://assets/objects/ui_heart_full.png");
@@ -520,9 +560,30 @@ public partial class HUD : CanvasLayer
 			_partyRosterTimer -= (float)delta;
 			if (_partyRosterTimer <= 0.0f)
 			{
-				_partyRosterTimer = 0.25f;
-				UpdatePartyRosterUI();
+				_partyRosterTimer = _isTabOpen ? 0.25f : 0.75f;
+				if (_isTabOpen)
+				{
+					UpdatePartyRosterUI();
+				}
 			}
+		}
+
+		_statsRefreshTimer -= (float)delta;
+		if (_statsRefreshTimer <= 0.0f)
+		{
+			_statsRefreshTimer = 0.15f;
+			UpdateStatsUI();
+		}
+	}
+
+	public override void _Input(InputEvent @event)
+	{
+		if (@event is InputEventKey kb && kb.Pressed && !kb.Echo && kb.Keycode == Key.Tab)
+		{
+			if (Engine.TimeScale == 0 || GetTree().Paused) return;
+			if (GetTree().Root.GetNodeOrNull("CoopPauseMenu") != null) return;
+			ToggleTabOverlay();
+			GetViewport().SetInputAsHandled();
 		}
 	}
 
@@ -704,17 +765,19 @@ public partial class HUD : CanvasLayer
 		_abilitiesContainer = new Control();
 		_abilitiesContainer.Name = "AbilitiesContainer";
 		_abilitiesContainer.LayoutMode = 1;
+		_abilitiesContainer.MouseFilter = Control.MouseFilterEnum.Ignore;
 		_abilitiesContainer.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
-		
-		// Смещаем к центру и прижимаем к нижнему краю (увеличено в 1.3 раза)
-		_abilitiesContainer.OffsetLeft = -74;
-		_abilitiesContainer.OffsetRight = 74;
-		_abilitiesContainer.OffsetTop = -64;
-		_abilitiesContainer.OffsetBottom = -10;
+
+		// Чуть крупнее прежних (56x56), по центру у нижнего края
+		_abilitiesContainer.OffsetLeft = -80;
+		_abilitiesContainer.OffsetRight = 80;
+		_abilitiesContainer.OffsetTop = -68;
+		_abilitiesContainer.OffsetBottom = -8;
 
 		var hbox = new HBoxContainer();
 		hbox.LayoutMode = 1;
 		hbox.SetAnchorsPreset(Control.LayoutPreset.FullRect);
+		hbox.MouseFilter = Control.MouseFilterEnum.Ignore;
 		hbox.Alignment = BoxContainer.AlignmentMode.Center;
 		hbox.AddThemeConstantOverride("separation", 22);
 		_abilitiesContainer.AddChild(hbox);
@@ -726,6 +789,37 @@ public partial class HUD : CanvasLayer
 		hbox.AddChild(_ability2Slot);
 
 		_hudRoot.AddChild(_abilitiesContainer);
+
+		var font = GameResourceCache.GetSilverFont();
+		_skillPointsBadge = new PanelContainer
+		{
+			Name = "SkillPointsBadge",
+			LayoutMode = 1,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Visible = false
+		};
+		_skillPointsBadge.SetAnchorsPreset(Control.LayoutPreset.CenterBottom);
+		_skillPointsBadge.OffsetLeft = -62;
+		_skillPointsBadge.OffsetRight = 62;
+		_skillPointsBadge.OffsetTop = -114;
+		_skillPointsBadge.OffsetBottom = -95;
+		_skillPointsBadge.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			new Color(0.08f, 0.06f, 0.02f, 0.92f),
+			DungeonVisuals.BrassGold,
+			1, 3, 3));
+		_hudRoot.AddChild(_skillPointsBadge);
+
+		_skillPointsLabel = new Label
+		{
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) _skillPointsLabel.AddThemeFontOverride("font", font);
+		_skillPointsLabel.AddThemeFontSizeOverride("font_size", 13);
+		_skillPointsLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.90f, 0.42f));
+		DungeonVisuals.ApplyPixelOutline(_skillPointsLabel, 1);
+		_skillPointsBadge.AddChild(_skillPointsLabel);
 	}
 
 	private void CreateFloorAndEnemiesUI(Font font)
@@ -740,12 +834,13 @@ public partial class HUD : CanvasLayer
 		_floorBadgePanel.OffsetLeft = -196;
 		_floorBadgePanel.OffsetRight = -10;
 		_floorBadgePanel.OffsetTop = 6;
-		_floorBadgePanel.OffsetBottom = 34;
+		_floorBadgePanel.OffsetBottom = 36;
 		_floorBadgePanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-			new Color(0.05f, 0.055f, 0.085f, 0.85f),
-			new Color(0.55f, 0.46f, 0.28f, 0.65f),
+			new Color(0.05f, 0.055f, 0.085f, 0.88f),
+			new Color(0.55f, 0.46f, 0.28f, 0.72f),
 			2, 4, 4));
 		_hudRoot.AddChild(_floorBadgePanel);
+		DungeonVisuals.AttachFrameAccent(_floorBadgePanel, DungeonVisuals.BrassDim, 2);
 
 		_floorEnemiesLabel = new Label();
 		_floorEnemiesLabel.Name = "FloorEnemiesLabel";
@@ -795,20 +890,6 @@ public partial class HUD : CanvasLayer
 
 	private void CreateMadnessAndRelicsUI(Font font)
 	{
-		_relicsContainer = new HBoxContainer
-		{
-			Name = "RelicsStrip",
-			LayoutMode = 1,
-			MouseFilter = Control.MouseFilterEnum.Ignore
-		};
-		_relicsContainer.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		_relicsContainer.OffsetLeft = 10;
-		_relicsContainer.OffsetRight = 380;
-		_relicsContainer.OffsetTop = 44;
-		_relicsContainer.OffsetBottom = 70;
-		_relicsContainer.AddThemeConstantOverride("separation", 5);
-		_hudRoot.AddChild(_relicsContainer);
-
 		_madnessContainer = new Control
 		{
 			Name = "MadnessContainer",
@@ -929,17 +1010,17 @@ public partial class HUD : CanvasLayer
 			_weaponSlots[i] = slot;
 		}
 
-		// Панель подсказки характеристик оружия при наведении курсора (в инвентаре или на земле)
+		// Панель подсказки характеристик оружия или способности при наведении курсора
 		_weaponTooltipPanel = new Panel();
 		_weaponTooltipPanel.Name = "WeaponTooltipPanel";
-		_weaponTooltipPanel.Size = new Vector2(115, 48);
+		_weaponTooltipPanel.Size = new Vector2(138, 52);
 		_weaponTooltipPanel.MouseFilter = Control.MouseFilterEnum.Ignore;
 		_weaponTooltipPanel.Visible = false;
 
 		var tipStyle = DungeonVisuals.CreatePanelStyle(
-			new Color(0.055f, 0.058f, 0.09f, 0.95f),
+			new Color(0.055f, 0.058f, 0.09f, 0.96f),
 			DungeonVisuals.BrassDim,
-			1, 2, 3);
+			1, 3, 4);
 		_weaponTooltipPanel.AddThemeStyleboxOverride("panel", tipStyle);
 		DungeonVisuals.AttachFrameAccent(_weaponTooltipPanel, DungeonVisuals.BrassGold, 2);
 		AddChild(_weaponTooltipPanel);
@@ -947,21 +1028,22 @@ public partial class HUD : CanvasLayer
 		_weaponTooltipLabel = new Label();
 		_weaponTooltipLabel.LayoutMode = 1;
 		_weaponTooltipLabel.SetAnchorsPreset(Control.LayoutPreset.FullRect);
-		_weaponTooltipLabel.OffsetLeft = 4;
-		_weaponTooltipLabel.OffsetRight = -4;
+		_weaponTooltipLabel.OffsetLeft = 5;
+		_weaponTooltipLabel.OffsetRight = -5;
 		_weaponTooltipLabel.OffsetTop = 3;
 		_weaponTooltipLabel.OffsetBottom = -3;
 		_weaponTooltipLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		_weaponTooltipLabel.VerticalAlignment = VerticalAlignment.Center;
 		if (font != null) _weaponTooltipLabel.AddThemeFontOverride("font", font);
-		_weaponTooltipLabel.AddThemeFontSizeOverride("font_size", 12);
-		_weaponTooltipLabel.AddThemeConstantOverride("line_spacing", -2);
+		_weaponTooltipLabel.AddThemeFontSizeOverride("font_size", 13);
+		_weaponTooltipLabel.AddThemeConstantOverride("line_spacing", -1);
 		_weaponTooltipLabel.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
 		DungeonVisuals.ApplyPixelOutline(_weaponTooltipLabel, 1);
 		_weaponTooltipPanel.AddChild(_weaponTooltipLabel);
 	}
 
 	private WeaponData _lastHoveredWeapon = null;
+	private AbilitySlotUI _lastHoveredAbilitySlot = null;
 	private float _tooltipScaleAnim = 1.0f;
 
 	private void UpdateWeaponsUI()
@@ -1049,14 +1131,24 @@ public partial class HUD : CanvasLayer
 			}
 		}
 
+		AbilitySlotUI hoveredAbility = null;
+		if (hoveredWeapon == null)
+		{
+			if (IsInstanceValid(_ability1Slot) && _ability1Slot.IsMouseOverSlot(mouseScreenPos))
+				hoveredAbility = _ability1Slot;
+			else if (IsInstanceValid(_ability2Slot) && _ability2Slot.IsMouseOverSlot(mouseScreenPos))
+				hoveredAbility = _ability2Slot;
+		}
+
 		if (IsInstanceValid(_weaponTooltipPanel) && IsInstanceValid(_weaponTooltipLabel))
 		{
 			if (hoveredWeapon != null)
 			{
-				if (_lastHoveredWeapon != hoveredWeapon || !_weaponTooltipPanel.Visible)
+				if (_lastHoveredWeapon != hoveredWeapon || _lastHoveredAbilitySlot != null || !_weaponTooltipPanel.Visible)
 				{
 					_tooltipScaleAnim = 0.82f;
 					_lastHoveredWeapon = hoveredWeapon;
+					_lastHoveredAbilitySlot = null;
 				}
 				_tooltipScaleAnim = Mathf.MoveToward(_tooltipScaleAnim, 1.0f, (float)GetProcessDeltaTime() * 4.5f);
 
@@ -1066,8 +1158,8 @@ public partial class HUD : CanvasLayer
 					isGroundHover,
 					_player.HasRelic(GameLogic.RelicPrismLens));
 
-				int cardW = hoveredWeapon.IsContinuousLaser ? 132 : 115;
-				int cardH = hoveredWeapon.IsContinuousLaser ? 66 : (hoveredWeapon.ManaCost > 0.01f ? 56 : 46);
+				int cardW = hoveredWeapon.IsContinuousLaser ? 152 : 136;
+				int cardH = hoveredWeapon.IsContinuousLaser ? 70 : (hoveredWeapon.ManaCost > 0.01f ? 62 : 50);
 				Vector2 cardSize = new Vector2(cardW, cardH);
 				_weaponTooltipPanel.Size = cardSize;
 
@@ -1083,9 +1175,34 @@ public partial class HUD : CanvasLayer
 				_weaponTooltipPanel.Scale = new Vector2(_tooltipScaleAnim, _tooltipScaleAnim);
 				_weaponTooltipPanel.Visible = true;
 			}
+			else if (hoveredAbility != null)
+			{
+				if (_lastHoveredAbilitySlot != hoveredAbility || _lastHoveredWeapon != null || !_weaponTooltipPanel.Visible)
+				{
+					_tooltipScaleAnim = 0.82f;
+					_lastHoveredAbilitySlot = hoveredAbility;
+					_lastHoveredWeapon = null;
+				}
+				_tooltipScaleAnim = Mathf.MoveToward(_tooltipScaleAnim, 1.0f, (float)GetProcessDeltaTime() * 4.5f);
+
+				_weaponTooltipLabel.Text = hoveredAbility.FormatAbilityTooltip(_player);
+				int lineCount = _weaponTooltipLabel.Text.Split('\n').Length;
+				Vector2 cardSize = new Vector2(174, lineCount >= 4 ? 72 : 58);
+				_weaponTooltipPanel.Size = cardSize;
+
+				Vector2 viewSize = GetViewport().GetVisibleRect().Size;
+				float posX = Mathf.Clamp(mouseScreenPos.X - cardSize.X * 0.5f, 8.0f, viewSize.X - cardSize.X - 8.0f);
+				float posY = Mathf.Max(8.0f, mouseScreenPos.Y - cardSize.Y - 12.0f);
+
+				_weaponTooltipPanel.Position = new Vector2(posX, posY);
+				_weaponTooltipPanel.PivotOffset = new Vector2(cardSize.X * 0.5f, cardSize.Y);
+				_weaponTooltipPanel.Scale = new Vector2(_tooltipScaleAnim, _tooltipScaleAnim);
+				_weaponTooltipPanel.Visible = true;
+			}
 			else
 			{
 				_lastHoveredWeapon = null;
+				_lastHoveredAbilitySlot = null;
 				_weaponTooltipPanel.Visible = false;
 			}
 		}
@@ -1224,6 +1341,23 @@ public partial class HUD : CanvasLayer
 	{
 		if (IsInstanceValid(_ability1Slot)) _ability1Slot.UpdateState();
 		if (IsInstanceValid(_ability2Slot)) _ability2Slot.UpdateState();
+
+		if (IsInstanceValid(_skillPointsBadge) && IsInstanceValid(_skillPointsLabel))
+		{
+			bool canSpend = IsInstanceValid(_player)
+				&& _player.SkillPoints > 0
+				&& (GameLogic.CanUpgradeAbility(_player.Ability1Level) || GameLogic.CanUpgradeAbility(_player.Ability2Level));
+			_skillPointsBadge.Visible = canSpend;
+			if (canSpend)
+			{
+				_skillPointsLabel.Text = _player.SkillPoints == 1
+					? " 1 SKILL POINT "
+					: $" {_player.SkillPoints} SKILL POINTS ";
+				bool madnessVis = IsInstanceValid(_madnessContainer) && _madnessContainer.Visible;
+				_skillPointsBadge.OffsetTop = madnessVis ? -138 : -114;
+				_skillPointsBadge.OffsetBottom = madnessVis ? -120 : -96;
+			}
+		}
 	}
 
 	public void SetFloorEventUI(GameLogic.FloorEventType evt)
@@ -1240,6 +1374,7 @@ public partial class HUD : CanvasLayer
 		{
 			GameLogic.FloorEventType.PitchBlack => new Color(1.0f, 0.84f, 0.30f),
 			GameLogic.FloorEventType.ImpFrenzy => new Color(1.0f, 0.42f, 0.30f),
+			GameLogic.FloorEventType.SpikeChamber => new Color(1.0f, 0.30f, 0.24f),
 			_ => new Color(0.55f, 0.88f, 1.0f)
 		};
 		_eventBadgeLabel.AddThemeColorOverride("font_color", accent);
@@ -1257,10 +1392,14 @@ public partial class HUD : CanvasLayer
 		{
 			_player = NetworkManager.GetLocalPlayer(GetTree());
 		}
-		if (!IsInstanceValid(_player)) return;
 
-		var owned = _player.GetRelicIdsList();
-		if (owned == null || owned.Count == 0) return;
+		var owned = IsInstanceValid(_player) ? _player.GetRelicIdsList() : null;
+		bool hasRelics = owned != null && owned.Count > 0;
+		if (IsInstanceValid(_relicsEmptyLabel))
+		{
+			_relicsEmptyLabel.Visible = !hasRelics;
+		}
+		if (!hasRelics) return;
 
 		var font = GameResourceCache.GetSilverFont();
 		foreach (string id in owned)
@@ -1276,40 +1415,62 @@ public partial class HUD : CanvasLayer
 
 			var badge = new PanelContainer
 			{
-				MouseFilter = Control.MouseFilterEnum.Pass,
-				TooltipText = $"{def.Name}\n{def.Description}"
+				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			badge.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-				new Color(0.05f, 0.06f, 0.09f, 0.92f),
-				new Color(accent.R, accent.G, accent.B, 0.85f),
-				1, 3, 2));
+				new Color(0.05f, 0.06f, 0.09f, 0.86f),
+				new Color(accent.R, accent.G, accent.B, 0.72f),
+				1, 3, 4));
 
-			var hbox = new HBoxContainer();
-			hbox.AddThemeConstantOverride("separation", 4);
+			var hbox = new HBoxContainer
+			{
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			hbox.AddThemeConstantOverride("separation", 6);
 
 			var icon = new TextureRect
 			{
 				Texture = DungeonVisuals.GetRelicIconTexture(id),
 				TextureFilter = CanvasItem.TextureFilterEnum.Nearest,
-				CustomMinimumSize = new Vector2(16, 16),
+				CustomMinimumSize = new Vector2(18, 18),
 				ExpandMode = TextureRect.ExpandModeEnum.IgnoreSize,
 				StretchMode = TextureRect.StretchModeEnum.KeepAspectCentered,
+				SizeFlagsVertical = Control.SizeFlags.ShrinkCenter,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			hbox.AddChild(icon);
 
-			var lbl = new Label
+			var textCol = new VBoxContainer
 			{
-				Text = $"{def.ShortTag} ",
-				HorizontalAlignment = HorizontalAlignment.Center,
-				VerticalAlignment = VerticalAlignment.Center
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
-			if (font != null) lbl.AddThemeFontOverride("font", font);
-			lbl.AddThemeFontSizeOverride("font_size", 13);
-			lbl.AddThemeColorOverride("font_color", accent.Lightened(0.15f));
-			DungeonVisuals.ApplyPixelOutline(lbl, 1);
-			hbox.AddChild(lbl);
+			textCol.AddThemeConstantOverride("separation", 0);
 
+			var titleLbl = new Label
+			{
+				Text = $"{def.Name.ToUpper()}  [{def.ShortTag}]",
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			if (font != null) titleLbl.AddThemeFontOverride("font", font);
+			titleLbl.AddThemeFontSizeOverride("font_size", 14);
+			titleLbl.AddThemeColorOverride("font_color", accent.Lightened(0.18f));
+			DungeonVisuals.ApplyPixelOutline(titleLbl, 1);
+			textCol.AddChild(titleLbl);
+
+			var descLbl = new Label
+			{
+				Text = def.Description,
+				AutowrapMode = TextServer.AutowrapMode.WordSmart,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			if (font != null) descLbl.AddThemeFontOverride("font", font);
+			descLbl.AddThemeFontSizeOverride("font_size", 12);
+			descLbl.AddThemeColorOverride("font_color", new Color(0.76f, 0.78f, 0.84f, 0.92f));
+			DungeonVisuals.ApplyPixelOutline(descLbl, 1);
+			textCol.AddChild(descLbl);
+
+			hbox.AddChild(textCol);
 			badge.AddChild(hbox);
 			_relicsContainer.AddChild(badge);
 		}
@@ -1428,25 +1589,11 @@ public partial class HUD : CanvasLayer
 		UpdateRelicsUI();
 		UpdateWeaponsUI();
 		UpdatePartyRosterUI();
+		RefreshStatsImmediate();
 	}
 
 	private void CreateCoopPartyAndBannersUI(Font font)
 	{
-		_partyRosterContainer = new VBoxContainer
-		{
-			Name = "PartyRosterContainer",
-			LayoutMode = 1,
-			MouseFilter = Control.MouseFilterEnum.Ignore,
-			Visible = false
-		};
-		_partyRosterContainer.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		_partyRosterContainer.OffsetLeft = 10;
-		_partyRosterContainer.OffsetRight = 230;
-		_partyRosterContainer.OffsetTop = 76;
-		_partyRosterContainer.OffsetBottom = 220;
-		_partyRosterContainer.AddThemeConstantOverride("separation", 4);
-		_hudRoot.AddChild(_partyRosterContainer);
-
 		_spectateBanner = new PanelContainer
 		{
 			Name = "SpectateBanner",
@@ -1536,6 +1683,7 @@ public partial class HUD : CanvasLayer
 		if (NetworkManager.Instance == null || !NetworkManager.Instance.IsCoopSession)
 		{
 			_partyRosterContainer.Visible = false;
+			if (IsInstanceValid(_tabPartySection)) _tabPartySection.Visible = false;
 			return;
 		}
 
@@ -1549,10 +1697,12 @@ public partial class HUD : CanvasLayer
 		if (teammates.Count == 0)
 		{
 			_partyRosterContainer.Visible = false;
+			if (IsInstanceValid(_tabPartySection)) _tabPartySection.Visible = false;
 			return;
 		}
 
 		_partyRosterContainer.Visible = true;
+		if (IsInstanceValid(_tabPartySection)) _tabPartySection.Visible = true;
 		foreach (Node child in _partyRosterContainer.GetChildren())
 		{
 			_partyRosterContainer.RemoveChild(child);
@@ -1617,6 +1767,371 @@ public partial class HUD : CanvasLayer
 			hpBar.AddThemeStyleboxOverride("background", new StyleBoxFlat { BgColor = new Color(0.08f, 0.08f, 0.11f, 0.9f) });
 			hpBar.AddThemeStyleboxOverride("fill", new StyleBoxFlat { BgColor = dead ? new Color(0.45f, 0.2f, 0.2f) : new Color(0.82f, 0.22f, 0.28f) });
 			vbox.AddChild(hpBar);
+		}
+	}
+
+	private void CreateStatsPanelUI(Font font)
+	{
+		_statsPanelStyle = DungeonVisuals.CreatePanelStyle(
+			new Color(0.03f, 0.035f, 0.055f, 0.14f),
+			new Color(0.45f, 0.42f, 0.34f, 0.16f),
+			1, 3, 6);
+
+		_statsPanel = new PanelContainer
+		{
+			Name = "IsaacDeadlockStatsPanel",
+			LayoutMode = 1,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Modulate = new Color(1.0f, 1.0f, 1.0f, 0.42f)
+		};
+		_statsPanel.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
+		_statsPanel.OffsetLeft = 10;
+		_statsPanel.OffsetRight = 160;
+		_statsPanel.OffsetTop = 50;
+		_statsPanel.OffsetBottom = 50;
+		_statsPanel.AddThemeStyleboxOverride("panel", _statsPanelStyle);
+		_hudRoot.AddChild(_statsPanel);
+
+		var rows = new VBoxContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		rows.AddThemeConstantOverride("separation", 2);
+		_statsPanel.AddChild(rows);
+
+		Label AddStatRow(StatGlyph.GlyphType glyphType, string tag, Color color, out Control rowContainer)
+		{
+			var row = new HBoxContainer
+			{
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			row.AddThemeConstantOverride("separation", 5);
+
+			var glyph = new StatGlyph(glyphType, color);
+			row.AddChild(glyph);
+
+			var tagLbl = new Label
+			{
+				Text = tag,
+				CustomMinimumSize = new Vector2(28, 0),
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			if (font != null) tagLbl.AddThemeFontOverride("font", font);
+			tagLbl.AddThemeFontSizeOverride("font_size", 13);
+			tagLbl.AddThemeColorOverride("font_color", color.Lightened(0.15f));
+			DungeonVisuals.ApplyPixelOutline(tagLbl, 1);
+			row.AddChild(tagLbl);
+
+			var valLbl = new Label
+			{
+				Text = "-",
+				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+				HorizontalAlignment = HorizontalAlignment.Right,
+				MouseFilter = Control.MouseFilterEnum.Ignore
+			};
+			if (font != null) valLbl.AddThemeFontOverride("font", font);
+			valLbl.AddThemeFontSizeOverride("font_size", 14);
+			valLbl.AddThemeColorOverride("font_color", new Color(0.95f, 0.94f, 0.90f));
+			DungeonVisuals.ApplyPixelOutline(valLbl, 1);
+			row.AddChild(valLbl);
+
+			rows.AddChild(row);
+			rowContainer = row;
+			return valLbl;
+		}
+
+		_statDmgLabel = AddStatRow(StatGlyph.GlyphType.Damage, "DMG", new Color(1.0f, 0.62f, 0.30f), out _);
+		_statRofLabel = AddStatRow(StatGlyph.GlyphType.AttackRate, "ROF", new Color(1.0f, 0.86f, 0.36f), out _);
+		_statCritLabel = AddStatRow(StatGlyph.GlyphType.Crit, "CRT", new Color(1.0f, 0.38f, 0.48f), out _);
+		_statSpdLabel = AddStatRow(StatGlyph.GlyphType.Speed, "SPD", new Color(0.44f, 0.86f, 1.0f), out _);
+		_statHprLabel = AddStatRow(StatGlyph.GlyphType.HpRegen, "HPR", new Color(0.42f, 0.94f, 0.56f), out _);
+		_statMprLabel = AddStatRow(StatGlyph.GlyphType.MpRegen, "MPR", new Color(0.42f, 0.72f, 1.0f), out _);
+		_statMadLabel = AddStatRow(StatGlyph.GlyphType.Madness, "MAD", new Color(0.98f, 0.32f, 0.36f), out _statMadRow);
+		_statMadRow.Visible = false;
+
+		_tabHintLabel = new Label
+		{
+			Text = "[TAB] INFO",
+			HorizontalAlignment = HorizontalAlignment.Left,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) _tabHintLabel.AddThemeFontOverride("font", font);
+		_tabHintLabel.AddThemeFontSizeOverride("font_size", 11);
+		_tabHintLabel.AddThemeColorOverride("font_color", new Color(0.75f, 0.78f, 0.85f, 0.80f));
+		DungeonVisuals.ApplyPixelOutline(_tabHintLabel, 1);
+		rows.AddChild(_tabHintLabel);
+	}
+
+	private void CreateTabOverlayUI(Font font)
+	{
+		_tabOverlay = new PanelContainer
+		{
+			Name = "TabInfoOverlay",
+			LayoutMode = 1,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Visible = false
+		};
+		_tabOverlay.SetAnchorsPreset(Control.LayoutPreset.TopRight);
+		_tabOverlay.OffsetLeft = -286;
+		_tabOverlay.OffsetRight = -10;
+		_tabOverlay.OffsetTop = 64;
+		_tabOverlay.OffsetBottom = 64;
+		_tabOverlay.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			new Color(0.04f, 0.045f, 0.075f, 0.84f),
+			new Color(0.72f, 0.58f, 0.30f, 0.80f),
+			2, 4, 8));
+		_hudRoot.AddChild(_tabOverlay);
+
+		var rootVBox = new VBoxContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		rootVBox.AddThemeConstantOverride("separation", 6);
+		_tabOverlay.AddChild(rootVBox);
+
+		var headerRow = new HBoxContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		rootVBox.AddChild(headerRow);
+
+		var titleLbl = new Label
+		{
+			Text = "RUN OVERVIEW",
+			SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) titleLbl.AddThemeFontOverride("font", font);
+		titleLbl.AddThemeFontSizeOverride("font_size", 17);
+		titleLbl.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(titleLbl, 2);
+		headerRow.AddChild(titleLbl);
+
+		var closeHint = new Label
+		{
+			Text = "[TAB]",
+			VerticalAlignment = VerticalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) closeHint.AddThemeFontOverride("font", font);
+		closeHint.AddThemeFontSizeOverride("font_size", 13);
+		closeHint.AddThemeColorOverride("font_color", new Color(0.70f, 0.74f, 0.82f));
+		DungeonVisuals.ApplyPixelOutline(closeHint, 1);
+		headerRow.AddChild(closeHint);
+
+		// Co-op Party section
+		_tabPartySection = new VBoxContainer
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Visible = false
+		};
+		_tabPartySection.AddThemeConstantOverride("separation", 4);
+		rootVBox.AddChild(_tabPartySection);
+
+		var partyHdr = new Label
+		{
+			Text = "TEAMMATES",
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) partyHdr.AddThemeFontOverride("font", font);
+		partyHdr.AddThemeFontSizeOverride("font_size", 13);
+		partyHdr.AddThemeColorOverride("font_color", new Color(0.62f, 0.84f, 1.0f));
+		DungeonVisuals.ApplyPixelOutline(partyHdr, 1);
+		_tabPartySection.AddChild(partyHdr);
+
+		_partyRosterContainer = new VBoxContainer
+		{
+			Name = "PartyRosterContainer",
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		_partyRosterContainer.AddThemeConstantOverride("separation", 4);
+		_tabPartySection.AddChild(_partyRosterContainer);
+
+		// Relics section
+		var relicsHdr = new Label
+		{
+			Text = "RELICS",
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) relicsHdr.AddThemeFontOverride("font", font);
+		relicsHdr.AddThemeFontSizeOverride("font_size", 13);
+		relicsHdr.AddThemeColorOverride("font_color", new Color(0.95f, 0.78f, 0.38f));
+		DungeonVisuals.ApplyPixelOutline(relicsHdr, 1);
+		rootVBox.AddChild(relicsHdr);
+
+		_relicsEmptyLabel = new Label
+		{
+			Text = "No relics acquired yet",
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) _relicsEmptyLabel.AddThemeFontOverride("font", font);
+		_relicsEmptyLabel.AddThemeFontSizeOverride("font_size", 13);
+		_relicsEmptyLabel.AddThemeColorOverride("font_color", new Color(0.62f, 0.64f, 0.72f));
+		DungeonVisuals.ApplyPixelOutline(_relicsEmptyLabel, 1);
+		rootVBox.AddChild(_relicsEmptyLabel);
+
+		var relicsVBox = new VBoxContainer
+		{
+			Name = "RelicsList",
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		relicsVBox.AddThemeConstantOverride("separation", 4);
+		rootVBox.AddChild(relicsVBox);
+		_relicsContainer = relicsVBox;
+	}
+
+	private void ToggleTabOverlay()
+	{
+		_isTabOpen = !_isTabOpen;
+		if (IsInstanceValid(_tabOverlay))
+		{
+			_tabOverlay.Visible = _isTabOpen;
+		}
+		if (IsInstanceValid(_tabHintLabel))
+		{
+			_tabHintLabel.Text = _isTabOpen ? "[TAB] CLOSE" : "[TAB] INFO";
+		}
+
+		if (_isTabOpen)
+		{
+			UpdateRelicsUI();
+			UpdatePartyRosterUI();
+		}
+		RefreshStatsImmediate();
+
+		if (IsInstanceValid(_statsPanel))
+		{
+			if (IsInstanceValid(_statsFadeTween)) _statsFadeTween.Kill();
+			float targetAlpha = _isTabOpen ? 0.98f : 0.42f;
+			_statsFadeTween = CreateTween();
+			_statsFadeTween.TweenProperty(_statsPanel, "modulate:a", targetAlpha, 0.12);
+		}
+
+		if (_statsPanelStyle != null)
+		{
+			_statsPanelStyle.BgColor = _isTabOpen
+				? new Color(0.04f, 0.045f, 0.075f, 0.86f)
+				: new Color(0.03f, 0.035f, 0.055f, 0.14f);
+			_statsPanelStyle.BorderColor = _isTabOpen
+				? new Color(0.72f, 0.58f, 0.30f, 0.80f)
+				: new Color(0.45f, 0.42f, 0.34f, 0.16f);
+		}
+	}
+
+	private void RefreshStatsImmediate()
+	{
+		_lastStatsKey = "";
+		_statsRefreshTimer = 0.0f;
+		UpdateStatsUI();
+	}
+
+	private void UpdateStatsUI()
+	{
+		if (!IsInstanceValid(_statsPanel) || !IsInstanceValid(_player) || _player.IsQueuedForDeletion()) return;
+
+		WeaponData weapon = _player.ActiveWeaponData;
+		int multPct = Mathf.RoundToInt(_player.WeaponDamageMultiplier * 100.0f);
+		string dmgText = weapon != null
+			? $"{Mathf.RoundToInt(weapon.Damage * _player.WeaponDamageMultiplier)} ({multPct}%)"
+			: $"{multPct}%";
+
+		float rateMult = Mathf.Max(1.0f, _player.GetMadnessAttackRateMultiplier());
+		string rofText;
+		if (weapon != null)
+		{
+			float cd = Mathf.Max(0.03f, weapon.AttackCooldown / rateMult);
+			rofText = $"{(1.0f / cd):0.0}/s";
+		}
+		else
+		{
+			rofText = $"{rateMult:0.00}x";
+		}
+
+		bool isBlade = weapon != null && !weapon.IsRanged && !weapon.IsContinuousLaser;
+		int critPct = Mathf.RoundToInt(_player.GetCritChance(isBlade) * 100.0f);
+		int moveSpd = Mathf.RoundToInt(_player.WalkSpeedEffective);
+		float hpr = _player.HealthRegenEffective;
+		float mpr = _player.ManaRegenEffective;
+		bool madnessUnlocked = _player.IsMadnessUnlocked();
+		int madPct = (int)_player.Madness;
+
+		string key = $"{dmgText}|{rofText}|{critPct}|{moveSpd}|{hpr:0.0}|{mpr:0.0}|{madnessUnlocked}|{madPct}";
+		if (key == _lastStatsKey) return;
+		_lastStatsKey = key;
+
+		_statDmgLabel.Text = dmgText;
+		_statRofLabel.Text = rofText;
+		_statCritLabel.Text = $"{critPct}%";
+		_statSpdLabel.Text = moveSpd.ToString();
+		_statHprLabel.Text = $"+{hpr:0.0}/s";
+		_statMprLabel.Text = $"+{mpr:0.0}/s";
+
+		if (IsInstanceValid(_statMadRow))
+		{
+			_statMadRow.Visible = madnessUnlocked;
+			if (madnessUnlocked && IsInstanceValid(_statMadLabel))
+			{
+				_statMadLabel.Text = $"{madPct}%";
+			}
+		}
+	}
+}
+
+public partial class StatGlyph : Control
+{
+	public enum GlyphType
+	{
+		Damage,
+		AttackRate,
+		Crit,
+		Speed,
+		HpRegen,
+		MpRegen,
+		Madness
+	}
+
+	private readonly GlyphType _type;
+	private readonly Color _color;
+
+	public StatGlyph(GlyphType type, Color color)
+	{
+		_type = type;
+		_color = color;
+		CustomMinimumSize = new Vector2(10, 12);
+		Size = new Vector2(10, 12);
+		SizeFlagsVertical = SizeFlags.ShrinkCenter;
+		MouseFilter = MouseFilterEnum.Ignore;
+	}
+
+	public override void _Draw()
+	{
+		switch (_type)
+		{
+			case GlyphType.Damage:
+				DrawColoredPolygon(new[] { new Vector2(5, 1), new Vector2(9, 7), new Vector2(1, 7) }, _color);
+				DrawRect(new Rect2(4, 7, 2, 4), _color.Darkened(0.2f));
+				break;
+			case GlyphType.AttackRate:
+				DrawColoredPolygon(new[] { new Vector2(6, 1), new Vector2(2, 6), new Vector2(5, 6), new Vector2(4, 11), new Vector2(8, 5), new Vector2(5, 5) }, _color);
+				break;
+			case GlyphType.Crit:
+				DrawColoredPolygon(new[] { new Vector2(5, 1), new Vector2(9, 6), new Vector2(5, 11), new Vector2(1, 6) }, _color);
+				break;
+			case GlyphType.Speed:
+				DrawColoredPolygon(new[] { new Vector2(1, 2), new Vector2(6, 6), new Vector2(1, 10) }, _color);
+				DrawColoredPolygon(new[] { new Vector2(5, 2), new Vector2(9, 6), new Vector2(5, 10) }, _color.Lightened(0.25f));
+				break;
+			case GlyphType.HpRegen:
+				DrawRect(new Rect2(4, 2, 2, 8), _color);
+				DrawRect(new Rect2(1, 5, 8, 2), _color);
+				break;
+			case GlyphType.MpRegen:
+				DrawColoredPolygon(new[] { new Vector2(5, 1), new Vector2(8.5f, 7.5f), new Vector2(5, 10.5f), new Vector2(1.5f, 7.5f) }, _color);
+				break;
+			case GlyphType.Madness:
+				DrawCircle(new Vector2(5, 7), 3.5f, _color);
+				DrawColoredPolygon(new[] { new Vector2(5, 1), new Vector2(8, 6), new Vector2(2, 6) }, _color.Lightened(0.25f));
+				break;
 		}
 	}
 }

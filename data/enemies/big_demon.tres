@@ -1,12 +1,12 @@
-[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3 uid="uid://cl508madjxa70"]
 
 [ext_resource type="Script" uid="uid://bljefiu15ackd" path="res://scripts/resources/EnemyData.cs" id="1_script"]
 
 [resource]
 script = ExtResource("1_script")
 EnemyName = "Archdemon"
-MaxHealth = 65.0
 Speed = 32.0
+MaxHealth = 58
 Damage = 14
 AttackRange = 30.0
 StopDuration = 0.25

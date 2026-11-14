@@ -185,6 +185,7 @@ public partial class SettingsMenu : CanvasLayer
 		SelectTab(0);
 		LoadCurrentSettingsIntoUI();
 		MainMenu.ConnectButtonSounds(this);
+		DungeonVisuals.AnimateModalOpen(frame, bgOverlay);
 	}
 
 	private Button CreateFooterButton(string text, Font font, Color accent)
@@ -328,20 +329,19 @@ public partial class SettingsMenu : CanvasLayer
 		vbox.AddChild(CreateOptionRow("Brightness", brightnessHBox, font));
 
 		_fpsOption = new OptionButton();
-		_fpsOption.AddThemeFontOverride("font", font);
-		_fpsOption.AddThemeFontSizeOverride("font_size", 16);
 		_fpsOption.AddItem("Unlimited", 0);
 		_fpsOption.AddItem("30 FPS", 30);
 		_fpsOption.AddItem("60 FPS", 60);
 		_fpsOption.AddItem("120 FPS", 120);
 		_fpsOption.AddItem("144 FPS", 144);
-		_fpsOption.CustomMinimumSize = new Vector2(80, 20);
+		_fpsOption.CustomMinimumSize = new Vector2(104, 24);
+		DungeonVisuals.StyleButton(_fpsOption, DungeonVisuals.BrassGold, font, 16, 3, DungeonVisuals.ObsidianDeep, 10, 2);
 		vbox.AddChild(CreateOptionRow("FPS Limit", _fpsOption, font));
 
 		_vsyncCheck = new CheckBox();
 		_vsyncCheck.Text = "Enabled";
-		_vsyncCheck.AddThemeFontOverride("font", font);
-		_vsyncCheck.AddThemeFontSizeOverride("font_size", 16);
+		_vsyncCheck.CustomMinimumSize = new Vector2(104, 24);
+		DungeonVisuals.StyleButton(_vsyncCheck, DungeonVisuals.ArcaneCyan, font, 16, 3, DungeonVisuals.ObsidianDeep, 10, 2);
 		vbox.AddChild(CreateOptionRow("V-Sync", _vsyncCheck, font));
 	}
 
@@ -553,11 +553,13 @@ public partial class SettingsMenu : CanvasLayer
 
 	private void UpdateBindButtonLabels()
 	{
+		var font = GameResourceCache.GetSilverFont();
 		foreach (var pair in _bindButtons)
 		{
 			if (_pendingKeyBinds.TryGetValue(pair.Key, out Key key))
 			{
 				pair.Value.Text = key.ToString();
+				DungeonVisuals.StyleButton(pair.Value, DungeonVisuals.BrassGold, font, 15, 3, DungeonVisuals.ObsidianDeep, 8, 2);
 			}
 		}
 	}
@@ -568,7 +570,9 @@ public partial class SettingsMenu : CanvasLayer
 
 		_actionToBind = action;
 		_isListeningForBind = true;
-		_bindButtons[action].Text = "...";
+		var btn = _bindButtons[action];
+		btn.Text = "PRESS KEY...";
+		DungeonVisuals.StyleButton(btn, DungeonVisuals.ArcaneCyan, GameResourceCache.GetSilverFont(), 15, 3, DungeonVisuals.ObsidianElevated, 8, 2);
 	}
 
 	public override void _Input(InputEvent @event)

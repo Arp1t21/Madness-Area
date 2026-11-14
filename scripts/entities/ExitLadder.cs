@@ -37,21 +37,12 @@ public partial class ExitLadder : Area2D, IInteractable
 			ladderGlowTex,
 			shadowEnabled: false);
 
-		_promptLabel = new Label();
-		_promptLabel.Text = "Go deeper [E]";
-		_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		_promptLabel.Position = new Vector2(-40, -18);
-		_promptLabel.Size = new Vector2(80, 15);
-		_promptLabel.AddThemeColorOverride("font_color", new Color(0.55f, 1.0f, 0.72f));
-		
-		var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
-		if (font != null) {
-			_promptLabel.AddThemeFontOverride("font", font);
-			_promptLabel.AddThemeFontSizeOverride("font_size", 8);
-		}
-		_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
-		DungeonVisuals.ApplyPixelOutline(_promptLabel, 2);
-		_promptLabel.Visible = false;
+		_promptLabel = new Label
+		{
+			Text = "[E] Descend",
+			Visible = false
+		};
+		DungeonVisuals.StyleWorldPromptLabel(_promptLabel, DungeonVisuals.Emerald, -22.0f);
 		AddChild(_promptLabel);
 
 		AreaEntered += OnAreaEntered;

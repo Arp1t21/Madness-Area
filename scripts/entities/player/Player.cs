@@ -34,6 +34,9 @@ public partial class Player : CharacterBody2D
 	public List<AttackController> WeaponSlots = new List<AttackController>();
 	private int _currentSlotIndex = 0;
 	public int CurrentSlotIndex => _currentSlotIndex;
+	public WeaponData ActiveWeaponData => (_currentSlotIndex >= 0 && _currentSlotIndex < WeaponSlots.Count)
+		? WeaponSlots[_currentSlotIndex]?.CurrentWeapon
+		: null;
 
 	// Текущие показатели и бонусы от алтаря снабжения
 	public float CurrentHealth;
@@ -152,12 +155,19 @@ public partial class Player : CharacterBody2D
 		return GameLogic.GetMadnessAttackRateMultiplier(GetCurrentFloorIndex(), Madness);
 	}
 
-	public (float damage, bool isCrit) RollDamageCrit(float baseDamage, bool isBladeWeapon)
+	public float GetCritChance(bool isBladeWeapon)
 	{
 		int floorIdx = GetCurrentFloorIndex();
 		float critChance = isBladeWeapon ? 0.06f : 0.02f;
 		if (HasRelic(GameLogic.RelicCrimsonEdge)) critChance += 0.10f;
 		critChance += GameLogic.GetMadnessCritChanceBonus(floorIdx, Madness);
+		return Mathf.Clamp(critChance, 0.0f, 1.0f);
+	}
+
+	public (float damage, bool isCrit) RollDamageCrit(float baseDamage, bool isBladeWeapon)
+	{
+		int floorIdx = GetCurrentFloorIndex();
+		float critChance = GetCritChance(isBladeWeapon);
 
 		if (critChance > 0.0f && GD.Randf() < critChance)
 		{

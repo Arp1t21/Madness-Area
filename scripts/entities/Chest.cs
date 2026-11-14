@@ -32,26 +32,11 @@ public partial class Chest : StaticBody2D, IInteractable
 		if (_promptLabel == null)
 		{
 			_promptLabel = new Label();
-			_promptLabel.Text = "Press E to open";
-			_promptLabel.HorizontalAlignment = HorizontalAlignment.Center;
-			_promptLabel.Position = new Vector2(-50, -24);
-			_promptLabel.Size = new Vector2(100, 20);
-			_promptLabel.Visible = false;
-
-			var font = GameResourceCache.GetSilverFont();
-			if (font != null)
-			{
-				_promptLabel.AddThemeFontOverride("font", font);
-				_promptLabel.AddThemeFontSizeOverride("font_size", 8);
-			}
-			_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
 			AddChild(_promptLabel);
 		}
-		else
-		{
-			_promptLabel.AddThemeConstantOverride("letter_spacing", 2);
-			_promptLabel.Position = new Vector2(-50, -24);
-		}
+		_promptLabel.Text = "[E] Open Chest";
+		_promptLabel.Visible = false;
+		DungeonVisuals.StyleWorldPromptLabel(_promptLabel, DungeonVisuals.BrassGold, -25.0f);
 
 		if (_sprite != null && ClosedTexture != null)
 		{

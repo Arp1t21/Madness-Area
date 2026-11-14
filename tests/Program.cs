@@ -49,6 +49,7 @@ internal static class Program
 		Test_FloorEventRolling();
 		Test_CoopScalingAndRevive();
 		Test_Enemy5FloorScalingAndLowHpDanger();
+		Test_SpikeRatiosAndSpikeEvent();
 
 		Console.WriteLine($"Unit tests finished: {_passed} passed, {_failed} failed.");
 		return _failed == 0 ? 0 : 1;
@@ -436,5 +437,39 @@ internal static class Program
 		Assert(midDanger > 0.45f && midDanger < 0.55f, "Mid low HP smoothstep ~0.5");
 		Assert(GameLogic.CalculateLowHealthDangerFactor(0.20f) > midDanger, "Lower HP -> higher danger");
 		AssertEqual(1.0f, GameLogic.CalculateLowHealthDangerFactor(0.10f), "<=12% HP -> max danger 1.0");
+	}
+
+	private static void Test_SpikeRatiosAndSpikeEvent()
+	{
+		// Floors 1-3 remain gentle and near baseline
+		Assert(MathF.Abs(GameLogic.CalculateSpikeFloorRatio(1) - 0.005f) < 0.0001f, "Floor 1 spike ratio ~0.5%");
+		Assert(MathF.Abs(GameLogic.CalculateSpikeFloorRatio(2) - 0.007f) < 0.0001f, "Floor 2 spike ratio ~0.7%");
+		Assert(MathF.Abs(GameLogic.CalculateSpikeFloorRatio(3) - 0.009f) < 0.0001f, "Floor 3 spike ratio ~0.9%");
+
+		// Floor 15 stays comfortably below 18% cap (not 97%)
+		float f15 = GameLogic.CalculateSpikeFloorRatio(15);
+		Assert(f15 > 0.10f && f15 < 0.18f, "Floor 15 spike ratio moderated below 18% cap");
+
+		// Deep floors strictly capped at 18%
+		AssertEqual(0.18f, GameLogic.CalculateSpikeFloorRatio(20), "Floor 20 capped at 18%");
+		AssertEqual(0.18f, GameLogic.CalculateSpikeFloorRatio(50), "Floor 50 capped at 18%");
+		AssertEqual(0.18f, GameLogic.CalculateSpikeFloorRatio(100), "Floor 100 capped at 18%");
+
+		// 1% Spike Chamber event overrides floor ratio to 60%
+		AssertEqual(0.60f, GameLogic.CalculateSpikeFloorRatio(1, GameLogic.FloorEventType.SpikeChamber), "SpikeChamber ratio 60%");
+		AssertEqual(0.60f, GameLogic.CalculateSpikeFloorRatio(15, GameLogic.FloorEventType.SpikeChamber), "SpikeChamber ratio 60% on floor 15");
+
+		// Exact 1% roll validation (only roll == 0 out of 0..99)
+		int spikeHits = 0;
+		for (int r = 0; r < 100; r++)
+		{
+			if (GameLogic.RollFloorEventWithSpike(4, 10, r) == GameLogic.FloorEventType.SpikeChamber)
+			{
+				spikeHits++;
+			}
+		}
+		AssertEqual(1, spikeHits, "SpikeChamber triggers on exact 1 out of 100 rolls (1%)");
+		AssertEqual(GameLogic.FloorEventType.PitchBlack, GameLogic.RollFloorEventWithSpike(3, 10, 42), "Non-spike roll preserves normal floor events");
+		AssertEqual("SPIKE CHAMBER (60%)", GameLogic.GetFloorEventTitle(GameLogic.FloorEventType.SpikeChamber), "SpikeChamber HUD title");
 	}
 }

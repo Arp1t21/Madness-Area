@@ -21,13 +21,26 @@ public partial class DeathScreen : CanvasLayer
 		_weapons = weapons;
 	}
 
+	private bool _introCanSkip = false;
+	private bool _introSkipped = false;
+
+	public override void _Input(InputEvent @event)
+	{
+		if (!_introCanSkip || _introSkipped) return;
+		if ((@event is InputEventKey k && k.Pressed && !k.Echo) ||
+			(@event is InputEventMouseButton mb && mb.Pressed))
+		{
+			_introSkipped = true;
+			GetViewport().SetInputAsHandled();
+		}
+	}
+
 	public override async void _Ready()
 	{
 		ProcessMode = ProcessModeEnum.Always;
 		Layer = 25;
 		SettingsManager.ApplyFontQualityFixes();
 
-		// 1. You Died screen (4 seconds)
 		var rootControl = new Control();
 		AddChild(rootControl);
 		rootControl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
@@ -49,28 +62,60 @@ public partial class DeathScreen : CanvasLayer
 		var titleFont = GameResourceCache.GetSilverFont();
 		var bigFont = GameResourceCache.GetForwardFont();
 
-		var youDiedLabel = new Label();
-		youDiedLabel.Text = "YOU DIED";
-		youDiedLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		youDiedLabel.VerticalAlignment = VerticalAlignment.Center;
+		var introBox = new VBoxContainer
+		{
+			Alignment = BoxContainer.AlignmentMode.Center,
+			Modulate = new Color(1, 1, 1, 0),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		introBox.AddThemeConstantOverride("separation", 10);
+		introBox.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		rootControl.AddChild(introBox);
+
+		var youDiedLabel = new Label
+		{
+			Text = "YOU DIED",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center
+		};
 		youDiedLabel.AddThemeFontOverride("font", bigFont);
 		youDiedLabel.AddThemeFontSizeOverride("font_size", 46);
 		youDiedLabel.AddThemeColorOverride("font_color", DungeonVisuals.CrimsonBright);
 		DungeonVisuals.ApplyPixelOutline(youDiedLabel, 4, new Color(0.08f, 0f, 0f, 1f), 3, 3);
-		youDiedLabel.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		youDiedLabel.Modulate = new Color(1, 1, 1, 0);
-		rootControl.AddChild(youDiedLabel);
+		introBox.AddChild(youDiedLabel);
 
-		var fadeIn = youDiedLabel.CreateTween();
-		fadeIn.TweenProperty(youDiedLabel, "modulate:a", 1.0f, 0.85f);
+		var subDiedLabel = new Label
+		{
+			Text = $"FALLEN ON FLOOR {_levelReached}   •   CLICK OR PRESS ANY KEY",
+			HorizontalAlignment = HorizontalAlignment.Center
+		};
+		if (titleFont != null) subDiedLabel.AddThemeFontOverride("font", titleFont);
+		subDiedLabel.AddThemeFontSizeOverride("font_size", 20);
+		subDiedLabel.AddThemeColorOverride("font_color", DungeonVisuals.MutedSlate);
+		DungeonVisuals.ApplyPixelOutline(subDiedLabel, 1);
+		introBox.AddChild(subDiedLabel);
 
-		// Wait 4 seconds using a pause-immune timer
-		await ToSignal(GetTree().CreateTimer(4.0, true), "timeout");
+		var fadeIn = introBox.CreateTween();
+		fadeIn.SetPauseMode(Tween.TweenPauseMode.Process);
+		fadeIn.TweenProperty(introBox, "modulate:a", 1.0f, 0.55f);
+
+		await ToSignal(GetTree().CreateTimer(0.65, true), "timeout");
+		if (!GodotObject.IsInstanceValid(this)) return;
+		_introCanSkip = true;
+
+		float waited = 0.0f;
+		while (waited < 2.0f && !_introSkipped && GodotObject.IsInstanceValid(this))
+		{
+			await ToSignal(GetTree().CreateTimer(0.1, true), "timeout");
+			waited += 0.1f;
+		}
+		if (!GodotObject.IsInstanceValid(this)) return;
+		_introCanSkip = false;
 
 		// 2. Transition to Stats screen
-		if (GodotObject.IsInstanceValid(youDiedLabel))
+		if (GodotObject.IsInstanceValid(introBox))
 		{
-			youDiedLabel.QueueFree();
+			introBox.QueueFree();
 		}
 		
 		blackOverlay.Color = new Color(0.025f, 0.02f, 0.03f, 0.90f);
@@ -172,6 +217,10 @@ public partial class DeathScreen : CanvasLayer
 		AddStatRow("GOLD COLLECTED", _coins.ToString(), DungeonVisuals.BrassGold, titleFont, statsVBox);
 		AddStatRow("ARSENAL", weaponsStr, DungeonVisuals.ArcaneCyan, titleFont, statsVBox);
 
+		var localPlayer = NetworkManager.GetLocalPlayer(GetTree());
+		int relicCount = localPlayer?.GetRelicIdsList().Count ?? 0;
+		AddStatRow("RELICS CLAIMED", relicCount.ToString(), DungeonVisuals.Emerald, titleFont, statsVBox);
+
 		// Back Button aligned to Stats Card
 		var backBtn = new Button();
 		backBtn.Text = "RETURN TO MAIN MENU";
@@ -184,6 +233,7 @@ public partial class DeathScreen : CanvasLayer
 		backBtn.Pressed += OnBackToMainMenuPressed;
 
 		MainMenu.ConnectButtonSounds(rootControl);
+		DungeonVisuals.AnimateModalOpen(statsCard);
 	}
 
 	private void AddStatRow(string labelText, string valueText, Color valueColor, Font font, Control parent)

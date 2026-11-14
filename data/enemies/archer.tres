@@ -1,4 +1,4 @@
-[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3 uid="uid://bwt2x0ctk4fem"]
 
 [ext_resource type="Script" uid="uid://bljefiu15ackd" path="res://scripts/resources/EnemyData.cs" id="1_arch"]
 

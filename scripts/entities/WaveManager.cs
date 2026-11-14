@@ -366,49 +366,99 @@ public partial class WaveManager : Node2D
 
 	private void ShowYouWon()
 	{
-		CanvasLayer canvas = new CanvasLayer();
-		var rootControl = new Control();
+		var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
+		int floorIdx = level != null ? level.CurrentLevelIndex : 1;
+		bool isBossFloor = GameLogic.IsMilestoneRelicFloor(floorIdx);
+
+		var canvas = new CanvasLayer { Layer = 8 };
+		var rootControl = new Control
+		{
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
 		rootControl.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		canvas.AddChild(rootControl);
 
-		Label label = new Label();
-		label.Text = "You killed wave!";
-		label.HorizontalAlignment = HorizontalAlignment.Center;
-		label.VerticalAlignment = VerticalAlignment.Center;
-		label.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.Center);
-		var font = GameResourceCache.GetSilverFont();
-		if (font != null) label.AddThemeFontOverride("font", font);
-		label.AddThemeFontSizeOverride("font_size", 24);
-		label.AddThemeColorOverride("font_color", DungeonVisuals.Emerald);
-		DungeonVisuals.ApplyPixelOutline(label, 2);
+		Vector2 viewSize = GetViewport().GetVisibleRect().Size;
+		const float bannerW = 360.0f;
+		const float bannerH = 54.0f;
+		var banner = new PanelContainer
+		{
+			CustomMinimumSize = new Vector2(bannerW, bannerH),
+			Size = new Vector2(bannerW, bannerH),
+			Position = new Vector2((viewSize.X - bannerW) * 0.5f, 68.0f),
+			PivotOffset = new Vector2(bannerW * 0.5f, bannerH * 0.5f),
+			Scale = new Vector2(0.88f, 0.88f),
+			Modulate = new Color(1f, 1f, 1f, 0f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
 
-		rootControl.AddChild(label);
+		Color accent = isBossFloor ? DungeonVisuals.BrassGold : DungeonVisuals.Emerald;
+		var style = DungeonVisuals.CreatePanelStyle(
+			new Color(0.05f, 0.065f, 0.095f, 0.94f),
+			accent,
+			2, 5, 8,
+			new Color(accent.R, accent.G, accent.B, 0.30f));
+		style.ContentMarginLeft = 16;
+		style.ContentMarginRight = 16;
+		style.ContentMarginTop = 6;
+		style.ContentMarginBottom = 6;
+		banner.AddThemeStyleboxOverride("panel", style);
+		DungeonVisuals.AttachFrameAccent(banner, accent, 4);
+
+		var vbox = new VBoxContainer
+		{
+			Alignment = BoxContainer.AlignmentMode.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		vbox.AddThemeConstantOverride("separation", 1);
+		banner.AddChild(vbox);
+
+		var font = GameResourceCache.GetSilverFont();
+
+		var titleLbl = new Label
+		{
+			Text = isBossFloor ? $"FLOOR {floorIdx} BOSS VANQUISHED!" : $"FLOOR {floorIdx} WAVE CLEARED!",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) titleLbl.AddThemeFontOverride("font", font);
+		titleLbl.AddThemeFontSizeOverride("font_size", 22);
+		titleLbl.AddThemeColorOverride("font_color", accent.Lightened(0.20f));
+		DungeonVisuals.ApplyPixelOutline(titleLbl, 2);
+		vbox.AddChild(titleLbl);
+
+		var subLbl = new Label
+		{
+			Text = isBossFloor
+				? "+1 SKILL POINT   •   CLAIM FREE RELIC AT ALTAR"
+				: "+1 SKILL POINT   •   ALTAR SHOP & STAIRS OPEN",
+			HorizontalAlignment = HorizontalAlignment.Center,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		if (font != null) subLbl.AddThemeFontOverride("font", font);
+		subLbl.AddThemeFontSizeOverride("font_size", 13);
+		subLbl.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
+		DungeonVisuals.ApplyPixelOutline(subLbl, 1);
+		vbox.AddChild(subLbl);
+
+		rootControl.AddChild(banner);
 		AddChild(canvas);
 
-		StartBlinking(label, 5.0f);
-
-		var timer = GetTree().CreateTimer(5.0f, processAlways: false);
-		timer.Timeout += () =>
+		var tw = banner.CreateTween();
+		tw.SetParallel(true);
+		tw.TweenProperty(banner, "scale", Vector2.One, 0.22f)
+			.SetTrans(Tween.TransitionType.Back).SetEase(Tween.EaseType.Out);
+		tw.TweenProperty(banner, "modulate:a", 1.0f, 0.16f)
+			.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+		tw.Chain().TweenInterval(2.6f);
+		tw.Chain().SetParallel(true);
+		tw.TweenProperty(banner, "position:y", 56.0f, 0.35f)
+			.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.In);
+		tw.TweenProperty(banner, "modulate:a", 0.0f, 0.35f)
+			.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.In);
+		tw.Chain().TweenCallback(Callable.From(() =>
 		{
-			if (GodotObject.IsInstanceValid(canvas))
-			{
-				canvas.QueueFree();
-			}
-		};
-	}
-
-	private async void StartBlinking(Label label, float duration)
-	{
-		float elapsed = 0;
-		while (elapsed < duration && IsInstanceValid(label))
-		{
-			label.Visible = true;
-			await ToSignal(GetTree().CreateTimer(0.6f, processAlways: false), "timeout");
-			if (!IsInstanceValid(label)) break;
-
-			label.Visible = false;
-			await ToSignal(GetTree().CreateTimer(0.4f, processAlways: false), "timeout");
-			elapsed += 1.0f;
-		}
+			if (GodotObject.IsInstanceValid(canvas)) canvas.QueueFree();
+		}));
 	}
 }

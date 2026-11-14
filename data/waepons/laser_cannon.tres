@@ -1,27 +1,23 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3 uid="uid://cci8wp46i7vm8"]
 
-[ext_resource type="Script" path="res://scripts/resources/WeaponData.cs" id="1_weapon"]
+[ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="1_weapon"]
 [ext_resource type="PackedScene" path="res://scene/weapons/laser_cannon.tscn" id="2_visual"]
-[ext_resource type="AudioStream" path="res://assets/sounds/buff_collecting.wav" id="3_sound"]
+[ext_resource type="AudioStream" uid="uid://dyefmqmaa7wjn" path="res://assets/sounds/buff_collecting.wav" id="3_sound"]
 
 [resource]
 script = ExtResource("1_weapon")
 WeaponName = "Prism Laser"
-Damage = 6
+Damage = 3
 AttackCooldown = 0.11
 AttackRange = 360.0
-KnockbackForce = 1.5
-Recoil = 0.0
+KnockbackForce = 0.1
 ManaCost = 11.0
+AttackSound = ExtResource("3_sound")
+WeaponVisualPrefab = ExtResource("2_visual")
 IsRanged = true
 BulletSpeed = 600.0
-BulletCount = 1
-Spread = 0.0
 IsPiercing = true
 MaxAmmo = 999
 ReloadTime = 0.5
 IsContinuousLaser = true
 SplashRadius = 28.0
-LaserColor = Color(0.24, 0.92, 1.0, 1.0)
-AttackSound = ExtResource("3_sound")
-WeaponVisualPrefab = ExtResource("2_visual")
