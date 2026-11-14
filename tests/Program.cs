@@ -48,6 +48,7 @@ internal static class Program
 		Test_MadnessUnlockAndScaling();
 		Test_FloorEventRolling();
 		Test_CoopScalingAndRevive();
+		Test_Enemy5FloorScalingAndLowHpDanger();
 
 		Console.WriteLine($"Unit tests finished: {_passed} passed, {_failed} failed.");
 		return _failed == 0 ? 0 : 1;
@@ -402,5 +403,38 @@ internal static class Program
 		AssertEqual(38.0f, GameLogic.CalculateCoopReviveHealth(75.0f), "Revive rounds cleanly");
 		AssertEqual(1.0f, GameLogic.CalculateCoopReviveHealth(0.0f), "Zero max HP clamps to 1");
 		AssertEqual(1.0f, GameLogic.CalculateCoopReviveHealth(1.0f), "Tiny max HP clamps to 1");
+	}
+
+	private static void Test_Enemy5FloorScalingAndLowHpDanger()
+	{
+		// Tier progression every 5 floors
+		AssertEqual(0, GameLogic.CalculateEnemyFloorTier(1), "Floor 1 tier 0");
+		AssertEqual(0, GameLogic.CalculateEnemyFloorTier(4), "Floor 4 tier 0");
+		AssertEqual(1, GameLogic.CalculateEnemyFloorTier(5), "Floor 5 tier 1");
+		AssertEqual(1, GameLogic.CalculateEnemyFloorTier(9), "Floor 9 tier 1");
+		AssertEqual(2, GameLogic.CalculateEnemyFloorTier(10), "Floor 10 tier 2");
+
+		// Base floors (1-4): 1.0x across stats
+		AssertEqual(1.0f, GameLogic.CalculateEnemyFloorHealthMultiplier(4), "Floor 4 base HP");
+		AssertEqual(1.0f, GameLogic.CalculateEnemyFloorDamageMultiplier(4), "Floor 4 base damage");
+		AssertEqual(1.0f, GameLogic.CalculateEnemyFloorSpeedMultiplier(4), "Floor 4 base speed");
+		AssertEqual(1.0f, GameLogic.CalculateEnemyFloorAttackSpeedMultiplier(4), "Floor 4 base attack speed");
+
+		// Tier 1 (floor 5) & Tier 2 (floor 10)
+		Assert(MathF.Abs(GameLogic.CalculateEnemyFloorHealthMultiplier(5) - 1.22f) < 0.001f, "Floor 5 HP +22%");
+		Assert(MathF.Abs(GameLogic.CalculateEnemyFloorDamageMultiplier(5) - 1.15f) < 0.001f, "Floor 5 damage +15%");
+		Assert(MathF.Abs(GameLogic.CalculateEnemyFloorSpeedMultiplier(5) - 1.06f) < 0.001f, "Floor 5 move speed +6%");
+		Assert(MathF.Abs(GameLogic.CalculateEnemyFloorAttackSpeedMultiplier(5) - 1.08f) < 0.001f, "Floor 5 attack speed +8%");
+		Assert(MathF.Abs(GameLogic.CalculateEnemyFloorHealthMultiplier(10) - 1.4884f) < 0.001f, "Floor 10 compounding HP");
+		Assert(GameLogic.CalculateEnemyFloorSpeedMultiplier(100) <= 1.421f, "Speed multiplier capped cleanly");
+		Assert(GameLogic.CalculateEnemyFloorAttackSpeedMultiplier(100) <= 1.501f, "Attack speed multiplier capped cleanly");
+
+		// Low-HP vignette danger factor
+		AssertEqual(0.0f, GameLogic.CalculateLowHealthDangerFactor(1.0f), "Full HP -> 0 danger");
+		AssertEqual(0.0f, GameLogic.CalculateLowHealthDangerFactor(0.55f), "55% HP threshold -> 0 danger");
+		float midDanger = GameLogic.CalculateLowHealthDangerFactor(0.335f);
+		Assert(midDanger > 0.45f && midDanger < 0.55f, "Mid low HP smoothstep ~0.5");
+		Assert(GameLogic.CalculateLowHealthDangerFactor(0.20f) > midDanger, "Lower HP -> higher danger");
+		AssertEqual(1.0f, GameLogic.CalculateLowHealthDangerFactor(0.10f), "<=12% HP -> max danger 1.0");
 	}
 }

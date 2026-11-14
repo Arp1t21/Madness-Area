@@ -16,6 +16,11 @@ public partial class Player : CharacterBody2D
 	private PointLight2D _torchLight;
 	private CanvasLayer _damageFlashLayer;
 	private ColorRect _damageFlashRect;
+	private ShaderMaterial _damageFlashMat;
+	private Tween _damageFlashTween;
+	private float _damageFlashAmount = 0.0f;
+	private float _damageLowHpSmoothed = 0.0f;
+	private float _damagePulseTime = 0.0f;
 	private Sprite2D _groundShadow;
 	private ShaderMaterial _hitFlashMat;
 	private Tween _hitFlashTween;
@@ -432,10 +437,11 @@ public partial class Player : CharacterBody2D
 			_damageFlashLayer.Layer = 50;
 			_damageFlashRect = new ColorRect();
 			_damageFlashRect.Color = Colors.White;
-			_damageFlashRect.Material = DungeonVisuals.GetVignetteMaterial(0.88f, 0.62f, new Color(0.82f, 0.04f, 0.06f, 1.0f));
+			_damageFlashMat = DungeonVisuals.GetDamageVignetteMaterial();
+			_damageFlashRect.Material = _damageFlashMat;
 			_damageFlashRect.MouseFilter = Control.MouseFilterEnum.Ignore;
 			_damageFlashRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-			_damageFlashRect.Modulate = new Color(1, 1, 1, 0);
+			_damageFlashRect.Visible = false;
 			_damageFlashLayer.AddChild(_damageFlashRect);
 			AddChild(_damageFlashLayer);
 		}
@@ -512,6 +518,7 @@ public partial class Player : CharacterBody2D
 		{
 			_noManaWarningCooldown -= (float)delta;
 		}
+		UpdateDamageVignetteVisuals((float)delta);
 
 		if (IsDead)
 		{
@@ -734,11 +741,55 @@ public partial class Player : CharacterBody2D
 
 	private void FlashRedScreen()
 	{
-		if (_damageFlashRect == null) return;
+		if (_damageFlashRect == null || _damageFlashMat == null) return;
 
-		var tween = _damageFlashRect.CreateTween();
-		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.58f, 0.06);
-		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.0f, 0.58);
+		float hpRatio = Mathf.Clamp(CurrentHealth / Mathf.Max(1.0f, MaxHealthEffective), 0.0f, 1.0f);
+		float danger = GameLogic.CalculateLowHealthDangerFactor(hpRatio);
+		float peakFlash = Mathf.Lerp(0.48f, 0.92f, danger);
+		float startVal = Mathf.Max(_damageFlashAmount, peakFlash * 0.35f);
+
+		_damageFlashTween?.Kill();
+		_damageFlashTween = CreateTween();
+		_damageFlashTween.TweenMethod(
+			Callable.From<float>(v => { _damageFlashAmount = v; }),
+			startVal,
+			peakFlash,
+			0.055f)
+			.SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
+		_damageFlashTween.TweenMethod(
+			Callable.From<float>(v => { _damageFlashAmount = v; }),
+			peakFlash,
+			0.0f,
+			0.55f)
+			.SetTrans(Tween.TransitionType.Cubic).SetEase(Tween.EaseType.Out);
+	}
+
+	private void UpdateDamageVignetteVisuals(float dt)
+	{
+		if (!IsLocalPlayer || _damageFlashRect == null || _damageFlashMat == null) return;
+
+		if (IsDead)
+		{
+			_damageFlashTween?.Kill();
+			_damageFlashAmount = Mathf.MoveToward(_damageFlashAmount, 0.0f, dt * 4.0f);
+			_damageLowHpSmoothed = Mathf.MoveToward(_damageLowHpSmoothed, 0.0f, dt * 4.0f);
+		}
+		else
+		{
+			float hpRatio = Mathf.Clamp(CurrentHealth / Mathf.Max(1.0f, MaxHealthEffective), 0.0f, 1.0f);
+			float targetDanger = GameLogic.CalculateLowHealthDangerFactor(hpRatio);
+			_damageLowHpSmoothed = Mathf.Lerp(_damageLowHpSmoothed, targetDanger, 1.0f - Mathf.Exp(-7.0f * dt));
+		}
+
+		_damagePulseTime += dt;
+		bool visible = _damageFlashAmount > 0.002f || _damageLowHpSmoothed > 0.002f;
+		_damageFlashRect.Visible = visible;
+		if (visible)
+		{
+			_damageFlashMat.SetShaderParameter("flash_amount", _damageFlashAmount);
+			_damageFlashMat.SetShaderParameter("low_hp_amount", _damageLowHpSmoothed);
+			_damageFlashMat.SetShaderParameter("pulse_time", _damagePulseTime);
+		}
 	}
 
 	private void TriggerSpriteHitFlash()

@@ -28,6 +28,7 @@ public static class DungeonVisuals
 	private static Texture2D _softOrbTex;
 	private static Shader _hitFlashShader;
 	private static Shader _vignetteShader;
+	private static Shader _damageVignetteShader;
 
 	public static StyleBoxFlat CreatePanelStyle(
 		Color bg,
@@ -349,6 +350,48 @@ void fragment() {
 		mat.SetShaderParameter("intensity", intensity);
 		mat.SetShaderParameter("softness", softness);
 		mat.SetShaderParameter("vignette_color", color ?? new Color(0.01f, 0.01f, 0.025f, 1.0f));
+		return mat;
+	}
+
+	public static ShaderMaterial GetDamageVignetteMaterial()
+	{
+		if (_damageVignetteShader == null)
+		{
+			_damageVignetteShader = new Shader
+			{
+				Code = @"shader_type canvas_item;
+uniform float flash_amount : hint_range(0.0, 1.0) = 0.0;
+uniform float low_hp_amount : hint_range(0.0, 1.0) = 0.0;
+uniform float pulse_time = 0.0;
+
+void fragment() {
+	vec2 p = (UV - vec2(0.5)) * 2.0;
+	float radial = length(p * vec2(0.88, 1.0));
+	float boxDist = max(abs(p.x) * 0.92, abs(p.y));
+	float edgeDist = mix(radial, boxDist, 0.45);
+
+	float outerMask = smoothstep(0.42, 1.38, edgeDist);
+	float innerRim = smoothstep(0.75, 1.45, edgeDist);
+
+	float heartbeat = 0.5 + 0.5 * sin(pulse_time * 3.6);
+	float lowHpAlpha = low_hp_amount * (0.28 + 0.16 * heartbeat) * outerMask;
+	float hitAlpha = flash_amount * (0.42 * outerMask + 0.24 * innerRim);
+
+	float totalAlpha = clamp(lowHpAlpha + hitAlpha * (1.0 - lowHpAlpha * 0.35), 0.0, 0.86);
+
+	vec3 innerCrimson = vec3(0.78, 0.09, 0.11);
+	vec3 outerDarkBlood = vec3(0.36, 0.02, 0.04);
+	vec3 col = mix(innerCrimson, outerDarkBlood, innerRim);
+	col = mix(col, vec3(0.88, 0.05, 0.07), low_hp_amount * 0.35 * (1.0 - innerRim * 0.5));
+
+	COLOR = vec4(col, totalAlpha);
+}"
+			};
+		}
+		var mat = new ShaderMaterial { Shader = _damageVignetteShader };
+		mat.SetShaderParameter("flash_amount", 0.0f);
+		mat.SetShaderParameter("low_hp_amount", 0.0f);
+		mat.SetShaderParameter("pulse_time", 0.0f);
 		return mat;
 	}
 

@@ -59,7 +59,7 @@ public partial class BigDemon : Enemy
 		if (IsBoss && _specialDashTimer > 0.0f)
 		{
 			_specialDashTimer -= dt;
-			Velocity = _telegraphDir * Config.Speed * 2.9f;
+			Velocity = _telegraphDir * Config.Speed * 2.9f * FloorSpeedMultiplier;
 			MoveAndSlide();
 			if (!_specialDashDealtHit)
 			{

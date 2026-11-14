@@ -374,4 +374,54 @@ public static class GameLogic
 		if (maxHealth <= 0.0f) return 1.0f;
 		return Math.Max(1.0f, MathF.Round(maxHealth * 0.50f));
 	}
+
+	/// <summary>
+	/// Returns the 5-floor enemy progression tier (0 on floors 1-4, +1 every 5 floors: 5, 10, 15...).
+	/// </summary>
+	public static int CalculateEnemyFloorTier(int levelIndex) => Math.Max(0, levelIndex / 5);
+
+	/// <summary>
+	/// Scales enemy max HP slightly every 5 floors (+22% compounding per tier).
+	/// </summary>
+	public static float CalculateEnemyFloorHealthMultiplier(int levelIndex)
+	{
+		return MathF.Pow(1.22f, CalculateEnemyFloorTier(levelIndex));
+	}
+
+	/// <summary>
+	/// Scales enemy damage slightly every 5 floors (+15% compounding per tier).
+	/// </summary>
+	public static float CalculateEnemyFloorDamageMultiplier(int levelIndex)
+	{
+		return MathF.Pow(1.15f, CalculateEnemyFloorTier(levelIndex));
+	}
+
+	/// <summary>
+	/// Scales enemy movement speed slightly every 5 floors (+6% per tier, capped at +42%).
+	/// </summary>
+	public static float CalculateEnemyFloorSpeedMultiplier(int levelIndex)
+	{
+		int tier = CalculateEnemyFloorTier(levelIndex);
+		return 1.0f + MathF.Min(0.42f, tier * 0.06f);
+	}
+
+	/// <summary>
+	/// Scales enemy attack/windup speed slightly every 5 floors (+8% per tier, capped at +50%).
+	/// </summary>
+	public static float CalculateEnemyFloorAttackSpeedMultiplier(int levelIndex)
+	{
+		int tier = CalculateEnemyFloorTier(levelIndex);
+		return 1.0f + MathF.Min(0.50f, tier * 0.08f);
+	}
+
+	/// <summary>
+	/// Returns smooth 0..1 danger factor for the player's low-HP blood vignette (begins below 55% HP).
+	/// </summary>
+	public static float CalculateLowHealthDangerFactor(float healthRatio)
+	{
+		if (healthRatio >= 0.55f) return 0.0f;
+		if (healthRatio <= 0.12f) return 1.0f;
+		float t = Math.Clamp((0.55f - healthRatio) / (0.55f - 0.12f), 0.0f, 1.0f);
+		return t * t * (3.0f - 2.0f * t);
+	}
 }

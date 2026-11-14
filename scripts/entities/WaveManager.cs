@@ -69,7 +69,9 @@ public partial class WaveManager : Node2D
 		float spawnDelay = Mathf.Clamp(0.45f + w * 0.06f, 0.45f, 1.05f);
 		GD.Print($"Wave {_currentWave} started! Enemies: {enemyCount} (BossWave: {isBossWave}, Event: {evt}, SpawnDelay: {spawnDelay:0.00}s)");
 
-		int maxElites = (_currentWave >= 2) ? (_currentWave >= 10 ? 3 : 2) : 0;
+		int floorTier = GameLogic.CalculateEnemyFloorTier(_currentWave);
+		int maxElites = (_currentWave >= 2) ? Mathf.Min(6, 2 + floorTier) : 0;
+		float eliteChance = Mathf.Min(0.45f, 0.22f + floorTier * 0.04f);
 		int elitesSpawned = 0;
 
 		for (int i = 0; i < enemyCount; i++)
@@ -81,7 +83,7 @@ public partial class WaveManager : Node2D
 			bool forceImp = !spawnAsBoss && extraImps > 0 && i >= (enemyCount - extraImps - (isBossWave ? 1 : 0));
 			bool forceAmbushRanged = !spawnAsBoss && !forceImp && evt == GameLogic.FloorEventType.MarksmanAmbush && (i == 0 || i == 2);
 			bool makeElite = !spawnAsBoss && _currentWave >= 2 && elitesSpawned < maxElites &&
-							 ((i == 0) || GD.Randf() < 0.22f);
+							 ((i == 0) || GD.Randf() < eliteChance);
 			if (makeElite) elitesSpawned++;
 
 			_enemiesToSpawn = Mathf.Max(0, _enemiesToSpawn - 1);

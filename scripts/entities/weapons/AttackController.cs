@@ -163,6 +163,10 @@ public partial class AttackController : Node2D
 		{
 			baseCd /= Mathf.Max(1.0f, _player.GetMadnessAttackRateMultiplier());
 		}
+		else if (_ownerNode is Enemy enemy && GodotObject.IsInstanceValid(enemy))
+		{
+			baseCd /= Mathf.Max(1.0f, enemy.FloorAttackSpeedMultiplier);
+		}
 		return Mathf.Max(0.03f, baseCd);
 	}
 

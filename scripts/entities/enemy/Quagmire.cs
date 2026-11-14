@@ -5,7 +5,7 @@ using Godot;
 // - бьет в ближнем бою, но с умеренным отталкиванием (Knockback 2.5).
 public partial class Quagmire : Enemy
 {
-	[Export] public float SlowAuraRadius = 19.0f; // в пикселях 1x-мира (~1.2 тайла радиус)
+	[Export] public float SlowAuraRadius = 38.0f; // в пикселях 1x-мира (~2.4 тайла радиус)
 	[Export] public float SlowStrength = 0.25f; // -25% скорости игрока в ауре
 	[Export] public float SlowRefreshInterval = 0.3f; // как часто обновляем ауру
 
@@ -123,7 +123,7 @@ public partial class Quagmire : Enemy
 		}
 	}
 
-	public float GetEffectiveAuraRadius() => IsBoss ? SlowAuraRadius * 1.25f : SlowAuraRadius;
+	public float GetEffectiveAuraRadius() => IsBoss ? SlowAuraRadius * 1.35f : SlowAuraRadius;
 
 	private void UpdateSlowAura(float dt)
 	{
@@ -159,7 +159,7 @@ public partial class Quagmire : Enemy
 					ApplyEliteOnHitToPlayer(target);
 				}
 			}
-			TriggerStop(Config.StopDuration);
+			TriggerStop(Config.StopDuration / Mathf.Max(0.1f, FloorAttackSpeedMultiplier));
 		}
 	}
 

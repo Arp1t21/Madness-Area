@@ -71,7 +71,11 @@ public partial class Enemy : CharacterBody2D
 	protected float _flankAngle = 0.0f;
 	protected float _flankSign = 1.0f;
 
+	public const float InfernoAuraRadius = 46.0f;
+
 	public float DamageMultiplier { get; protected set; } = 1.0f;
+	public float FloorSpeedMultiplier { get; protected set; } = 1.0f;
+	public float FloorAttackSpeedMultiplier { get; protected set; } = 1.0f;
 
 	protected virtual Color WarningLabelColor => new Color(1.0f, 0.15f, 0.15f);
 
@@ -137,14 +141,15 @@ public partial class Enemy : CharacterBody2D
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
-		// ХП мобов увеличивается на 15% после каждого побежденного босса (каждые 5 этажей)
-		int bossesDefeated = Mathf.Max(0, (levelIndex - 1) / 5);
-		float healthMultiplier = Mathf.Pow(1.15f, bossesDefeated);
+		// Каждые 5 этажей мобы становятся чуть сильнее (ХП, урон, скорость бега и скорость атак)
+		float healthMultiplier = GameLogic.CalculateEnemyFloorHealthMultiplier(levelIndex);
 		if (IsCoopSession && NetworkManager.Instance != null)
 		{
 			healthMultiplier *= GameLogic.CalculateCoopEnemyHealthMultiplier(false, NetworkManager.Instance.CoopPlayerCount);
 		}
-		DamageMultiplier = 1.0f + bossesDefeated * 0.15f;
+		DamageMultiplier = GameLogic.CalculateEnemyFloorDamageMultiplier(levelIndex);
+		FloorSpeedMultiplier = GameLogic.CalculateEnemyFloorSpeedMultiplier(levelIndex);
+		FloorAttackSpeedMultiplier = GameLogic.CalculateEnemyFloorAttackSpeedMultiplier(levelIndex);
 
 		if (Config != null)
 		{
@@ -215,8 +220,8 @@ public partial class Enemy : CharacterBody2D
 
 		if (_bossAura == null)
 		{
-			// Keep boss rune ring proportional to sprite scale rather than compounding Scale (1.75x)
-			float desiredWorldRadius = (this is BigDemon || this is Quagmire) ? 15.0f : 11.5f;
+			// Keep boss rune ring clearly framing the scaled boss sprite
+			float desiredWorldRadius = (this is BigDemon || this is Quagmire) ? 30.0f : 22.0f;
 			float localRadius = desiredWorldRadius / Mathf.Max(0.1f, Scale.X);
 			_bossAura = DungeonVisuals.CreateRuneAura(localRadius, new Color(1.0f, 0.28f, 0.20f, 0.78f), 8, -1);
 			_bossAura.Position = new Vector2(0, -2);
@@ -258,7 +263,9 @@ public partial class Enemy : CharacterBody2D
 
 		if (_eliteAura == null)
 		{
-			float desiredWorldRadius = (this is BigDemon || this is Quagmire) ? 13.5f : 9.8f;
+			float desiredWorldRadius = mod == EliteModifier.Inferno
+				? InfernoAuraRadius
+				: ((this is BigDemon || this is Quagmire) ? 24.0f : 18.0f);
 			float localRadius = desiredWorldRadius / Mathf.Max(0.1f, Scale.X);
 			_eliteAura = DungeonVisuals.CreateRuneAura(localRadius, auraCol, 6, -1);
 			_eliteAura.Position = new Vector2(0, -1);
@@ -314,7 +321,7 @@ public partial class Enemy : CharacterBody2D
 
 	protected float GetEnemySpeedMultiplier()
 	{
-		float mult = 1.0f;
+		float mult = FloorSpeedMultiplier;
 		if (_statusManager != null && _statusManager.HasEffect(StatusEffectType.Slow))
 		{
 			float slow = Mathf.Clamp(_statusManager.GetEffectStrength(StatusEffectType.Slow), 0.0f, 0.75f);
@@ -406,7 +413,7 @@ public partial class Enemy : CharacterBody2D
 				_infernoAuraTimer = 0.65f;
 				foreach (Player target in NetworkManager.GetAlivePlayers(GetTree()))
 				{
-					if (GlobalPosition.DistanceTo(target.GlobalPosition) <= 30.0f)
+					if (GlobalPosition.DistanceTo(target.GlobalPosition) <= InfernoAuraRadius)
 					{
 						target.ApplyStatusEffect(StatusEffectType.Burn, 1.5f, 2.0f);
 					}
@@ -825,7 +832,8 @@ public partial class Enemy : CharacterBody2D
 			}
 		}
 
-		if (_preAttackTimer >= Config.PreAttackDelay)
+		float effectivePreDelay = Config.PreAttackDelay / Mathf.Max(0.1f, FloorAttackSpeedMultiplier);
+		if (_preAttackTimer >= effectivePreDelay)
 		{
 			FinishAttack();
 		}
@@ -850,7 +858,7 @@ public partial class Enemy : CharacterBody2D
 
 		if (Config != null)
 		{
-			TriggerStop(Config.StopDuration);
+			TriggerStop(Config.StopDuration / Mathf.Max(0.1f, FloorAttackSpeedMultiplier));
 		}
 	}
 
@@ -1218,7 +1226,7 @@ public partial class Enemy : CharacterBody2D
 
 	private void SpawnVolatileDeathBlast(Vector2 deathPos, Node parentNode)
 	{
-		var ring = new VolatileDeathHazard(deathPos, 32.0f, 0.55f, Mathf.Max(5.0f, Config.Damage * DamageMultiplier * 0.75f));
+		var ring = new VolatileDeathHazard(deathPos, 42.0f, 0.55f, Mathf.Max(5.0f, Config.Damage * DamageMultiplier * 0.75f));
 		parentNode.AddChild(ring);
 	}
 
