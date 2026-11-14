@@ -13,6 +13,10 @@ public partial class Enemy : CharacterBody2D
 	public string DisplayName => IsBoss ? $"BOSS: {Config?.EnemyName ?? "Warlord"}" : (Config?.EnemyName ?? "Enemy");
 
 	protected AnimatedSprite2D _sprite;
+	protected Sprite2D _groundShadow;
+	protected ShaderMaterial _hitFlashMat;
+	protected Tween _hitFlashTween;
+	protected DungeonRuneAura _bossAura;
 	protected Player _player;
 	protected AttackController _attackController;
 	protected Label _warningLabel;
@@ -25,6 +29,7 @@ public partial class Enemy : CharacterBody2D
 
 	protected List<Vector2> _navigationPath = new List<Vector2>();
 	protected float _pathUpdateTimer = 0.0f;
+	private Level _cachedLevel;
 
 	private static int s_flankCounter = 0;
 	protected float _flankAngle = 0.0f;
@@ -73,7 +78,15 @@ public partial class Enemy : CharacterBody2D
 		_flankAngle = (flankIdx * 2.3999632f) % Mathf.Tau;
 		_flankSign = (flankIdx % 2 == 0) ? 1.0f : -1.0f;
 
+		ZIndex = 2;
 		_sprite = GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
+		if (_sprite != null)
+		{
+			_hitFlashMat = DungeonVisuals.CreateHitFlashMaterial();
+			_sprite.Material = _hitFlashMat;
+		}
+		float shadowScaleMul = (this is BigDemon || this is Quagmire) ? 0.86f : 0.56f;
+		_groundShadow = DungeonVisuals.AttachGroundShadow(this, new Vector2(0, -1), new Vector2(shadowScaleMul, shadowScaleMul * 0.86f), 0.55f);
 		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
 
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
@@ -137,7 +150,15 @@ public partial class Enemy : CharacterBody2D
 
 		if (_sprite != null)
 		{
-			_sprite.SelfModulate = new Color(1.15f, 0.88f, 0.75f, 1.0f);
+			_sprite.SelfModulate = new Color(1.18f, 0.86f, 0.74f, 1.0f);
+		}
+
+		if (_bossAura == null)
+		{
+			float auraRadius = (this is BigDemon || this is Quagmire) ? 20.0f : 14.5f;
+			_bossAura = DungeonVisuals.CreateRuneAura(auraRadius, new Color(1.0f, 0.28f, 0.20f, 0.78f), 8, -1);
+			_bossAura.Position = new Vector2(0, -2);
+			AddChild(_bossAura);
 		}
 	}
 
@@ -149,7 +170,7 @@ public partial class Enemy : CharacterBody2D
 		_warningLabel.Text = "!";
 		_warningLabel.AddThemeColorOverride("font_color", color);
 
-		var font = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+		var font = GameResourceCache.GetForwardFont();
 		if (font != null)
 		{
 			_warningLabel.AddThemeFontOverride("font", font);
@@ -175,8 +196,11 @@ public partial class Enemy : CharacterBody2D
 		if (_pathUpdateTimer <= 0)
 		{
 			_pathUpdateTimer = 0.25f + (float)GD.RandRange(-0.05f, 0.05f);
-			var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-			if (level != null)
+			if (!GodotObject.IsInstanceValid(_cachedLevel))
+			{
+				_cachedLevel = GetTree().GetFirstNodeInGroup("Level") as Level;
+			}
+			if (_cachedLevel != null)
 			{
 				Vector2 navGoal = _player.GlobalPosition;
 				// Если моб далеко, он строит маршрут к своей точке окружения вокруг игрока, а не идет в одну линию со всеми
@@ -184,9 +208,9 @@ public partial class Enemy : CharacterBody2D
 				{
 					float flankRadius = Mathf.Clamp((distToPlayer - 35.0f * World.Scale) * 0.65f, 42.0f * World.Scale, 125.0f * World.Scale);
 					Vector2 desiredFlank = _player.GlobalPosition + new Vector2(Mathf.Cos(_flankAngle), Mathf.Sin(_flankAngle)) * flankRadius;
-					navGoal = level.GetWalkableFlankTarget(_player.GlobalPosition, desiredFlank);
+					navGoal = _cachedLevel.GetWalkableFlankTarget(_player.GlobalPosition, desiredFlank);
 				}
-				_navigationPath = level.GetPathToPlayer(GlobalPosition, navGoal) ?? new List<Vector2>();
+				_navigationPath = _cachedLevel.GetPathToPlayer(GlobalPosition, navGoal) ?? new List<Vector2>();
 			}
 		}
 
@@ -268,6 +292,154 @@ public partial class Enemy : CharacterBody2D
 			separation /= neighborsCount;
 		}
 		return separation;
+	}
+
+	protected PointLight2D SetupGlowLight(
+		string name,
+		Vector2 position,
+		Color lightColor,
+		float energy,
+		Color innerColor,
+		Color midColor,
+		float midOffset,
+		int textureSize)
+	{
+		var tex = GameResourceCache.GetRadialGlowTexture(innerColor, midColor, midOffset, textureSize);
+		return GameResourceCache.CreateGlowLight(this, name, position, lightColor, energy, tex, false);
+	}
+
+	/// <summary>
+	/// Processes inactive, preparing, and post-attack stop states.
+	/// Returns true when the enemy is free to steer and trigger a new attack this frame.
+	/// </summary>
+	protected bool StepEnemyActionState(double delta)
+	{
+		if (_player == null || !GodotObject.IsInstanceValid(_player) || Config == null || CurrentHealth <= 0)
+		{
+			Velocity = Velocity.Lerp(Vector2.Zero, 0.1f);
+			return false;
+		}
+
+		if (_cancelAttackCooldown > 0)
+		{
+			_cancelAttackCooldown -= (float)delta;
+		}
+
+		if (_isPreparingAttack)
+		{
+			HandlePreparingState(delta);
+			Velocity = Velocity.Lerp(Vector2.Zero, 0.1f);
+			return false;
+		}
+
+		if (_isStopping)
+		{
+			Velocity = Velocity.Lerp(Vector2.Zero, 0.1f);
+			return false;
+		}
+
+		return true;
+	}
+
+	protected void RunRangedKitingAI(
+		double delta,
+		float fallbackAttackRange,
+		float approachDistanceRatio,
+		float retreatDistance,
+		float approachWaypointReach,
+		float retreatSpeedFactor,
+		float strafeSpeedFactor)
+	{
+		float baseAttackRange = Config.AttackRange > 0 ? Config.AttackRange : fallbackAttackRange;
+		float engageDist = baseAttackRange * approachDistanceRatio * World.Scale;
+		float retreatDist = retreatDistance * World.Scale;
+		float triggerRange = baseAttackRange * World.Scale;
+		float dist = GlobalPosition.DistanceTo(_player.GlobalPosition);
+
+		Vector2 direction;
+		float currentSpeed = Config.Speed * World.Scale;
+
+		if (dist > engageDist)
+		{
+			direction = UpdateNavigationDirection(delta, approachWaypointReach * World.Scale);
+		}
+		else if (dist < retreatDist)
+		{
+			direction = (GlobalPosition - _player.GlobalPosition).Normalized();
+			currentSpeed = Config.Speed * retreatSpeedFactor * World.Scale;
+		}
+		else
+		{
+			direction = GetStrafeDirectionAroundPlayer();
+			currentSpeed = Config.Speed * strafeSpeedFactor * World.Scale;
+		}
+
+		Vector2 separation = ComputeEnemySeparation(90.0f);
+		if (separation != Vector2.Zero)
+		{
+			direction = (direction + separation * 0.75f).Normalized();
+		}
+
+		if (direction != Vector2.Zero)
+		{
+			direction = ApplyAntiStuck(direction, delta, () => _navigationPath?.Clear());
+		}
+
+		Velocity = Velocity.Lerp(direction * currentSpeed, 0.1f);
+
+		if (_sprite != null)
+		{
+			_sprite.Play(Velocity.Length() > 5.0f ? WalkAnimationName : IdleAnimationName);
+			_sprite.FlipH = _player.GlobalPosition.X < GlobalPosition.X;
+		}
+
+		if (_cancelAttackCooldown <= 0 && _attackController != null && _attackController.CanAttack())
+		{
+			if (dist <= triggerRange)
+			{
+				StartAttackPreparation();
+			}
+		}
+	}
+
+	protected void UpdateMeleeChaseVelocity(
+		double delta,
+		float waypointReach,
+		float separationRadius,
+		float speedMultiplier,
+		float velocityLerp,
+		float playerSeparationRadius = 0.0f)
+	{
+		Vector2 direction = UpdateNavigationDirection(delta, waypointReach);
+		direction = ApplyAntiStuck(direction, delta, () => _navigationPath?.Clear());
+
+		Vector2 separation = ComputeEnemySeparation(separationRadius);
+		if (separation != Vector2.Zero)
+		{
+			direction = (direction + separation * 0.65f).Normalized();
+		}
+
+		if (playerSeparationRadius > 0.0f)
+		{
+			float playerDist = GlobalPosition.DistanceTo(_player.GlobalPosition);
+			if (playerDist < playerSeparationRadius && playerDist > 0.1f)
+			{
+				Vector2 pushFromPlayer = (GlobalPosition - _player.GlobalPosition).Normalized() * (playerSeparationRadius - playerDist);
+				direction = (direction + pushFromPlayer * 0.35f).Normalized();
+			}
+		}
+
+		Vector2 targetVelocity = direction * Config.Speed * speedMultiplier * World.Scale;
+		Velocity = Velocity.Lerp(targetVelocity, velocityLerp);
+
+		if (_sprite != null)
+		{
+			if (Mathf.Abs(Velocity.X) > 5.0f)
+			{
+				_sprite.FlipH = Velocity.X < 0;
+			}
+			_sprite.Play(WalkAnimationName);
+		}
 	}
 
 	protected void StartAttackPreparation()
@@ -353,11 +525,14 @@ public partial class Enemy : CharacterBody2D
 
 		if (area.IsInGroup("PlayerWeapon"))
 		{
-			var controller = area.GetParent()?.GetParent() as AttackController;
+			var controller = GameResourceCache.FindAncestor<AttackController>(area);
 			if (controller != null && controller.CurrentWeapon != null)
 			{
-				var player = GetTree().GetFirstNodeInGroup("Player") as Player;
-				Vector2 source = player != null ? player.GlobalPosition : GlobalPosition;
+				if (!GodotObject.IsInstanceValid(_player))
+				{
+					_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+				}
+				Vector2 source = _player != null ? _player.GlobalPosition : GlobalPosition;
 
 				float dist = GlobalPosition.DistanceTo(source);
 				float weaponRange = controller.CurrentWeapon.AttackRange * World.Scale;
@@ -366,7 +541,7 @@ public partial class Enemy : CharacterBody2D
 				{
 					if (controller.CanHitEnemy(GetInstanceId()))
 					{
-						float dmg = controller.CurrentWeapon.Damage * (player != null ? player.WeaponDamageMultiplier : 1.0f);
+						float dmg = controller.CurrentWeapon.Damage * (_player != null ? _player.WeaponDamageMultiplier : 1.0f);
 						TakeDamage(dmg, source, controller.CurrentWeapon.KnockbackForce, true);
 					}
 				}
@@ -377,8 +552,11 @@ public partial class Enemy : CharacterBody2D
 	// Метод для получения позиции игрока
 	public Vector2 GetPlayerPosition()
 	{
-		var player = GetTree().GetFirstNodeInGroup("Player") as Node2D;
-		return player != null ? player.GlobalPosition : GlobalPosition;
+		if (!GodotObject.IsInstanceValid(_player))
+		{
+			_player = GetTree().GetFirstNodeInGroup("Player") as Player;
+		}
+		return _player != null ? _player.GlobalPosition : GlobalPosition;
 	}
 
 	// --- Анти-застревание ---
@@ -435,6 +613,20 @@ public partial class Enemy : CharacterBody2D
 		CurrentHealth -= amount;
 
 		FlashRed();
+		if (GetParent() != null)
+		{
+			Vector2 hitDir = knockbackSource != default ? (GlobalPosition - knockbackSource) : Vector2.Up;
+			Color sparkCol = Config?.FlashColor ?? new Color(1.0f, 0.78f, 0.32f);
+			DungeonVisuals.SpawnImpactSparks(
+				GetParent(),
+				GlobalPosition + new Vector2(0, -10.0f * Scale.Y),
+				hitDir,
+				sparkCol,
+				isMelee ? 9 : 6,
+				140.0f,
+				68.0f,
+				IsBoss ? 2.1f : 1.5f);
+		}
 		float effectiveKnockback = IsBoss ? knockbackForce * 0.35f : knockbackForce;
 		ApplyKnockback(knockbackSource, effectiveKnockback);
 		SpawnDamageNumber(amount);
@@ -450,6 +642,20 @@ public partial class Enemy : CharacterBody2D
 		if (_sprite == null) return;
 		Color flashColor = Config?.FlashColor ?? new Color(1, 0, 0);
 		_sprite.Modulate = flashColor;
+
+		if (_hitFlashMat != null)
+		{
+			_hitFlashTween?.Kill();
+			_hitFlashMat.SetShaderParameter("flash_color", new Color(1.0f, 0.95f, 0.88f, 1.0f));
+			_hitFlashMat.SetShaderParameter("flash_amount", 0.92f);
+			_hitFlashTween = CreateTween();
+			_hitFlashTween.TweenMethod(
+				Callable.From<float>(v => { if (GodotObject.IsInstanceValid(_hitFlashMat)) _hitFlashMat.SetShaderParameter("flash_amount", v); }),
+				0.92f,
+				0.0f,
+				0.12f);
+		}
+
 		var timer = GetTree().CreateTimer(0.1f, processAlways: false);
 		timer.Timeout += () =>
 		{
@@ -551,26 +757,42 @@ public partial class Enemy : CharacterBody2D
 			hitBox.SetDeferred("monitorable", false);
 		}
 
+		if (_bossAura != null && GodotObject.IsInstanceValid(_bossAura))
+		{
+			_bossAura.QueueFree();
+		}
+
 		var dust = new CpuParticles2D();
 		dust.OneShot = true;
 		dust.Emitting = true;
 		dust.Explosiveness = 1.0f;
-		dust.Amount = IsBoss ? 45 : 22;
-		dust.Lifetime = 0.5f;
+		dust.Amount = IsBoss ? 48 : 24;
+		dust.Lifetime = IsBoss ? 0.65f : 0.5f;
 		dust.LocalCoords = false;
+		dust.Texture = DungeonVisuals.GetPixelSquareTexture();
+		dust.Material = GameResourceCache.GetUnshadedMaterial();
 		dust.Spread = 180.0f;
-		dust.Gravity = new Vector2(0, 260);
+		dust.Gravity = new Vector2(0, 220);
 		dust.InitialVelocityMin = 55;
-		dust.InitialVelocityMax = IsBoss ? 220 : 140;
+		dust.InitialVelocityMax = IsBoss ? 240 : 145;
 		dust.ScaleAmountMin = 1.2f;
-		dust.ScaleAmountMax = IsBoss ? 4.0f : 2.6f;
+		dust.ScaleAmountMax = IsBoss ? 3.6f : 2.4f;
 		var gradient = new Gradient();
-		gradient.Colors = new Color[]
-		{
-			new Color(0.75f, 0.2f, 0.15f, 0.9f),
-			new Color(0.35f, 0.1f, 0.08f, 0.0f)
-		};
-		gradient.Offsets = new float[] { 0.0f, 1.0f };
+		gradient.Colors = IsBoss
+			? new Color[]
+			{
+				new Color(1.0f, 0.72f, 0.25f, 0.95f),
+				new Color(0.82f, 0.16f, 0.12f, 0.85f),
+				new Color(0.25f, 0.06f, 0.06f, 0.0f)
+			}
+			: new Color[]
+			{
+				new Color(0.95f, 0.35f, 0.22f, 0.92f),
+				new Color(0.35f, 0.1f, 0.08f, 0.0f)
+			};
+		gradient.Offsets = IsBoss
+			? new float[] { 0.0f, 0.45f, 1.0f }
+			: new float[] { 0.0f, 1.0f };
 		dust.ColorRamp = gradient;
 		AddChild(dust);
 

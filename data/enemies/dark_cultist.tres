@@ -12,4 +12,5 @@ AttackRange = 145.0
 StopDuration = 0.25
 CoinDropChance = 0.35
 ManaCrystalDropChance = 0.65
+IsRanged = true
 metadata/_custom_type_script = "uid://bljefiu15ackd"

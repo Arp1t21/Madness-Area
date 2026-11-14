@@ -15,17 +15,40 @@ public partial class PauseMenu : CanvasLayer
 		rootControl.Size = GetViewport().GetVisibleRect().Size;
 
 		var bgOverlay = new ColorRect();
-		bgOverlay.Color = new Color(0.0f, 0.0f, 0.0f, 0.72f);
+		bgOverlay.Color = new Color(0.02f, 0.022f, 0.035f, 0.78f);
 		rootControl.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
+		var vig = new ColorRect
+		{
+			Material = DungeonVisuals.GetVignetteMaterial(0.8f, 0.58f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		vig.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		rootControl.AddChild(vig);
+
+		var center = new CenterContainer();
+		center.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		rootControl.AddChild(center);
+
+		var frame = new PanelContainer
+		{
+			CustomMinimumSize = new Vector2(400, 360)
+		};
+		frame.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 2, 6, 12));
+		center.AddChild(frame);
+
 		var margin = new MarginContainer();
-		margin.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		rootControl.AddChild(margin);
+		margin.AddThemeConstantOverride("margin_left", 36);
+		margin.AddThemeConstantOverride("margin_right", 36);
+		margin.AddThemeConstantOverride("margin_top", 28);
+		margin.AddThemeConstantOverride("margin_bottom", 28);
+		frame.AddChild(margin);
 
 		var vbox = new VBoxContainer();
 		vbox.Alignment = BoxContainer.AlignmentMode.Center;
-		vbox.AddThemeConstantOverride("separation", 24);
+		vbox.AddThemeConstantOverride("separation", 14);
 		margin.AddChild(vbox);
 
 		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
@@ -34,46 +57,49 @@ public partial class PauseMenu : CanvasLayer
 		title.Text = "PAUSED";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
-		title.AddThemeFontSizeOverride("font_size", 96);
-		title.AddThemeColorOverride("font_color", new Color(1.0f, 0.88f, 0.55f));
-		title.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
-		title.AddThemeConstantOverride("outline_size", 4);
+		title.AddThemeFontSizeOverride("font_size", 76);
+		title.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(title, 4);
 		vbox.AddChild(title);
 
-		var btnContinue = CreateMenuButton("CONTINUE", titleFont, vbox);
+		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		var player = GetTree().GetFirstNodeInGroup("Player") as Player;
+		string subText = level != null
+			? $"FLOOR {level.CurrentLevelIndex}  •  GOLD {player?.CoinCount ?? 0}"
+			: "RUN IN PROGRESS";
+		var subLabel = new Label
+		{
+			Text = subText,
+			HorizontalAlignment = HorizontalAlignment.Center
+		};
+		subLabel.AddThemeFontOverride("font", titleFont);
+		subLabel.AddThemeFontSizeOverride("font_size", 22);
+		subLabel.AddThemeColorOverride("font_color", DungeonVisuals.MutedSlate);
+		vbox.AddChild(subLabel);
+
+		DungeonVisuals.AddDivider(vbox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.7f), 2.0f);
+
+		var btnContinue = CreateMenuButton("CONTINUE", titleFont, vbox, DungeonVisuals.Emerald);
 		btnContinue.Pressed += OnContinuePressed;
 
-		var btnSettings = CreateMenuButton("SETTINGS", titleFont, vbox);
+		var btnSettings = CreateMenuButton("SETTINGS", titleFont, vbox, DungeonVisuals.BrassGold);
 		btnSettings.Pressed += OnSettingsPressed;
 
-		var btnSaveLeave = CreateMenuButton("SAVE AND LEAVE", titleFont, vbox);
+		var btnSaveLeave = CreateMenuButton("SAVE AND LEAVE", titleFont, vbox, DungeonVisuals.Crimson);
 		btnSaveLeave.Pressed += OnSaveLeavePressed;
 
+		DungeonVisuals.AttachFrameAccent(frame, DungeonVisuals.BrassGold, 7);
 		MainMenu.ConnectButtonSounds(this);
 	}
 
-	private Button CreateMenuButton(string text, Font font, Control parent)
+	private Button CreateMenuButton(string text, Font font, Control parent, Color accent)
 	{
 		var btn = new Button();
 		btn.Text = text;
-		btn.Flat = true;
-		btn.AddThemeFontOverride("font", font);
-		btn.AddThemeFontSizeOverride("font_size", 48);
-		btn.AddThemeColorOverride("font_color", new Color(0.95f, 0.95f, 0.95f));
-		btn.AddThemeColorOverride("font_hover_color", new Color(1.0f, 0.9f, 0.6f));
-		btn.AddThemeColorOverride("font_outline_color", new Color(0, 0, 0, 1));
-		btn.AddThemeConstantOverride("outline_size", 2);
-		btn.CustomMinimumSize = new Vector2(360, 62);
+		btn.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
+		btn.CustomMinimumSize = new Vector2(300, 52);
+		DungeonVisuals.StyleButton(btn, accent, font, 38, 4, DungeonVisuals.ObsidianCard, 20, 8);
 		parent.AddChild(btn);
-
-		var btnNormal = new StyleBoxEmpty();
-		var btnHover = new StyleBoxFlat();
-		btnHover.BgColor = new Color(1, 1, 1, 0.08f);
-		btn.AddThemeStyleboxOverride("normal", btnNormal);
-		btn.AddThemeStyleboxOverride("hover", btnHover);
-		btn.AddThemeStyleboxOverride("pressed", btnNormal);
-		btn.AddThemeStyleboxOverride("focus", btnNormal);
-
 		return btn;
 	}
 
@@ -96,52 +122,11 @@ public partial class PauseMenu : CanvasLayer
 
 	private void OnSaveLeavePressed()
 	{
-		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-		var player = GetTree().GetFirstNodeInGroup("Player") as Player;
-		if (level != null && player != null && SaveManager.CurrentSave != null)
+		// Keep the floor-entry checkpoint intact so uncommitted mid-floor gains
+		// (coins, skill points, ability upgrades, shop items) do not carry over without descending.
+		if (SaveManager.CurrentSave != null)
 		{
-			var currentSave = SaveManager.CurrentSave;
-			currentSave.CurrentLevelIndex = level.CurrentLevelIndex;
-			currentSave.Coins = player.CoinCount;
-			currentSave.CurrentHealth = player.CurrentHealth;
-			currentSave.CurrentMana = player.CurrentMana;
-			currentSave.BonusMaxHealth = player.BonusMaxHealth;
-			currentSave.BonusMaxMana = player.BonusMaxMana;
-			currentSave.BonusHealthRegen = player.BonusHealthRegen;
-			currentSave.BonusManaRegen = player.BonusManaRegen;
-			currentSave.BonusMoveSpeed = player.BonusMoveSpeed;
-			currentSave.WeaponDamageMultiplier = player.WeaponDamageMultiplier;
-			currentSave.SkillPoints = player.SkillPoints;
-			currentSave.Ability1Level = player.Ability1Level;
-			currentSave.Ability2Level = player.Ability2Level;
-			currentSave.PlayedTimeSeconds += level.ConsumePlayedTime();
-
-			currentSave.ShopPurchaseCounts = new System.Collections.Generic.Dictionary<string, int>(player.ShopPurchaseCounts);
-			currentSave.WeaponResourcePaths.Clear();
-			currentSave.WeaponSlotCustomStats.Clear();
-			for (int i = 0; i < player.WeaponSlots.Count; i++)
-			{
-				var w = player.WeaponSlots[i].CurrentWeapon;
-				if (w != null)
-				{
-					currentSave.WeaponResourcePaths.Add(w.GetEffectiveResourcePath());
-					currentSave.WeaponSlotCustomStats.Add(new SavedWeaponStats
-					{
-						Damage = w.Damage,
-						AttackCooldown = w.AttackCooldown,
-						MaxAmmo = w.MaxAmmo,
-						ReloadTime = w.ReloadTime,
-						ManaCost = w.ManaCost,
-						KnockbackForce = w.KnockbackForce
-					});
-				}
-				else
-				{
-					currentSave.WeaponResourcePaths.Add("");
-					currentSave.WeaponSlotCustomStats.Add(null);
-				}
-			}
-			SaveManager.SaveGame(currentSave);
+			SaveManager.SaveGame(SaveManager.CurrentSave);
 		}
 
 		GetTree().Paused = false;

@@ -38,7 +38,7 @@ public partial class Chest : StaticBody2D, IInteractable
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 
-			var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+			var font = GameResourceCache.GetSilverFont();
 			if (font != null)
 			{
 				_promptLabel.AddThemeFontOverride("font", font);

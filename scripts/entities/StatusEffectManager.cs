@@ -10,6 +10,9 @@ public partial class StatusEffectManager : Node
 	private Dictionary<StatusEffectType, (float time, float strength)> _activeEffects =
 		new Dictionary<StatusEffectType, (float, float)>();
 
+	private readonly List<StatusEffectType> _keysBuffer = new List<StatusEffectType>();
+	private readonly List<StatusEffectType> _toRemoveBuffer = new List<StatusEffectType>();
+
 	public override void _Ready()
 	{
 		_owner = GetParent() as CharacterBody2D;
@@ -30,21 +33,24 @@ public partial class StatusEffectManager : Node
 
 	public override void _Process(double delta)
 	{
-		List<StatusEffectType> toRemove = new List<StatusEffectType>();
-		var keys = new List<StatusEffectType>(_activeEffects.Keys);
+		if (_activeEffects.Count == 0) return;
 
-		foreach (var type in keys)
+		_toRemoveBuffer.Clear();
+		_keysBuffer.Clear();
+		_keysBuffer.AddRange(_activeEffects.Keys);
+
+		foreach (var type in _keysBuffer)
 		{
 			var effect = _activeEffects[type];
 			effect.time -= (float)delta;
 			_activeEffects[type] = effect;
 			if (effect.time <= 0)
 			{
-				toRemove.Add(type);
+				_toRemoveBuffer.Add(type);
 			}
 		}
 
-		foreach (var type in toRemove)
+		foreach (var type in _toRemoveBuffer)
 		{
 			_activeEffects.Remove(type);
 		}

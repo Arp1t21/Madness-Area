@@ -49,12 +49,7 @@ public partial class WaveManager : Node2D
 
 		bool isBossWave = (_currentWave % 5 == 0);
 		int w = Mathf.Max(0, _currentWave - 1);
-		int baseCount = 6 + w * 4 + (w * w) / 3;
-		int enemyCount = Mathf.Max(4, Mathf.RoundToInt(baseCount * Level.DifficultyMultiplier));
-		if (isBossWave)
-		{
-			enemyCount += 1; // +1 большой Босс поверх волны
-		}
+		int enemyCount = GameLogic.CalculateWaveEnemyCount(_currentWave, Level.DifficultyMultiplier);
 
 		_enemiesToSpawn = enemyCount;
 		_isSpawning = true;

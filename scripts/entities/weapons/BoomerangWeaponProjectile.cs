@@ -141,7 +141,7 @@ public partial class BoomerangWeaponProjectile : Node2D
 		float hitRadius = 18.0f * World.Scale;
 		var hitSet = _returning ? _returnHits : _outboundHits;
 
-		foreach (Node node in GetTree().GetNodesInGroup("enemy"))
+		foreach (Node node in GetTree().GetNodesInGroup("Enemies"))
 		{
 			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
 			{

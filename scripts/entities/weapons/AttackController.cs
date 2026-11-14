@@ -80,6 +80,7 @@ public partial class AttackController : Node2D
 	}
 
 	private Node2D _ownerNode;
+	private AnimatedSprite2D _ownerSprite;
 	public Node2D OwnerNode => _ownerNode;
 
 	public override void _Ready()
@@ -94,6 +95,7 @@ public partial class AttackController : Node2D
 			if (pNode is CharacterBody2D cb)
 			{
 				_ownerNode = cb;
+				_ownerSprite = cb.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
 				break;
 			}
 			pNode = pNode.GetParent();
@@ -225,11 +227,10 @@ public partial class AttackController : Node2D
 			UpdateWeaponOrientation(GetTargetPosition());
 		}
 
-		var ownerSprite = GetParent()?.GetParent()?.GetNodeOrNull<AnimatedSprite2D>("AnimatedSprite2D");
-		if (ownerSprite != null)
+		if (IsInstanceValid(_ownerSprite))
 		{
 			Vector2 pos = Position;
-			pos.X = ownerSprite.FlipH ? -2.0f : 2.0f;
+			pos.X = _ownerSprite.FlipH ? -2.0f : 2.0f;
 			pos.Y = -4.0f;
 			Position = pos;
 		}
@@ -345,6 +346,23 @@ public partial class AttackController : Node2D
 				_currentAmmo--;
 			}
 		}
+		else if (_isPlayerOwned)
+		{
+			Node vfxHost = GetTree().CurrentScene ?? GetTree().Root;
+			Vector2 swingDir = (targetPosition - GlobalPosition).Normalized();
+			Color glintColor = CurrentWeapon.WeaponName.Contains("Katana", StringComparison.OrdinalIgnoreCase)
+				? new Color(0.55f, 0.92f, 1.0f)
+				: new Color(0.95f, 0.95f, 1.0f);
+			DungeonVisuals.SpawnImpactSparks(
+				vfxHost,
+				GlobalPosition + swingDir * 24.0f,
+				swingDir,
+				glintColor,
+				3,
+				95.0f,
+				55.0f,
+				1.2f);
+		}
 
 		if (CurrentWeapon.Recoil > 0 && _isPlayerOwned && _player != null)
 		{
@@ -442,6 +460,27 @@ public partial class AttackController : Node2D
 		}
 
 		Vector2 spawnPos = muzzle != null ? muzzle.GlobalPosition : GlobalPosition;
+		Node vfxHost = GetTree().CurrentScene ?? GetTree().Root;
+		Vector2 aimDir = (targetPos - spawnPos).Normalized();
+		Color muzzleCol = _isPlayerOwned
+			? (CurrentWeapon.WeaponName.Contains("Staff", StringComparison.OrdinalIgnoreCase)
+				? new Color(0.42f, 0.88f, 1.0f)
+				: new Color(1.0f, 0.82f, 0.36f))
+			: new Color(1.0f, 0.44f, 0.24f);
+		float flashRadius = CurrentWeapon.BulletCount > 1 ? 13.0f : 8.5f;
+		DungeonVisuals.SpawnMuzzleFlash(vfxHost, spawnPos, muzzleCol, flashRadius);
+		if (_isPlayerOwned)
+		{
+			DungeonVisuals.SpawnImpactSparks(
+				vfxHost,
+				spawnPos,
+				aimDir,
+				muzzleCol,
+				CurrentWeapon.BulletCount > 1 ? 6 : 4,
+				110.0f,
+				38.0f,
+				1.15f);
+		}
 
 		for (int i = 0; i < CurrentWeapon.BulletCount; i++)
 		{
@@ -512,13 +551,13 @@ public partial class AttackController : Node2D
 	{
 		if (!_isPlayerOwned)
 		{
-			var p = GetTree().GetFirstNodeInGroup("Player") as Node2D;
-			return p != null ? p.GlobalPosition : GlobalPosition;
+			if (!IsInstanceValid(_player)) _player = GetTree().GetFirstNodeInGroup("Player") as Player;
+			return _player != null ? _player.GlobalPosition : GlobalPosition;
 		}
 
 		if (CurrentWeapon != null && CurrentWeapon.IsAutoAim)
 		{
-			var enemies = GetTree().GetNodesInGroup("enemy");
+			var enemies = GetTree().GetNodesInGroup("Enemies");
 			Node2D nearest = null;
 			float minDist = float.MaxValue;
 			foreach (Node node in enemies)
@@ -540,12 +579,6 @@ public partial class AttackController : Node2D
 
 	public void PlaySound(AudioStream stream)
 	{
-		if (stream == null) return;
-		var audioPlayer = new AudioStreamPlayer();
-		audioPlayer.Stream = stream;
-		audioPlayer.Bus = "SFX";
-		AddChild(audioPlayer);
-		audioPlayer.Play();
-		audioPlayer.Finished += () => audioPlayer.QueueFree();
+		GameResourceCache.PlayPooledSound(GetTree(), stream, "SFX");
 	}
 }

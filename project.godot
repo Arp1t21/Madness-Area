@@ -123,6 +123,6 @@ textures/decals/filter=0
 textures/light_projectors/filter=0
 lightmapping/lightmap_gi/use_bicubic_filter=false
 environment/volumetric_fog/use_filter=0
-environment/defaults/default_clear_color=Color(0.51718444, 0.5171845, 0.51718444, 1)
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)
 textures/basis_universal/zstd_supercompression=false
 2d/snap/snap_2d_transforms_to_pixel=true

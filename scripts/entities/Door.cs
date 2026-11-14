@@ -22,6 +22,7 @@ public partial class Door : StaticBody2D, IInteractable
 	private bool _isLocked = true;
 	public bool IsLocked => _isLocked;
 	private bool _shopItemsSpawned = false;
+	private Level _cachedLevel;
 
 	public override void _Ready()
 	{
@@ -48,7 +49,7 @@ public partial class Door : StaticBody2D, IInteractable
 			_promptLabel.Size = new Vector2(100, 20);
 			_promptLabel.Visible = false;
 			
-			var font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+			var font = GameResourceCache.GetSilverFont();
 			if (font != null) {
 				_promptLabel.AddThemeFontOverride("font", font);
 				_promptLabel.AddThemeFontSizeOverride("font_size", 8);
@@ -148,14 +149,17 @@ public partial class Door : StaticBody2D, IInteractable
 		}
 
 		// Обновляем проходимость сетки AStar в уровне
-		var level = GetTree()?.GetFirstNodeInGroup("Level") as Level;
-		if (level != null)
+		if (!IsInstanceValid(_cachedLevel))
+		{
+			_cachedLevel = GetTree()?.GetFirstNodeInGroup("Level") as Level;
+		}
+		if (_cachedLevel != null)
 		{
 			bool solid = _isLocked || !IsOpen;
-			level.SetCellSolid(GlobalPosition + new Vector2(-24, -24), solid);
-			level.SetCellSolid(GlobalPosition + new Vector2(24, -24), solid);
-			level.SetCellSolid(GlobalPosition + new Vector2(-24, 24), solid);
-			level.SetCellSolid(GlobalPosition + new Vector2(24, 24), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(-24, -24), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(24, -24), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(-24, 24), solid);
+			_cachedLevel.SetCellSolid(GlobalPosition + new Vector2(24, 24), solid);
 		}
 	}
 

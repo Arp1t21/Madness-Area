@@ -23,32 +23,20 @@ public partial class DungeonTorch : Node2D
 
 	private void SetupLight()
 	{
-		_torchLight = new PointLight2D();
-		_torchLight.Name = "TorchLight";
-		_torchLight.Position = new Vector2(0, -6);
-		_torchLight.ShadowEnabled = false;
-		_torchLight.Color = new Color(1.0f, 0.74f, 0.36f, 1.0f);
-		_torchLight.Energy = _baseEnergy;
-
-		var gradient = new Gradient();
-		gradient.Colors = new Color[]
-		{
+		var gradTex = GameResourceCache.GetRadialGlowTexture(
 			new Color(1.0f, 0.92f, 0.72f, 1.0f),
 			new Color(1.0f, 0.68f, 0.28f, 0.55f),
-			new Color(0.0f, 0.0f, 0.0f, 0.0f)
-		};
-		gradient.Offsets = new float[] { 0.0f, 0.42f, 1.0f };
+			0.42f,
+			112);
 
-		var gradTex = new GradientTexture2D();
-		gradTex.Gradient = gradient;
-		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
-		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
-		gradTex.FillTo = new Vector2(0.5f, 0.0f);
-		gradTex.Width = 112;
-		gradTex.Height = 112;
-
-		_torchLight.Texture = gradTex;
-		AddChild(_torchLight);
+		_torchLight = GameResourceCache.CreateGlowLight(
+			this,
+			"TorchLight",
+			new Vector2(0, -6),
+			new Color(1.0f, 0.74f, 0.36f, 1.0f),
+			_baseEnergy,
+			gradTex,
+			shadowEnabled: false);
 	}
 
 	private void SetupEmbers()

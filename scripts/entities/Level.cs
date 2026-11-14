@@ -6,6 +6,7 @@ using System.Linq;
 public partial class Level : Node2D
 {
 	private Player _player;
+	public Player Player => _player;
 	private TileMapLayer _floorLayer;
 	private TileMapLayer _wallsVerticalLayer;
 	private TileMapLayer _wallsHorizontalLayer;
@@ -44,6 +45,14 @@ public partial class Level : Node2D
 	private double _playerSpikeInvulnerabilityTimer = 0.0;
 	private readonly Dictionary<ulong, double> _enemySpikeCooldowns = new Dictionary<ulong, double>();
 	private SpikePhase _currentSpikePhase = SpikePhase.Retracted;
+	private WaveManager _cachedWaveManager;
+	private Node2D _occludersContainer;
+	private readonly List<ulong> _expiredSpikeIds = new List<ulong>();
+	private static OccluderPolygon2D _leftWallOccluderPolygon;
+	private static OccluderPolygon2D _rightWallOccluderPolygon;
+	private static OccluderPolygon2D _topWallOccluderPolygon;
+	private static OccluderPolygon2D _bottomWallOccluderPolygon;
+	private static OccluderPolygon2D _columnOccluderPolygon;
 
 	private enum SpikePhase
 	{
@@ -97,10 +106,11 @@ public partial class Level : Node2D
 			mapNode.Scale = new Vector2(3.0f, 3.0f);
 		}
 
-		// 1. Создаем CanvasModulate для общего затемнения сцены (черный void за картой)
+		// 1. Черный фон viewport и CanvasModulate (затемненные стены/пол видны, void за картой чисто черный)
+		RenderingServer.SetDefaultClearColor(Colors.Black);
 		var modulate = new CanvasModulate();
 		modulate.Name = "CanvasModulate";
-		float ambient = Mathf.Clamp((SettingsManager.Brightness - 1.0f) * 0.5f, 0.0f, 0.5f);
+		float ambient = GameLogic.CalculateAmbientLight(SettingsManager.Brightness);
 		modulate.Color = new Color(ambient, ambient, ambient, 1.0f);
 		AddChild(modulate);
 
@@ -140,30 +150,10 @@ public partial class Level : Node2D
 		
 		_spikesLayer = GetNodeOrNull<TileMapLayer>("Map/Spikes");
 
-		if (_floorLayer != null && _floorLayer.TileSet != null) {
-			var usedCells = _floorLayer.GetUsedCells();
-			foreach (var cell in usedCells) {
-				int srcId = _floorLayer.GetCellSourceId(cell);
-				if (srcId == -1 || !_floorLayer.TileSet.HasSource(srcId)) continue;
-				var tileData = _floorLayer.GetCellTileData(cell);
-				// Если у тайла террейн равен 1 (террейн "wall" в floor.tres), создаем для него окклюдер
-				if (tileData != null && tileData.Terrain == 1) {
-					var occluder = new LightOccluder2D();
-					var polygon = new OccluderPolygon2D();
-					
-					polygon.Polygon = new Vector2[] {
-						new Vector2(-8, -8),
-						new Vector2(8, -8),
-						new Vector2(8, 8),
-						new Vector2(-8, 8)
-					};
-					
-					occluder.Occluder = polygon;
-					occluder.Position = _floorLayer.MapToLocal(cell);
-					_floorLayer.AddChild(occluder);
-				}
-			}
-		}
+		Node occluderHost = (Node)mapNode ?? _floorLayer?.GetParent() ?? this;
+		_occludersContainer = new Node2D { Name = "LightOccluders" };
+		occluderHost.AddChild(_occludersContainer);
+		RebuildLevelOccluders();
 
 		// 3. Находим игрока и слой лестницы
 		_player = GetTree().GetFirstNodeInGroup("Player") as Player;
@@ -288,6 +278,63 @@ public partial class Level : Node2D
 			_wallsVerticalLayer.SetCell(new Vector2I(-1, -6), 0, new Vector2I(2, 1));
 			SpawnDungeonTorches();
 		}
+
+		SetupDungeonAtmosphere();
+	}
+
+	private void SetupDungeonAtmosphere()
+	{
+		var hud = GetNodeOrNull<CanvasLayer>("HUD");
+		if (hud != null && hud.Layer < 5)
+		{
+			hud.Layer = 5;
+		}
+
+		var vigLayer = new CanvasLayer
+		{
+			Name = "DungeonVignetteLayer",
+			Layer = 1
+		};
+		var vigRect = new ColorRect
+		{
+			Name = "DungeonVignetteRect",
+			Color = Colors.White,
+			MouseFilter = Control.MouseFilterEnum.Ignore,
+			Material = DungeonVisuals.GetVignetteMaterial(0.28f, 0.50f)
+		};
+		vigRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		vigLayer.AddChild(vigRect);
+		AddChild(vigLayer);
+
+		if (_player != null && GodotObject.IsInstanceValid(_player))
+		{
+			var motes = new CpuParticles2D
+			{
+				Name = "DungeonDustMotes",
+				Scale = new Vector2(1.0f / 3.0f, 1.0f / 3.0f),
+				ZIndex = 4,
+				Texture = DungeonVisuals.GetPixelSquareTexture(),
+				Amount = 22,
+				Lifetime = 4.2f,
+				Preprocess = 2.0f,
+				LocalCoords = false,
+				EmissionShape = CpuParticles2D.EmissionShapeEnum.Rectangle,
+				EmissionRectExtents = new Vector2(460.0f, 280.0f),
+				Direction = new Vector2(0.35f, -1.0f),
+				Spread = 35.0f,
+				Gravity = new Vector2(0.0f, -3.5f),
+				InitialVelocityMin = 4.0f,
+				InitialVelocityMax = 11.0f,
+				ScaleAmountMin = 0.7f,
+				ScaleAmountMax = 1.4f
+			};
+			var moteGrad = new Gradient();
+			moteGrad.SetColor(0, new Color(0.95f, 0.86f, 0.65f, 0.0f));
+			moteGrad.AddPoint(0.45f, new Color(0.95f, 0.86f, 0.65f, 0.22f));
+			moteGrad.SetColor(1, new Color(0.95f, 0.86f, 0.65f, 0.0f));
+			motes.ColorRamp = moteGrad;
+			_player.AddChild(motes);
+		}
 	}
 
 	private void SpawnEntryLadder(Vector2 position)
@@ -390,11 +437,20 @@ public partial class Level : Node2D
 		// Новый сид для новой карты; сохраняем его, чтобы после загрузки сейва
 		// сгенерировалась точно такая же карта
 		_rng.Seed = (ulong)(GD.Randi() << 32) | GD.Randi();
+		GenerateRandomLevel();
+
 		if (SaveManager.CurrentSave != null)
 		{
 			SaveManager.CurrentSave.LevelSeed = _rng.Seed;
+			if (_player != null)
+			{
+				SaveManager.CommitFloorCheckpoint(this, _player, SaveManager.CurrentSave);
+			}
+			else
+			{
+				SaveManager.SaveGame(SaveManager.CurrentSave);
+			}
 		}
-		GenerateRandomLevel();
 
 		// 4. Спавним входную лестницу под игроком
 		if (_player != null) {
@@ -421,10 +477,7 @@ public partial class Level : Node2D
 
 	public int GetExpectedMonsterCount()
 	{
-		int w = Mathf.Max(0, _currentLevelIndex - 1);
-		int baseCount = 6 + w * 4 + (w * w) / 3;
-		if (_currentLevelIndex % 5 == 0) baseCount += 1;
-		return Mathf.Max(6, Mathf.RoundToInt(baseCount * DifficultyMultiplier));
+		return GameLogic.CalculateWaveEnemyCount(_currentLevelIndex, DifficultyMultiplier);
 	}
 
 	private void GenerateRandomLevel()
@@ -592,116 +645,115 @@ public partial class Level : Node2D
 		// 5. Выстраиваем контур внешних стен вокруг всей составной фигуры
 		Vector2I hTile = new Vector2I(2, 10); // Source ID 2 (боковая стена)
 
-		for (int x = boundMinX - 2; x <= boundMaxX + 2; x++)
+		int genMinX = boundMinX - 3;
+		int genMaxX = boundMaxX + 3;
+		int genMinY = boundMinY - 3;
+		int genMaxY = boundMaxY + 3;
+
+		// 5.1. Проход кирпичных стен (WallsVertical):
+		// Генерируем их первыми, чтобы боковые бортики (WallHorizontal) не перекрывали проходные ряды шапок нижних стен и кирпичные углы.
+		// Нижняя стена: 2 ряда (верхний ряд с тайлом пола под полупрозрачной шапкой).
+		// Верхняя стена: 2 ряда (нижний ряд - тело, верхний - шапка).
+		if (_wallsVerticalLayer != null)
 		{
-			for (int y = boundMinY - 2; y <= boundMaxY + 2; y++)
+			for (int x = genMinX; x <= genMaxX; x++)
 			{
-				Vector2I pos = new Vector2I(x, y);
-				if (floorSet.Contains(pos)) continue;
-
-				bool touchesFloor = false;
-				for (int dx = -1; dx <= 1 && !touchesFloor; dx++)
+				for (int y = genMinY; y <= genMaxY; y++)
 				{
-					for (int dy = -1; dy <= 1; dy++)
-					{
-						if (dx == 0 && dy == 0) continue;
-						if (floorSet.Contains(new Vector2I(x + dx, y + dy)))
-						{
-							touchesFloor = true;
-							break;
-						}
-					}
-				}
-				if (!touchesFloor) continue;
+					Vector2I pos = new Vector2I(x, y);
+					if (floorSet.Contains(pos)) continue;
 
-				bool floorNorth = floorSet.Contains(new Vector2I(x, y - 1));
-				bool floorSouth = floorSet.Contains(new Vector2I(x, y + 1));
-				bool floorWest = floorSet.Contains(new Vector2I(x - 1, y));
-				bool floorEast = floorSet.Contains(new Vector2I(x + 1, y));
+					bool floorNorth = floorSet.Contains(new Vector2I(x, y - 1));
+					bool floorSouth = floorSet.Contains(new Vector2I(x, y + 1));
+					int variantX = (((x % 3) + 3) % 3) + 1;
 
-				if (floorNorth && !floorSouth)
-				{
-					// На внутреннем углу (где снизу-сбоку продолжается комната) приоритет у вертикального бортика боковой стены,
-					// чтобы кирпичная стена не прерывала боковой бортик и не оставляла черную дыру
-					if ((floorEast || floorWest) && !(floorWest && floorEast))
+					// Нижняя стена (комната сверху)
+					if (floorNorth && !floorSouth)
 					{
 						_floorLayer.SetCell(pos, 1, GetRandomFloorTile());
-						if (_wallsHorizontalLayer != null)
-						{
-							_wallsHorizontalLayer.SetCell(pos, 2, hTile, floorEast ? 1 : 0);
-						}
-					}
-					else
-					{
-						// Нижняя стена в точности как на первой карте (y=19 и y=20 в map.tscn):
-						// На верхнем ряду pos ОБЯЗАТЕЛЬНО рисуется тайл пола под полупрозрачной шапкой (variantX, 0),
-						// чтобы между полом и нижней стеной не было черной полосы!
-						_floorLayer.SetCell(pos, 1, GetRandomFloorTile());
-						if (_wallsVerticalLayer != null)
-						{
-							int variantX = (((x % 3) + 3) % 3) + 1;
-							_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 0));
+						_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 0));
 
-							Vector2I posBelow = new Vector2I(x, y + 1);
-							bool belowBordersFloorSide = floorSet.Contains(new Vector2I(x - 1, y + 1)) || floorSet.Contains(new Vector2I(x + 1, y + 1));
-							if (!floorSet.Contains(posBelow) && !belowBordersFloorSide)
-							{
-								_wallsVerticalLayer.SetCell(posBelow, 0, new Vector2I(variantX, 1));
-							}
+						Vector2I posBelow = new Vector2I(x, y + 1);
+						if (!floorSet.Contains(posBelow))
+						{
+							_wallsVerticalLayer.SetCell(posBelow, 0, new Vector2I(variantX, 1));
 						}
 					}
-				}
-				else if (floorSouth || (floorWest && floorEast))
-				{
-					if (_wallsVerticalLayer != null)
+					// Верхняя стена (комната снизу)
+					else if (floorSouth && !floorNorth)
 					{
-						int variantX = (((x % 3) + 3) % 3) + 1;
 						_wallsVerticalLayer.SetCell(pos, 0, new Vector2I(variantX, 1));
-						if (floorSouth && !floorNorth)
+
+						Vector2I posAbove = new Vector2I(x, y - 1);
+						if (!floorSet.Contains(posAbove))
 						{
-							Vector2I posAbove = new Vector2I(x, y - 1);
-							if (!floorSet.Contains(posAbove) && _wallsVerticalLayer.GetCellSourceId(posAbove) == -1)
+							_wallsVerticalLayer.SetCell(posAbove, 0, new Vector2I(variantX, 0));
+						}
+					}
+				}
+			}
+		}
+
+		// 5.2. Проход боковых стен (WallHorizontal):
+		// Проставляем вертикальные бортики слева (alt=1) и справа (alt=0) от комнат.
+		// Не ставим их поверх проходных нижних шапок (где уже уложен пол) и поверх сплошных 16x16 кирпичей (atlasY==1).
+		// На внешних углах продлеваем только в пустых колонках (без пола сверху/снизу на +-2 тайла):
+		// на 1 тайл вверх (вровень с телом верхней стены, не вылезая над 4px-шапкой) и на 2 тайла вниз (вдоль шапки и тела нижней стены).
+		if (_wallsHorizontalLayer != null)
+		{
+			for (int x = genMinX; x <= genMaxX; x++)
+			{
+				for (int y = genMinY; y <= genMaxY; y++)
+				{
+					Vector2I pos = new Vector2I(x, y);
+					if (floorSet.Contains(pos)) continue;
+					if (_floorLayer != null && _floorLayer.GetCellSourceId(pos) != -1) continue;
+					if (_wallsVerticalLayer != null &&
+						_wallsVerticalLayer.GetCellSourceId(pos) != -1 &&
+						_wallsVerticalLayer.GetCellAtlasCoords(pos).Y == 1)
+					{
+						continue;
+					}
+
+					bool leftBorder = floorSet.Contains(new Vector2I(x + 1, y));
+					bool rightBorder = floorSet.Contains(new Vector2I(x - 1, y));
+
+					if (!leftBorder && !rightBorder)
+					{
+						bool hasFloorInColumn =
+							floorSet.Contains(new Vector2I(x, y - 1)) ||
+							floorSet.Contains(new Vector2I(x, y - 2)) ||
+							floorSet.Contains(new Vector2I(x, y + 1)) ||
+							floorSet.Contains(new Vector2I(x, y + 2));
+
+						if (!hasFloorInColumn)
+						{
+							if (floorSet.Contains(new Vector2I(x + 1, y - 1)) ||
+								floorSet.Contains(new Vector2I(x + 1, y - 2)) ||
+								floorSet.Contains(new Vector2I(x + 1, y + 1)))
 							{
-								_wallsVerticalLayer.SetCell(posAbove, 0, new Vector2I(variantX, 0));
+								leftBorder = true;
+							}
+							else if (floorSet.Contains(new Vector2I(x - 1, y - 1)) ||
+									 floorSet.Contains(new Vector2I(x - 1, y - 2)) ||
+									 floorSet.Contains(new Vector2I(x - 1, y + 1)))
+							{
+								rightBorder = true;
 							}
 						}
 					}
 
-					if (_wallsHorizontalLayer != null && (floorEast || floorWest) && !(floorWest && floorEast))
-					{
-						_wallsHorizontalLayer.SetCell(pos, 2, hTile, floorEast ? 1 : 0);
-					}
-				}
-				else if (floorEast)
-				{
-					if (_wallsHorizontalLayer != null)
+					if (leftBorder && !rightBorder)
 					{
 						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 1);
 					}
-				}
-				else if (floorWest)
-				{
-					if (_wallsHorizontalLayer != null)
+					else if (rightBorder && !leftBorder)
 					{
-						_wallsHorizontalLayer.SetCell(pos, 2, hTile);
+						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 0);
 					}
-				}
-				else
-				{
-					// Внешний диагональный угол (в т.ч. нижние углы карты на уровне двухрядной нижней стены)
-					bool diagEast = floorSet.Contains(new Vector2I(x + 1, y - 1)) || floorSet.Contains(new Vector2I(x + 1, y + 1));
-					bool diagBottomCorner = floorSet.Contains(new Vector2I(x + 1, y - 1)) || floorSet.Contains(new Vector2I(x - 1, y - 1));
-					if (_wallsHorizontalLayer != null)
+					else if (leftBorder && rightBorder)
 					{
-						_wallsHorizontalLayer.SetCell(pos, 2, hTile, diagEast ? 1 : 0);
-						if (diagBottomCorner)
-						{
-							Vector2I posBelow = new Vector2I(x, y + 1);
-							if (!floorSet.Contains(posBelow))
-							{
-								_wallsHorizontalLayer.SetCell(posBelow, 2, hTile, diagEast ? 1 : 0);
-							}
-						}
+						_wallsHorizontalLayer.SetCell(pos, 2, hTile, 0);
 					}
 				}
 			}
@@ -837,36 +889,8 @@ public partial class Level : Node2D
 			_stairsLayer.Visible = false;
 		}
 
-		// 8. Удаляем ВСЕ старые LightOccluder2D (в т.ч. на полу) — иначе невидимые
-		// окклюдеры с прошлых уровней продолжают блокировать свет на новых местах
-		if (_floorLayer != null)
-		{
-			foreach (var child in _floorLayer.GetChildren())
-			{
-				if (child is LightOccluder2D) child.QueueFree();
-			}
-		}
-		if (_wallsVerticalLayer != null)
-		{
-			foreach (var child in _wallsVerticalLayer.GetChildren())
-			{
-				if (child is LightOccluder2D) child.QueueFree();
-			}
-		}
-		if (_wallsHorizontalLayer != null)
-		{
-			foreach (var child in _wallsHorizontalLayer.GetChildren())
-			{
-				if (child is LightOccluder2D) child.QueueFree();
-			}
-		}
-		if (_columnsLayer != null)
-		{
-			foreach (var child in _columnsLayer.GetChildren())
-			{
-				if (child is LightOccluder2D) child.QueueFree();
-			}
-		}
+		// 8. Перестраиваем LightOccluder2D под сгенерированную геометрию стен и колонн
+		RebuildLevelOccluders();
 
 		// 9. Перемещаем игрока в центр Vector2.Zero
 		if (_player != null)
@@ -1239,12 +1263,118 @@ public partial class Level : Node2D
 		return path;
 	}
 
+	private static OccluderPolygon2D GetOrCreateRectOccluderPolygon(
+		ref OccluderPolygon2D cache, float minX, float minY, float maxX, float maxY)
+	{
+		return cache ??= new OccluderPolygon2D
+		{
+			Polygon = new Vector2[]
+			{
+				new Vector2(minX, minY),
+				new Vector2(maxX, minY),
+				new Vector2(maxX, maxY),
+				new Vector2(minX, maxY)
+			}
+		};
+	}
+
+	private void RebuildLevelOccluders()
+	{
+		if (!IsInstanceValid(_occludersContainer)) return;
+
+		foreach (Node child in _occludersContainer.GetChildren())
+		{
+			child.QueueFree();
+		}
+
+		// Place each occluder behind the visible trim/brick face so room lights illuminate the wall face while still blocking light leak into the void.
+		var leftPoly = GetOrCreateRectOccluderPolygon(ref _leftWallOccluderPolygon, -8, -8, 2, 8);
+		var rightPoly = GetOrCreateRectOccluderPolygon(ref _rightWallOccluderPolygon, -2, -8, 8, 8);
+		var topPoly = GetOrCreateRectOccluderPolygon(ref _topWallOccluderPolygon, -8, -8, 8, 3);
+		var bottomPoly = GetOrCreateRectOccluderPolygon(ref _bottomWallOccluderPolygon, -8, 4, 8, 8);
+		var columnPoly = GetOrCreateRectOccluderPolygon(ref _columnOccluderPolygon, -6, -6, 6, 6);
+
+		if (_wallsHorizontalLayer != null)
+		{
+			foreach (var cell in _wallsHorizontalLayer.GetUsedCells())
+			{
+				var poly = _wallsHorizontalLayer.GetCellAlternativeTile(cell) == 1 ? leftPoly : rightPoly;
+				AddTileOccluder(_wallsHorizontalLayer, cell, poly);
+			}
+		}
+
+		if (_wallsVerticalLayer != null && _floorLayer != null)
+		{
+			foreach (var cell in _wallsVerticalLayer.GetUsedCells())
+			{
+				Vector2I atlas = _wallsVerticalLayer.GetCellAtlasCoords(cell);
+				// Upper-wall top caps (atlasY == 0 without floor tile) and lower-wall outer rows (atlasY == 1 without adjacent south floor)
+				if (atlas.Y == 0 && _floorLayer.GetCellSourceId(cell) == -1)
+				{
+					AddTileOccluder(_wallsVerticalLayer, cell, topPoly);
+				}
+				else if (atlas.Y == 1 && _floorLayer.GetCellSourceId(cell) == -1 && _floorLayer.GetCellSourceId(cell + Vector2I.Down) == -1)
+				{
+					AddTileOccluder(_wallsVerticalLayer, cell, bottomPoly);
+				}
+			}
+		}
+
+		if (_columnsLayer != null)
+		{
+			foreach (var cell in _columnsLayer.GetUsedCells())
+			{
+				if (_columnsLayer.GetCellAtlasCoords(cell) == new Vector2I(15, 6))
+				{
+					AddTileOccluder(_columnsLayer, cell, columnPoly);
+				}
+			}
+		}
+	}
+
+	private void AddTileOccluder(TileMapLayer layer, Vector2I cell, OccluderPolygon2D polygon)
+	{
+		var occluder = new LightOccluder2D
+		{
+			Occluder = polygon,
+			Position = layer.Position + layer.MapToLocal(cell)
+		};
+		_occludersContainer.AddChild(occluder);
+	}
+
+	private bool TryGetHitSpikeCenter(Vector2 actorGlobalPos, float spikeRadius, out Vector2 hitCenter)
+	{
+		hitCenter = Vector2.Zero;
+		if (_spikesLayer == null) return false;
+
+		Vector2I baseCell = _spikesLayer.LocalToMap(_spikesLayer.ToLocal(actorGlobalPos));
+		for (int dx = -1; dx <= 1; dx++)
+		{
+			for (int dy = -1; dy <= 1; dy++)
+			{
+				Vector2I candidate = new Vector2I(baseCell.X + dx, baseCell.Y + dy);
+				if (_spikesLayer.GetCellSourceId(candidate) == -1) continue;
+
+				Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(candidate));
+				if (actorGlobalPos.DistanceTo(cellCenter) < spikeRadius)
+				{
+					hitCenter = cellCenter;
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
 	public override void _PhysicsProcess(double delta)
 	{
 		LevelPlayedTime += (float)delta;
 		// 1. Обработка музыки в зависимости от положения игрока
-		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
-		bool waveActive = waveManager != null && waveManager.WaveInProgress;
+		if (!IsInstanceValid(_cachedWaveManager))
+		{
+			_cachedWaveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
+		}
+		bool waveActive = _cachedWaveManager != null && _cachedWaveManager.WaveInProgress;
 		if (!waveActive)
 		{
 			MusicManager.Instance?.PlayMusic("res://assets/sounds/doom_10. Ties That Bind.mp3");
@@ -1259,8 +1389,9 @@ public partial class Level : Node2D
 
 		if (_enemySpikeCooldowns.Count > 0)
 		{
-			var keys = _enemySpikeCooldowns.Keys.ToList();
-			foreach (ulong id in keys)
+			_expiredSpikeIds.Clear();
+			_expiredSpikeIds.AddRange(_enemySpikeCooldowns.Keys);
+			foreach (ulong id in _expiredSpikeIds)
 			{
 				double remaining = _enemySpikeCooldowns[id] - delta;
 				if (remaining <= 0) _enemySpikeCooldowns.Remove(id);
@@ -1286,22 +1417,13 @@ public partial class Level : Node2D
 		// Урон наносим только во время активной фазы (и игроку, и наземным врагам)
 		if (_currentSpikePhase == SpikePhase.Active)
 		{
-			var spikeCells = _spikesLayer.GetUsedCells();
 			float spikeRadius = 12.0f * World.Scale;
 
-			if (_playerSpikeInvulnerabilityTimer <= 0 && _player != null)
+			if (_playerSpikeInvulnerabilityTimer <= 0 && _player != null &&
+				TryGetHitSpikeCenter(_player.GlobalPosition, spikeRadius, out Vector2 playerSpikeCenter))
 			{
-				Vector2 playerPos = _player.GlobalPosition;
-				foreach (var cell in spikeCells)
-				{
-					Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
-					if (playerPos.DistanceTo(cellCenter) < spikeRadius)
-					{
-						_player.TakeDamage(5f, cellCenter, 2.5f, true);
-						_playerSpikeInvulnerabilityTimer = 1.0;
-						break;
-					}
-				}
+				_player.TakeDamage(5f, playerSpikeCenter, 2.5f, true);
+				_playerSpikeInvulnerabilityTimer = 1.0;
 			}
 
 			foreach (Node node in GetTree().GetNodesInGroup("Enemies"))
@@ -1311,16 +1433,10 @@ public partial class Level : Node2D
 					ulong id = enemy.GetInstanceId();
 					if (_enemySpikeCooldowns.ContainsKey(id)) continue;
 
-					Vector2 enemyPos = enemy.GlobalPosition;
-					foreach (var cell in spikeCells)
+					if (TryGetHitSpikeCenter(enemy.GlobalPosition, spikeRadius, out Vector2 enemySpikeCenter))
 					{
-						Vector2 cellCenter = _spikesLayer.ToGlobal(_spikesLayer.MapToLocal(cell));
-						if (enemyPos.DistanceTo(cellCenter) < spikeRadius)
-						{
-							enemy.TakeDamage(8f, cellCenter, 2.0f, true);
-							_enemySpikeCooldowns[id] = 1.0;
-							break;
-						}
+						enemy.TakeDamage(8f, enemySpikeCenter, 2.0f, true);
+						_enemySpikeCooldowns[id] = 1.0;
 					}
 				}
 			}
@@ -1333,11 +1449,26 @@ public partial class Level : Node2D
 		Vector2I tileCoords;
 		switch (_currentSpikePhase)
 		{
-			case SpikePhase.Retracted: tileCoords = new Vector2I(0, 3); break;
-			case SpikePhase.Warning: tileCoords = new Vector2I(1, 3); break;
-			case SpikePhase.Active: tileCoords = new Vector2I(2, 3); break;
-			case SpikePhase.Retracting: tileCoords = new Vector2I(3, 3); break;
-			default: tileCoords = new Vector2I(0, 3); break;
+			case SpikePhase.Retracted:
+				tileCoords = new Vector2I(0, 3);
+				_spikesLayer.Modulate = Colors.White;
+				break;
+			case SpikePhase.Warning:
+				tileCoords = new Vector2I(1, 3);
+				_spikesLayer.Modulate = new Color(1.38f, 0.78f, 0.42f, 1.0f);
+				break;
+			case SpikePhase.Active:
+				tileCoords = new Vector2I(2, 3);
+				_spikesLayer.Modulate = new Color(1.18f, 0.88f, 0.88f, 1.0f);
+				break;
+			case SpikePhase.Retracting:
+				tileCoords = new Vector2I(3, 3);
+				_spikesLayer.Modulate = Colors.White;
+				break;
+			default:
+				tileCoords = new Vector2I(0, 3);
+				_spikesLayer.Modulate = Colors.White;
+				break;
 		}
 
 		var cells = _spikesLayer.GetUsedCells();

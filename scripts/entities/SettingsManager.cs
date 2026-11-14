@@ -5,6 +5,7 @@ using System.Collections.Generic;
 public static class SettingsManager
 {
 	private const string ConfigPath = "user://settings.cfg";
+	private static bool _fontsConfigured = false;
 
 	public static float ReverbRoomSize = 0.35f;
 	public static float ReverbDampness = 0.4f;
@@ -20,8 +21,6 @@ public static class SettingsManager
 	public static float MusicVolume = 70f;
 	public static float SFXVolume = 70f;
 
-	public static float MouseSensitivity = 1.0f;
-
 	public static Dictionary<string, Key> KeyBinds = new Dictionary<string, Key>()
 	{
 		{ "move_left", Key.A },
@@ -33,6 +32,21 @@ public static class SettingsManager
 		{ "ability_1", Key.Q },
 		{ "ability_2", Key.V }
 	};
+
+	public static Dictionary<string, Key> CreateDefaultKeyBinds()
+	{
+		return new Dictionary<string, Key>()
+		{
+			{ "move_left", Key.A },
+			{ "move_right", Key.D },
+			{ "move_up", Key.W },
+			{ "move_down", Key.S },
+			{ "interact", Key.E },
+			{ "reload", Key.R },
+			{ "ability_1", Key.Q },
+			{ "ability_2", Key.V }
+		};
+	}
 
 	public static void LoadSettings()
 	{
@@ -47,23 +61,25 @@ public static class SettingsManager
 			return;
 		}
 
-		Brightness = (float)config.GetValue("Display", "Brightness", 1.0f);
+		Brightness = Mathf.Clamp((float)config.GetValue("Display", "Brightness", 1.0f), 1.0f, 2.0f);
 		MaxFps = (int)config.GetValue("Display", "MaxFps", 60);
 		VSync = (bool)config.GetValue("Display", "VSync", true);
-		ScreenShake = (float)config.GetValue("Display", "ScreenShake", 1.0f);
+		ScreenShake = Mathf.Clamp((float)config.GetValue("Display", "ScreenShake", 1.0f), 0.0f, 2.0f);
 
-		MasterVolume = (float)config.GetValue("Audio", "MasterVolume", 80f);
-		MusicVolume = (float)config.GetValue("Audio", "MusicVolume", 70f);
-		SFXVolume = (float)config.GetValue("Audio", "SFXVolume", 70f);
-
-		MouseSensitivity = (float)config.GetValue("Controllers", "MouseSensitivity", 1.0f);
+		MasterVolume = Mathf.Clamp((float)config.GetValue("Audio", "MasterVolume", 80f), 0f, 100f);
+		MusicVolume = Mathf.Clamp((float)config.GetValue("Audio", "MusicVolume", 70f), 0f, 100f);
+		SFXVolume = Mathf.Clamp((float)config.GetValue("Audio", "SFXVolume", 70f), 0f, 100f);
 
 		var actions = new List<string>(KeyBinds.Keys);
 		foreach (var action in actions)
 		{
 			if (config.HasSectionKey("Binds", action))
 			{
-				KeyBinds[action] = (Key)(int)config.GetValue("Binds", action);
+				Key loadedKey = (Key)(int)config.GetValue("Binds", action);
+				if (loadedKey != Key.None)
+				{
+					KeyBinds[action] = loadedKey;
+				}
 			}
 		}
 
@@ -84,8 +100,6 @@ public static class SettingsManager
 		config.SetValue("Audio", "MusicVolume", MusicVolume);
 		config.SetValue("Audio", "SFXVolume", SFXVolume);
 
-		config.SetValue("Controllers", "MouseSensitivity", MouseSensitivity);
-
 		foreach (var pair in KeyBinds)
 		{
 			config.SetValue("Binds", pair.Key, (int)pair.Value);
@@ -102,14 +116,11 @@ public static class SettingsManager
 		Engine.MaxFps = MaxFps;
 		DisplayServer.WindowSetVsyncMode(VSync ? DisplayServer.VSyncMode.Enabled : DisplayServer.VSyncMode.Disabled);
 
-		int masterIdx = AudioServer.GetBusIndex("Master");
-		if (masterIdx != -1) AudioServer.SetBusVolumeDb(masterIdx, Mathf.LinearToDb(MasterVolume / 100f));
-
-		int musicIdx = AudioServer.GetBusIndex("Music");
-		if (musicIdx != -1) AudioServer.SetBusVolumeDb(musicIdx, Mathf.LinearToDb(MusicVolume / 100f));
-
-		int sfxIdx = AudioServer.GetBusIndex("SFX");
-		if (sfxIdx != -1) AudioServer.SetBusVolumeDb(sfxIdx, Mathf.LinearToDb(SFXVolume / 100f));
+		SetBusVolume("Master", MasterVolume);
+		SetBusVolume("Music", MusicVolume);
+		SetBusVolume("SFX", SFXVolume);
+		// UI bus tracks SFX slider volume without dungeon reverb
+		SetBusVolume("UI", SFXVolume);
 
 		foreach (var pair in KeyBinds)
 		{
@@ -120,24 +131,38 @@ public static class SettingsManager
 			}
 
 			InputMap.ActionEraseEvents(pair.Key);
-			var keyEvent = new InputEventKey();
-			keyEvent.PhysicalKeycode = pair.Value;
-			keyEvent.Keycode = pair.Value;
+			// Use PhysicalKeycode only so movement/abilities remain layout-independent (EN/RU/etc.).
+			var keyEvent = new InputEventKey
+			{
+				PhysicalKeycode = pair.Value
+			};
 			InputMap.ActionAddEvent(pair.Key, keyEvent);
 		}
 	}
 
+	private static void SetBusVolume(string busName, float volumePercent)
+	{
+		int busIdx = AudioServer.GetBusIndex(busName);
+		if (busIdx == -1) return;
+
+		float linear = Mathf.Clamp(volumePercent / 100f, 0f, 1f);
+		AudioServer.SetBusVolumeDb(busIdx, linear <= 0.0001f ? -80.0f : Mathf.LinearToDb(linear));
+		AudioServer.SetBusMute(busIdx, linear <= 0.0001f);
+	}
+
 	public static void ApplyFontQualityFixes()
 	{
-		string[] fontPaths = new[]
+		if (_fontsConfigured) return;
+		_fontsConfigured = true;
+
+		Font[] fonts = new[]
 		{
-			"res://assets/fonts/silver/Silver.ttf",
-			"res://assets/fonts/fff-forward/FFFFORWA.TTF"
+			GameResourceCache.GetSilverFont(),
+			GameResourceCache.GetForwardFont()
 		};
 
-		foreach (string path in fontPaths)
+		foreach (var font in fonts)
 		{
-			var font = GD.Load<Font>(path);
 			if (font is FontFile ff)
 			{
 				ff.Antialiasing = TextServer.FontAntialiasing.Gray;
@@ -150,25 +175,27 @@ public static class SettingsManager
 
 	private static void EnsureAudioBuses()
 	{
-		int musicIdx = AudioServer.GetBusIndex("Music");
-		if (musicIdx == -1)
+		EnsureBus("Music");
+		int sfxIdx = EnsureBus("SFX");
+		EnsureBus("UI");
+
+		if (sfxIdx != -1)
+		{
+			ConfigureReverb(sfxIdx);
+		}
+	}
+
+	private static int EnsureBus(string busName)
+	{
+		int idx = AudioServer.GetBusIndex(busName);
+		if (idx == -1)
 		{
 			AudioServer.AddBus();
-			musicIdx = AudioServer.GetBusCount() - 1;
-			AudioServer.SetBusName(musicIdx, "Music");
-			AudioServer.SetBusSend(musicIdx, "Master");
+			idx = AudioServer.GetBusCount() - 1;
+			AudioServer.SetBusName(idx, busName);
+			AudioServer.SetBusSend(idx, "Master");
 		}
-
-		int sfxIdx = AudioServer.GetBusIndex("SFX");
-		if (sfxIdx == -1)
-		{
-			AudioServer.AddBus();
-			sfxIdx = AudioServer.GetBusCount() - 1;
-			AudioServer.SetBusName(sfxIdx, "SFX");
-			AudioServer.SetBusSend(sfxIdx, "Master");
-		}
-
-		ConfigureReverb(sfxIdx);
+		return idx;
 	}
 
 	private static void ConfigureReverb(int sfxIdx)

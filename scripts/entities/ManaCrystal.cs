@@ -1,157 +1,23 @@
 using Godot;
-using System;
 
-public partial class ManaCrystal : Node2D
+public partial class ManaCrystal : PickupItem
 {
-	private bool _isBeingPickedUp = false;
-	private bool _isAnimatingSpawn = true;
-	private Node2D _targetPlayer;
-	private Area2D _area;
-	private float _speed = 600.0f;
-	private float _pickupDelay = 0.15f;
 	private static AudioStream _manaSound;
 
-	public override void _Ready()
+	protected override string LightName => "ManaGlow";
+	protected override Color LightColor => new Color(0.32f, 0.82f, 1.0f, 1.0f);
+	protected override Color GlowInnerColor => new Color(0.85f, 0.98f, 1.0f, 1.0f);
+	protected override Color GlowMidColor => new Color(0.28f, 0.75f, 1.0f, 0.55f);
+	protected override string VisualNodeName => "Sprite2D";
+
+	protected override AudioStream GetPickupSound()
 	{
-		Scale = new Vector2(3.0f, 3.0f);
-		_area = GetNode<Area2D>("Area2D");
-		_area.AreaEntered += _on_area_2d_area_entered;
-
-		var sprite = GetNodeOrNull<Sprite2D>("Sprite2D");
-		if (sprite != null)
-		{
-			sprite.Material = new CanvasItemMaterial
-			{
-				LightMode = CanvasItemMaterial.LightModeEnum.Unshaded
-			};
-		}
-
-		SetupGlow();
-
-		if (_manaSound == null)
-		{
-			_manaSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-		}
-
-		PlaySpawnAnimation();
+		return _manaSound ??= GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
 	}
 
-	private void SetupGlow()
+	protected override void ApplyPickupEffect(Player player)
 	{
-		var light = new PointLight2D();
-		light.Name = "ManaGlow";
-		light.ShadowEnabled = false;
-		light.Color = new Color(0.32f, 0.82f, 1.0f, 1.0f);
-		light.Energy = 0.85f;
-
-		var gradient = new Gradient();
-		gradient.Colors = new Color[]
-		{
-			new Color(0.85f, 0.98f, 1.0f, 1.0f),
-			new Color(0.28f, 0.75f, 1.0f, 0.55f),
-			new Color(0.0f, 0.0f, 0.0f, 0.0f)
-		};
-		gradient.Offsets = new float[] { 0.0f, 0.45f, 1.0f };
-
-		var gradTex = new GradientTexture2D();
-		gradTex.Gradient = gradient;
-		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
-		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
-		gradTex.FillTo = new Vector2(0.5f, 0.0f);
-		gradTex.Width = 64;
-		gradTex.Height = 64;
-
-		light.Texture = gradTex;
-		AddChild(light);
-	}
-
-	private void PlaySpawnAnimation()
-	{
-		_isAnimatingSpawn = true;
-
-		Vector2 startPos = GlobalPosition;
-		Vector2 jumpPos = startPos + new Vector2(0, -20 * 3f);
-		Vector2 landPos = startPos + new Vector2((float)GD.RandRange(-15, 15) * 3f, 5 * 3f);
-
-		var tween = CreateTween();
-		tween.TweenProperty(this, "global_position", jumpPos, 0.25f).SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.Out);
-		tween.TweenProperty(this, "global_position", landPos, 0.25f).SetTrans(Tween.TransitionType.Quad).SetEase(Tween.EaseType.In);
-
-		tween.Finished += () => _isAnimatingSpawn = false;
-	}
-
-	public override void _Process(double delta)
-	{
-		if (_isAnimatingSpawn) return;
-
-		if (_pickupDelay > 0)
-		{
-			_pickupDelay -= (float)delta;
-			return;
-		}
-
-		if (!_isBeingPickedUp)
-		{
-			TryDetectPlayerInZone();
-		}
-
-		if (_isBeingPickedUp && IsInstanceValid(_targetPlayer))
-		{
-			Vector2 direction = (_targetPlayer.GlobalPosition - GlobalPosition).Normalized();
-			GlobalPosition += direction * _speed * (float)delta;
-			_speed += 1500.0f * (float)delta;
-
-			if (GlobalPosition.DistanceTo(_targetPlayer.GlobalPosition) < 18.0f)
-			{
-				if (_targetPlayer is Player p)
-				{
-					float maxMana = p.MaxManaEffective;
-					p.CurrentMana = Mathf.Min(maxMana, p.CurrentMana + 8.0f);
-					if (_manaSound != null)
-					{
-						MainMenu.PlayUISound(_manaSound);
-					}
-				}
-				QueueFree();
-			}
-		}
-	}
-
-	private void TryDetectPlayerInZone()
-	{
-		if (_area != null && _area.Monitoring)
-		{
-			foreach (var overlapping in _area.GetOverlappingAreas())
-			{
-				if (overlapping.GetParent() is Player overlappingPlayer)
-				{
-					StartPickup(overlappingPlayer);
-					return;
-				}
-			}
-		}
-
-		var nearby = GetTree().GetFirstNodeInGroup("Player") as Node2D;
-		if (nearby != null && GlobalPosition.DistanceTo(nearby.GlobalPosition) <= 32.0f * World.Scale)
-		{
-			StartPickup(nearby);
-		}
-	}
-
-	private void _on_area_2d_area_entered(Area2D area)
-	{
-		if (!_isBeingPickedUp && !_isAnimatingSpawn && _pickupDelay <= 0 && area.GetParent() is Player player)
-		{
-			StartPickup(player);
-		}
-	}
-
-	private void StartPickup(Node2D player)
-	{
-		_targetPlayer = player;
-		_isBeingPickedUp = true;
-
-		var tween = CreateTween();
-		tween.TweenProperty(this, "scale", Scale * 0.8f, 0.3f);
+		float maxMana = player.MaxManaEffective;
+		player.CurrentMana = Mathf.Min(maxMana, player.CurrentMana + 8.0f);
 	}
 }

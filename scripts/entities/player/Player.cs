@@ -16,8 +16,13 @@ public partial class Player : CharacterBody2D
 	private PointLight2D _torchLight;
 	private CanvasLayer _damageFlashLayer;
 	private ColorRect _damageFlashRect;
+	private Sprite2D _groundShadow;
+	private ShaderMaterial _hitFlashMat;
+	private Tween _hitFlashTween;
+	private float _footstepTimer = 0.0f;
 
 	private AnimatedSprite2D _animatedSprite;
+	public AnimatedSprite2D Sprite => _animatedSprite;
 	private Node2D _abilityManager;
 	private Camera2D _camera;
 
@@ -93,7 +98,8 @@ public partial class Player : CharacterBody2D
 	public bool IsShieldActive => ActiveShieldTimer > 0.0f;
 	private double _shieldPulseTime = 0.0;
 
-	private PackedScene _fireballScene;
+	private WaveManager _cachedWaveManager;
+	private HUD _cachedHud;
 	public CharacterAbilitySet CharacterAbilities { get; private set; }
 
 	public void RegisterInteractable(IInteractable interactable)
@@ -113,6 +119,7 @@ public partial class Player : CharacterBody2D
 	public override void _Ready()
 	{
 		Scale = new Vector2(3.0f, 3.0f);
+		ZIndex = 2;
 		_animatedSprite = GetNode<AnimatedSprite2D>("AnimatedSprite2D");
 		_abilityManager = GetNode<Node2D>("AbilityManager");
 		_camera = GetNodeOrNull<Camera2D>("Camera2D") ?? GetNodeOrNull<Camera2D>("../Camera2D");
@@ -128,13 +135,7 @@ public partial class Player : CharacterBody2D
 		if (SaveManager.CurrentSave != null && !string.IsNullOrEmpty(SaveManager.CurrentSave.CharacterName))
 		{
 			string savedName = SaveManager.CurrentSave.CharacterName;
-			string charPath = "res://data/characters/knight.tres";
-			if (savedName.Equals("Magician", StringComparison.OrdinalIgnoreCase))
-				charPath = "res://data/characters/magician.tres";
-			else if (savedName.Equals("Rogue", StringComparison.OrdinalIgnoreCase))
-				charPath = "res://data/characters/rogue.tres";
-			else if (savedName.Equals("Berserker", StringComparison.OrdinalIgnoreCase))
-				charPath = "res://data/characters/berserker.tres";
+			string charPath = GameLogic.ResolveCharacterDataPath(savedName);
 
 			var loadedConfig = GD.Load<PlayerData>(charPath);
 			if (loadedConfig != null)
@@ -147,6 +148,9 @@ public partial class Player : CharacterBody2D
 		CharacterAbilities = CharacterAbilitySet.CreateForCharacter(this, Config?.CharacterName ?? "Knight");
 
 		_animatedSprite.Visible = true;
+		_hitFlashMat = DungeonVisuals.CreateHitFlashMaterial();
+		_animatedSprite.Material = _hitFlashMat;
+		_groundShadow = DungeonVisuals.AttachGroundShadow(this, new Vector2(0, -1), new Vector2(0.55f, 0.48f), 0.58f);
 
 		if (Config != null && Config.CharacterAnimations != null)
 		{
@@ -222,7 +226,6 @@ public partial class Player : CharacterBody2D
 
 				if (Config != null && Config.StartingWeapons != null)
 				{
-					save.WeaponResourcePaths = new List<string>();
 					for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++)
 					{
 						var weaponData = Config.StartingWeapons[i];
@@ -230,9 +233,9 @@ public partial class Player : CharacterBody2D
 						{
 							WeaponSlots[i].CurrentWeapon = weaponData;
 							WeaponSlots[i].ApplyWeaponSettings();
-							save.WeaponResourcePaths.Add(weaponData.GetEffectiveResourcePath());
 						}
 					}
+					SaveManager.CapturePlayerInventory(this, save);
 					SaveManager.SaveGame(save);
 				}
 			}
@@ -243,20 +246,12 @@ public partial class Player : CharacterBody2D
 					string resPath = save.WeaponResourcePaths[i];
 					if (!string.IsNullOrEmpty(resPath))
 					{
-						var weaponData = GD.Load<WeaponData>(resPath);
+						var customStats = (save.WeaponSlotCustomStats != null && i < save.WeaponSlotCustomStats.Count)
+							? save.WeaponSlotCustomStats[i]
+							: null;
+						var weaponData = SaveManager.RestoreWeaponWithStats(resPath, customStats);
 						if (weaponData != null)
 						{
-							if (save.WeaponSlotCustomStats != null && i < save.WeaponSlotCustomStats.Count && save.WeaponSlotCustomStats[i] != null)
-							{
-								var st = save.WeaponSlotCustomStats[i];
-								weaponData = weaponData.CreateUniqueCopy();
-								weaponData.Damage = st.Damage;
-								weaponData.AttackCooldown = st.AttackCooldown;
-								weaponData.MaxAmmo = st.MaxAmmo;
-								weaponData.ReloadTime = st.ReloadTime;
-								weaponData.ManaCost = st.ManaCost;
-								weaponData.KnockbackForce = st.KnockbackForce;
-							}
 							WeaponSlots[i].CurrentWeapon = weaponData;
 							WeaponSlots[i].ApplyWeaponSettings();
 						}
@@ -282,35 +277,21 @@ public partial class Player : CharacterBody2D
 		_torchLight.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5;
 		_torchLight.Position = new Vector2(0, -9);
 
-		var gradient = new Gradient();
-		gradient.Colors = new Color[]
-		{
+		_torchLight.Texture = GameResourceCache.GetRadialGlowTexture(
 			new Color(1f, 0.92f, 0.75f, 1f),
 			new Color(1f, 0.92f, 0.75f, 0.8f),
-			new Color(0f, 0f, 0f, 0f)
-		};
-		gradient.Offsets = new float[] { 0.0f, TorchGradientMiddleOffset, 1.0f };
-
-		var gradTex = new GradientTexture2D();
-		gradTex.Gradient = gradient;
-		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
-		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
-		gradTex.FillTo = new Vector2(TorchFillToX, TorchFillToY);
-		gradTex.Width = TorchRadius;
-		gradTex.Height = TorchRadius;
-
-		_torchLight.Texture = gradTex;
+			TorchGradientMiddleOffset,
+			TorchRadius,
+			new Vector2(TorchFillToX, TorchFillToY));
 		AddChild(_torchLight);
-
-		_fireballScene = GD.Load<PackedScene>("res://scene/abilities/fireball.tscn");
 
 		_damageFlashLayer = new CanvasLayer();
 		_damageFlashLayer.Layer = 50;
 		_damageFlashRect = new ColorRect();
-		_damageFlashRect.Color = new Color(0.7f, 0.03f, 0.03f);
+		_damageFlashRect.Color = Colors.White;
+		_damageFlashRect.Material = DungeonVisuals.GetVignetteMaterial(0.88f, 0.62f, new Color(0.82f, 0.04f, 0.06f, 1.0f));
 		_damageFlashRect.MouseFilter = Control.MouseFilterEnum.Ignore;
-		_damageFlashRect.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
-		_damageFlashRect.Size = GetViewport().GetVisibleRect().Size;
+		_damageFlashRect.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		_damageFlashRect.Modulate = new Color(1, 1, 1, 0);
 		_damageFlashLayer.AddChild(_damageFlashRect);
 		AddChild(_damageFlashLayer);
@@ -322,12 +303,20 @@ public partial class Player : CharacterBody2D
 
 		if (!IsShieldActive) return;
 
-		float pulse = 1.0f + Mathf.Sin((float)_shieldPulseTime * 8.0f) * 0.08f;
+		float t = (float)_shieldPulseTime;
+		float pulse = 1.0f + Mathf.Sin(t * 7.5f) * 0.07f;
 		Vector2 center = new Vector2(0, -9);
-		float r = 13.5f * pulse;
+		float r = 14.0f * pulse;
 
-		DrawCircle(center, r, new Color(0.15f, 0.75f, 1.0f, 0.22f));
-		DrawArc(center, r, 0f, Mathf.Tau, 32, new Color(0.45f, 0.92f, 1.0f, 0.88f), 1.4f, true);
+		DrawCircle(center, r, new Color(0.10f, 0.62f, 0.95f, 0.18f));
+		DrawArc(center, r, 0f, Mathf.Tau, 32, new Color(0.45f, 0.92f, 1.0f, 0.90f), 1.35f, true);
+		DrawArc(center, r * 0.78f, t * 2.2f, t * 2.2f + Mathf.Pi * 1.45f, 20, new Color(0.80f, 0.98f, 1.0f, 0.62f), 0.85f, true);
+		for (int i = 0; i < 6; i++)
+		{
+			float ang = t * 1.8f + i * (Mathf.Tau / 6.0f);
+			Vector2 pt = center + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * r;
+			DrawCircle(pt, 1.15f, new Color(0.88f, 0.98f, 1.0f, 0.95f));
+		}
 	}
 
 	public override void _PhysicsProcess(double delta)
@@ -365,7 +354,7 @@ public partial class Player : CharacterBody2D
 
 		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root))
 		{
-			CharacterAbilities?.UpdateSpecialAttack(delta, false);
+			CharacterAbilities?.CancelSpecialAttack();
 			Velocity = Vector2.Zero;
 			MoveAndSlide();
 			UpdateAnimation(Vector2.Zero);
@@ -393,6 +382,23 @@ public partial class Player : CharacterBody2D
 
 		Velocity = direction * currentSpeed + _externalVelocity;
 		MoveAndSlide();
+
+		if (direction != Vector2.Zero && GetParent() != null)
+		{
+			_footstepTimer -= (float)delta;
+			if (_footstepTimer <= 0.0f)
+			{
+				_footstepTimer = isRunning ? 0.14f : 0.30f;
+				Color dustColor = isRunning
+					? new Color(0.68f, 0.62f, 0.54f, 0.68f)
+					: new Color(0.50f, 0.45f, 0.40f, 0.36f);
+				DungeonVisuals.SpawnFootstepDust(GetParent(), GlobalPosition + new Vector2(0, 2), dustColor);
+			}
+		}
+		else
+		{
+			_footstepTimer = 0.05f;
+		}
 
 		if (_externalVelocity.Length() > 0)
 		{
@@ -480,6 +486,20 @@ public partial class Player : CharacterBody2D
 
 		ApplyCameraShake(DamageShakeIntensity * SettingsManager.ScreenShake);
 		FlashRedScreen();
+		TriggerSpriteHitFlash();
+
+		if (sourcePos != default && GetParent() != null)
+		{
+			DungeonVisuals.SpawnImpactSparks(
+				GetParent(),
+				GlobalPosition + new Vector2(0, -18),
+				GlobalPosition - sourcePos,
+				new Color(1.0f, 0.28f, 0.22f),
+				7,
+				135.0f,
+				75.0f,
+				1.6f);
+		}
 
 		if (knockForce > 0 && sourcePos != default)
 		{
@@ -497,8 +517,53 @@ public partial class Player : CharacterBody2D
 		if (_damageFlashRect == null) return;
 
 		var tween = _damageFlashRect.CreateTween();
-		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.32f, 0.08);
-		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.0f, 0.92);
+		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.58f, 0.06);
+		tween.TweenProperty(_damageFlashRect, "modulate:a", 0.0f, 0.58);
+	}
+
+	private void TriggerSpriteHitFlash()
+	{
+		if (_hitFlashMat == null) return;
+		_hitFlashTween?.Kill();
+		_hitFlashMat.SetShaderParameter("flash_color", new Color(1.0f, 0.45f, 0.42f, 1.0f));
+		_hitFlashMat.SetShaderParameter("flash_amount", 0.92f);
+		_hitFlashTween = CreateTween();
+		_hitFlashTween.TweenMethod(
+			Callable.From<float>(v => { if (GodotObject.IsInstanceValid(_hitFlashMat)) _hitFlashMat.SetShaderParameter("flash_amount", v); }),
+			0.92f,
+			0.0f,
+			0.14f);
+	}
+
+	public void PlayDashVisuals(Vector2 dashDir)
+	{
+		Node parent = GetParent();
+		if (parent == null) return;
+
+		DungeonVisuals.SpawnImpactSparks(
+			parent,
+			GlobalPosition + new Vector2(0, -10),
+			-dashDir,
+			new Color(0.45f, 0.92f, 1.0f),
+			10,
+			160.0f,
+			65.0f,
+			1.7f);
+
+		float[] delays = { 0.01f, 0.055f, 0.105f, 0.155f };
+		float[] alphas = { 0.55f, 0.44f, 0.34f, 0.24f };
+		for (int i = 0; i < delays.Length; i++)
+		{
+			float alpha = alphas[i];
+			var timer = GetTree().CreateTimer(delays[i], processAlways: false);
+			timer.Timeout += () =>
+			{
+				if (GodotObject.IsInstanceValid(this) && GodotObject.IsInstanceValid(_animatedSprite) && GodotObject.IsInstanceValid(parent))
+				{
+					DungeonVisuals.SpawnDashAfterimage(parent, _animatedSprite, new Color(0.38f, 0.88f, 1.0f, alpha), Scale);
+				}
+			};
+		}
 	}
 
 	private void ApplyCameraShake(float intensity)
@@ -532,7 +597,7 @@ public partial class Player : CharacterBody2D
 			var deadSound = GD.Load<AudioStream>("res://assets/sounds/dead.wav");
 			if (deadSound != null)
 			{
-				MainMenu.PlayUISound(deadSound);
+				GameResourceCache.PlayPooledSound(GetTree(), deadSound, "SFX");
 			}
 		}
 		catch (Exception e)
@@ -583,7 +648,7 @@ public partial class Player : CharacterBody2D
 	{
 		if (area.IsInGroup("EnemyWeapon"))
 		{
-			var controller = area.GetParent()?.GetParent() as AttackController;
+			var controller = GameResourceCache.FindAncestor<AttackController>(area);
 			if (controller != null && controller.CurrentWeapon != null)
 			{
 				float damage = controller.CurrentWeapon.Damage;
@@ -602,9 +667,9 @@ public partial class Player : CharacterBody2D
 
 		// Регенерация ХП и маны работает во время обратного отсчета до начала волны и во время самой волны,
 		// но отключается после зачистки этажа, чтобы игрок не стоял на пустом этаже, абузя восстановление
-		var waveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
-		var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
-		bool canRegen = (waveManager != null && waveManager.WaveInProgress) || (hud != null && hud.IsCountingDown);
+		if (!IsInstanceValid(_cachedWaveManager)) _cachedWaveManager = GetTree().GetFirstNodeInGroup("WaveManager") as WaveManager;
+		if (!IsInstanceValid(_cachedHud)) _cachedHud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
+		bool canRegen = (_cachedWaveManager != null && _cachedWaveManager.WaveInProgress) || (_cachedHud != null && _cachedHud.IsCountingDown);
 		if (!canRegen) return;
 
 		float maxHp = MaxHealthEffective;

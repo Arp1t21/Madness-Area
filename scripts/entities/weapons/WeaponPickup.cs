@@ -8,6 +8,9 @@ public partial class WeaponPickup : Node2D, IInteractable
 	
 	private Area2D _pickupArea;
 	private Label _nameLabel;
+	private Sprite2D _groundSprite;
+	private Vector2 _groundSpriteBasePos;
+	private float _bobTime = 0.0f;
 	private bool _playerInRange = false;
 	private Player _player;
 
@@ -44,15 +47,42 @@ public partial class WeaponPickup : Node2D, IInteractable
 				Sprite2D weaponSprite = FindSpriteRecursive(instance);
 
 				if (weaponSprite != null) {
-					var groundSprite = GetNodeOrNull<Sprite2D>("Sprite2D");
-					if (groundSprite != null) {
-						groundSprite.Texture = weaponSprite.Texture;
-						groundSprite.Scale = weaponSprite.Scale;
-						groundSprite.Visible = true;
+					_groundSprite = GetNodeOrNull<Sprite2D>("Sprite2D");
+					if (_groundSprite != null) {
+						_groundSprite.Texture = weaponSprite.Texture;
+						_groundSprite.Scale = weaponSprite.Scale;
+						_groundSprite.Visible = true;
+						_groundSpriteBasePos = _groundSprite.Position;
 					}
 				}
-				instance.QueueFree(); // Удаляем временный экземпляр
+				instance.QueueFree(); // Удаляем временный экземляр
 			}
+		}
+
+		DungeonVisuals.AttachGroundShadow(this, new Vector2(0, 5), new Vector2(0.55f, 0.44f), 0.50f);
+		var glowTex = GameResourceCache.GetRadialGlowTexture(
+			new Color(0.55f, 0.88f, 1.0f, 0.85f),
+			Colors.Transparent,
+			0.95f,
+			56,
+			new Vector2(0.8f, 0.8f));
+		GameResourceCache.CreateGlowLight(
+			this,
+			"WeaponPickupGlow",
+			Vector2.Zero,
+			new Color(0.55f, 0.86f, 1.0f, 0.9f),
+			0.62f,
+			glowTex,
+			shadowEnabled: false);
+		_bobTime = (float)GD.RandRange(0.0, Math.PI * 2.0);
+	}
+
+	public override void _Process(double delta)
+	{
+		if (_groundSprite != null && GodotObject.IsInstanceValid(_groundSprite))
+		{
+			_bobTime += (float)delta * 2.8f;
+			_groundSprite.Position = _groundSpriteBasePos + new Vector2(0f, Mathf.Sin(_bobTime) * 1.3f);
 		}
 	}
 

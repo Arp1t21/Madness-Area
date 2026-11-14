@@ -28,14 +28,8 @@ public partial class SettingsMenu : CanvasLayer
 	private Label _sfxValueLabel;
 
 	// Controls settings UI
-	private HSlider _sensitivitySlider;
-	private Label _sensitivityValueLabel;
 	private Dictionary<string, Button> _bindButtons = new Dictionary<string, Button>();
-
-	// General settings (Subliminal decorative placeholders / Reset functionality)
-	private OptionButton _textLangOption;
-	private OptionButton _voiceLangOption;
-	private CheckBox _subtitlesCheck;
+	private Dictionary<string, Key> _pendingKeyBinds = new Dictionary<string, Key>();
 
 	private string _actionToBind = null;
 	private bool _isListeningForBind = false;
@@ -45,50 +39,67 @@ public partial class SettingsMenu : CanvasLayer
 		ProcessMode = ProcessModeEnum.Always;
 		Layer = 25;
 		SettingsManager.ApplyFontQualityFixes();
-		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		_pendingKeyBinds = new Dictionary<string, Key>(SettingsManager.KeyBinds);
+		var titleFont = GameResourceCache.GetSilverFont();
 
-		// 1. Create a root Control node
 		var rootControl = new Control();
 		AddChild(rootControl);
-		
+
 		var viewportSize = GetViewport().GetVisibleRect().Size;
 		float uiScale = Mathf.Clamp(viewportSize.X / 960.0f, 1.0f, 3.0f);
 		rootControl.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
 		rootControl.Size = viewportSize / uiScale;
 		rootControl.Scale = new Vector2(uiScale, uiScale);
 
-		// Solid dark background overlay (almost black)
 		var bgOverlay = new ColorRect();
-		bgOverlay.Color = new Color(0.02f, 0.02f, 0.02f, 1.0f);
+		bgOverlay.Color = new Color(0.025f, 0.028f, 0.042f, 0.94f);
 		rootControl.AddChild(bgOverlay);
 		bgOverlay.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 
-		// Main Margin Container
+		var vig = new ColorRect
+		{
+			Material = DungeonVisuals.GetVignetteMaterial(0.75f, 0.55f),
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		vig.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
+		rootControl.AddChild(vig);
+
 		var marginContainer = new MarginContainer();
 		marginContainer.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
-		marginContainer.AddThemeConstantOverride("margin_left", 40);
-		marginContainer.AddThemeConstantOverride("margin_right", 40);
+		marginContainer.AddThemeConstantOverride("margin_left", 36);
+		marginContainer.AddThemeConstantOverride("margin_right", 36);
 		marginContainer.AddThemeConstantOverride("margin_top", 20);
 		marginContainer.AddThemeConstantOverride("margin_bottom", 20);
 		rootControl.AddChild(marginContainer);
 
-		var mainVBox = new VBoxContainer();
-		mainVBox.AddThemeConstantOverride("separation", 12);
-		marginContainer.AddChild(mainVBox);
+		var frame = new PanelContainer();
+		frame.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 2, 5, 10));
+		marginContainer.AddChild(frame);
 
-		// Title Label: "SETTINGS"
+		var innerMargin = new MarginContainer();
+		innerMargin.AddThemeConstantOverride("margin_left", 24);
+		innerMargin.AddThemeConstantOverride("margin_right", 24);
+		innerMargin.AddThemeConstantOverride("margin_top", 16);
+		innerMargin.AddThemeConstantOverride("margin_bottom", 16);
+		frame.AddChild(innerMargin);
+
+		var mainVBox = new VBoxContainer();
+		mainVBox.AddThemeConstantOverride("separation", 10);
+		innerMargin.AddChild(mainVBox);
+
 		var titleLabel = new Label();
 		titleLabel.Text = "SETTINGS";
 		titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		titleLabel.AddThemeFontOverride("font", titleFont);
 		titleLabel.AddThemeFontSizeOverride("font_size", 32);
-		titleLabel.AddThemeColorOverride("font_color", new Color(1.0f, 1.0f, 1.0f));
+		titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(titleLabel, 2);
 		mainVBox.AddChild(titleLabel);
 
-		// Horizontal tab buttons (GENERAL, GRAPHICS, IMMERSION, AUDIO, CONTROLS)
 		var tabsHBox = new HBoxContainer();
 		tabsHBox.Alignment = BoxContainer.AlignmentMode.Center;
-		tabsHBox.AddThemeConstantOverride("separation", 35);
+		tabsHBox.AddThemeConstantOverride("separation", 18);
 		mainVBox.AddChild(tabsHBox);
 
 		string[] tabNames = new string[] { "GENERAL", "GRAPHICS", "IMMERSION", "AUDIO", "CONTROLS" };
@@ -97,49 +108,40 @@ public partial class SettingsMenu : CanvasLayer
 			int tabIndex = i;
 			var btn = new Button();
 			btn.Text = tabNames[i];
-			btn.Flat = true;
-			btn.AddThemeFontOverride("font", titleFont);
-			btn.AddThemeFontSizeOverride("font_size", 18);
 			btn.Pressed += () => SelectTab(tabIndex);
 			tabsHBox.AddChild(btn);
 			_tabButtons.Add(btn);
 		}
 
-		// Horizontal separator line below tabs
-		var horizontalLine = new ColorRect();
-		horizontalLine.Color = new Color(1.0f, 1.0f, 1.0f, 0.4f);
-		horizontalLine.CustomMinimumSize = new Vector2(0, 1);
-		mainVBox.AddChild(horizontalLine);
+		DungeonVisuals.AddDivider(mainVBox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.7f), 1.5f);
 
-		// Content layout: Left Panel (Options) | Vertical Line Divider | Right Panel (Description)
 		var splitHBox = new HBoxContainer();
 		splitHBox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		splitHBox.AddThemeConstantOverride("separation", 20);
+		splitHBox.AddThemeConstantOverride("separation", 18);
 		mainVBox.AddChild(splitHBox);
 
-		// Left Container: TabContainer with hidden tabs
 		_tabContainer = new TabContainer();
 		_tabContainer.TabsVisible = false;
 		_tabContainer.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		_tabContainer.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		var tabEmptyStyle = new StyleBoxEmpty();
-		_tabContainer.AddThemeStyleboxOverride("panel", tabEmptyStyle);
+		_tabContainer.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			DungeonVisuals.ObsidianPanel, DungeonVisuals.IronBorder, 1, 4, 2));
 		splitHBox.AddChild(_tabContainer);
 
-		// Vertical divider line in the center
-		var verticalLine = new ColorRect();
-		verticalLine.Color = new Color(1.0f, 1.0f, 1.0f, 0.4f);
-		verticalLine.CustomMinimumSize = new Vector2(1, 0);
-		verticalLine.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		splitHBox.AddChild(verticalLine);
+		var descPanel = new PanelContainer
+		{
+			CustomMinimumSize = new Vector2(280, 0)
+		};
+		descPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
+			DungeonVisuals.ObsidianPanel, DungeonVisuals.BrassDim, 1, 4, 3));
+		splitHBox.AddChild(descPanel);
 
-		// Right Container: Description panel
 		var descMargin = new MarginContainer();
-		descMargin.CustomMinimumSize = new Vector2(300, 0);
-		descMargin.AddThemeConstantOverride("margin_left", 15);
-		descMargin.AddThemeConstantOverride("margin_right", 15);
-		descMargin.AddThemeConstantOverride("margin_top", 10);
-		splitHBox.AddChild(descMargin);
+		descMargin.AddThemeConstantOverride("margin_left", 16);
+		descMargin.AddThemeConstantOverride("margin_right", 16);
+		descMargin.AddThemeConstantOverride("margin_top", 12);
+		descMargin.AddThemeConstantOverride("margin_bottom", 12);
+		descPanel.AddChild(descMargin);
 
 		var descVBox = new VBoxContainer();
 		descVBox.AddThemeConstantOverride("separation", 10);
@@ -148,91 +150,71 @@ public partial class SettingsMenu : CanvasLayer
 		_descriptionTitle = new Label();
 		_descriptionTitle.Text = "GENERAL";
 		_descriptionTitle.AddThemeFontOverride("font", titleFont);
-		_descriptionTitle.AddThemeFontSizeOverride("font_size", 20);
-		_descriptionTitle.AddThemeColorOverride("font_color", new Color(1, 1, 1));
+		_descriptionTitle.AddThemeFontSizeOverride("font_size", 22);
+		_descriptionTitle.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
+		DungeonVisuals.ApplyPixelOutline(_descriptionTitle, 1);
 		descVBox.AddChild(_descriptionTitle);
 
-		var descUnderline = new ColorRect();
-		descUnderline.Color = new Color(1.0f, 1.0f, 1.0f, 0.3f);
-		descUnderline.CustomMinimumSize = new Vector2(0, 1);
-		descVBox.AddChild(descUnderline);
+		DungeonVisuals.AddDivider(descVBox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.5f), 1.0f);
 
 		_descriptionText = new Label();
 		_descriptionText.Text = "";
 		_descriptionText.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		_descriptionText.AddThemeFontOverride("font", titleFont);
 		_descriptionText.AddThemeFontSizeOverride("font_size", 16);
-		_descriptionText.AddThemeColorOverride("font_color", new Color(0.8f, 0.8f, 0.8f));
+		_descriptionText.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
 		_descriptionText.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 		descVBox.AddChild(_descriptionText);
 
-		// Create each Tab Page
 		CreateGeneralTab(titleFont);
 		CreateGraphicsTab(titleFont);
 		CreateImmersionTab(titleFont);
 		CreateAudioTab(titleFont);
 		CreateControlsTab(titleFont);
 
-		// Footer: Back Button (aligned left)
 		var footerHBox = new HBoxContainer();
-		footerHBox.Alignment = BoxContainer.AlignmentMode.Begin;
+		footerHBox.Alignment = BoxContainer.AlignmentMode.End;
+		footerHBox.AddThemeConstantOverride("separation", 14);
 		mainVBox.AddChild(footerHBox);
 
-		var backBtn = new Button();
-		backBtn.Text = "BACK";
-		backBtn.Flat = true;
-		backBtn.CustomMinimumSize = new Vector2(100, 25);
-		backBtn.AddThemeFontOverride("font", titleFont);
-		backBtn.AddThemeFontSizeOverride("font_size", 20);
-		backBtn.Pressed += OnBackPressed;
-		
-		// Style BACK button to look minimal
-		var backNormal = new StyleBoxEmpty();
-		var backHover = new StyleBoxFlat();
-		backHover.BgColor = new Color(1, 1, 1, 0.05f);
-		backHover.ContentMarginLeft = backHover.ContentMarginRight = 10;
-		backBtn.AddThemeStyleboxOverride("normal", backNormal);
-		backBtn.AddThemeStyleboxOverride("hover", backHover);
-		backBtn.AddThemeStyleboxOverride("pressed", backNormal);
-		backBtn.AddThemeStyleboxOverride("focus", backNormal);
+		var cancelBtn = CreateFooterButton("CANCEL [ESC]", titleFont, DungeonVisuals.IronBorder.Lightened(0.35f));
+		cancelBtn.Pressed += OnCancelPressed;
+		footerHBox.AddChild(cancelBtn);
+
+		var backBtn = CreateFooterButton("SAVE & BACK", titleFont, DungeonVisuals.BrassGold);
+		backBtn.Pressed += OnSaveAndBackPressed;
 		footerHBox.AddChild(backBtn);
 
-		// Select general tab by default
+		DungeonVisuals.AttachFrameAccent(frame, DungeonVisuals.BrassGold, 6);
+
 		SelectTab(0);
-
-		// Load configurations
 		LoadCurrentSettingsIntoUI();
-
-		// Play UI click sounds
 		MainMenu.ConnectButtonSounds(this);
+	}
+
+	private Button CreateFooterButton(string text, Font font, Color accent)
+	{
+		var btn = new Button();
+		btn.Text = text;
+		btn.CustomMinimumSize = new Vector2(130, 30);
+		DungeonVisuals.StyleButton(btn, accent, font, 18, 3, DungeonVisuals.ObsidianCard, 12, 4);
+		return btn;
 	}
 
 	private void SelectTab(int index)
 	{
 		_tabContainer.CurrentTab = index;
+		var titleFont = GameResourceCache.GetSilverFont();
 
 		for (int i = 0; i < _tabButtons.Count; i++)
 		{
-			var btnNormal = new StyleBoxEmpty();
-			var btnFocus = new StyleBoxEmpty();
-			_tabButtons[i].AddThemeStyleboxOverride("normal", btnNormal);
-			_tabButtons[i].AddThemeStyleboxOverride("hover", btnNormal);
-			_tabButtons[i].AddThemeStyleboxOverride("pressed", btnNormal);
-			_tabButtons[i].AddThemeStyleboxOverride("focus", btnFocus);
-
 			if (i == index)
 			{
-				_tabButtons[i].AddThemeColorOverride("font_color", new Color(1, 1, 1));
-				_tabButtons[i].AddThemeColorOverride("font_hover_color", new Color(1, 1, 1));
-				_tabButtons[i].AddThemeColorOverride("font_pressed_color", new Color(1, 1, 1));
-				_tabButtons[i].AddThemeFontSizeOverride("font_size", 20);
+				DungeonVisuals.StyleButton(_tabButtons[i], DungeonVisuals.BrassGold, titleFont, 18, 3, DungeonVisuals.ObsidianElevated, 12, 4);
 			}
 			else
 			{
-				_tabButtons[i].AddThemeColorOverride("font_color", new Color(0.45f, 0.45f, 0.45f));
-				_tabButtons[i].AddThemeColorOverride("font_hover_color", new Color(0.7f, 0.7f, 0.7f));
-				_tabButtons[i].AddThemeColorOverride("font_pressed_color", new Color(0.45f, 0.45f, 0.45f));
-				_tabButtons[i].AddThemeFontSizeOverride("font_size", 17);
+				DungeonVisuals.StyleButton(_tabButtons[i], DungeonVisuals.IronBorder, titleFont, 16, 3, DungeonVisuals.ObsidianDeep, 10, 4);
 			}
 		}
 
@@ -245,11 +227,11 @@ public partial class SettingsMenu : CanvasLayer
 		{
 			case 0:
 				_descriptionTitle.Text = "GENERAL";
-				_descriptionText.Text = "A set of the most common settings players like to adjust.\n\nIf you'd like something added here, reach out and we'll get it in.\n\nChange a setting to see an overview and explanation of what it does!";
+				_descriptionText.Text = "Reset all settings to their default values.\n\nUse SAVE & BACK to apply and store changes, or press ESC to discard unsaved edits.";
 				break;
 			case 1:
 				_descriptionTitle.Text = "GRAPHICS";
-				_descriptionText.Text = "Configure visual quality and performance options.\n\nAdjust brightness, set frame rate limits, and toggle vertical synchronization to optimize performance on your system.";
+				_descriptionText.Text = "Configure visual quality and performance options.\n\nAdjust ambient brightness (1.00 = default darkness, up to 2.00 = brighter cave), set FPS limits, and toggle V-Sync.";
 				break;
 			case 2:
 				_descriptionTitle.Text = "IMMERSION";
@@ -257,11 +239,11 @@ public partial class SettingsMenu : CanvasLayer
 				break;
 			case 3:
 				_descriptionTitle.Text = "AUDIO";
-				_descriptionText.Text = "Configure volume levels for music and sound effects.\n\nAdjust master, music, and SFX volume sliders to your preference. SFX bus includes cavern reverb effects.";
+				_descriptionText.Text = "Configure volume levels for music, sound effects, and UI.\n\nSFX uses cavern reverb; menu and UI sounds bypass reverb on the dedicated UI bus.";
 				break;
 			case 4:
 				_descriptionTitle.Text = "CONTROLS";
-				_descriptionText.Text = "Configure mouse sensitivity and keyboard bindings.\n\nClick on any key action to bind a new key. Press ESC to cancel binding.";
+				_descriptionText.Text = "Configure keyboard bindings (layout-independent physical keys).\n\nClick an action to bind a new key. Conflicting keys automatically swap. Press ESC to cancel listening.";
 				break;
 		}
 	}
@@ -271,38 +253,9 @@ public partial class SettingsMenu : CanvasLayer
 		var scroll = CreateScrollContainer("General");
 		var vbox = CreateTabVBox(scroll);
 
-		// Text Language
-		_textLangOption = new OptionButton();
-		_textLangOption.AddThemeFontOverride("font", font);
-		_textLangOption.AddThemeFontSizeOverride("font_size", 16);
-		_textLangOption.AddItem("English", 0);
-		_textLangOption.AddItem("Russian", 1);
-		_textLangOption.CustomMinimumSize = new Vector2(80, 20);
-		vbox.AddChild(CreateOptionRow("Text Language", _textLangOption, font));
-
-		// Voice Language
-		_voiceLangOption = new OptionButton();
-		_voiceLangOption.AddThemeFontOverride("font", font);
-		_voiceLangOption.AddThemeFontSizeOverride("font_size", 16);
-		_voiceLangOption.AddItem("English", 0);
-		_voiceLangOption.AddItem("Russian", 1);
-		_voiceLangOption.CustomMinimumSize = new Vector2(80, 20);
-		vbox.AddChild(CreateOptionRow("Voice Language", _voiceLangOption, font));
-
-		// Subtitles
-		_subtitlesCheck = new CheckBox();
-		_subtitlesCheck.Text = "ON";
-		_subtitlesCheck.AddThemeFontOverride("font", font);
-		_subtitlesCheck.AddThemeFontSizeOverride("font_size", 16);
-		vbox.AddChild(CreateOptionRow("Subtitles", _subtitlesCheck, font));
-
-		// Reset Everything Button
 		var resetBtn = new Button();
 		resetBtn.Text = "RESET EVERYTHING";
-		resetBtn.Flat = true;
-		resetBtn.AddThemeFontOverride("font", font);
-		resetBtn.AddThemeFontSizeOverride("font_size", 16);
-		resetBtn.AddThemeColorOverride("font_color", new Color(1.0f, 0.25f, 0.25f));
+		DungeonVisuals.StyleButton(resetBtn, DungeonVisuals.Crimson, font, 16, 3, new Color(0.18f, 0.05f, 0.06f, 0.95f), 10, 3);
 		resetBtn.Pressed += OnResetSettingsPressed;
 		vbox.AddChild(CreateOptionRow("Reset Settings", resetBtn, font));
 	}
@@ -312,18 +265,18 @@ public partial class SettingsMenu : CanvasLayer
 		var scroll = CreateScrollContainer("Graphics");
 		var vbox = CreateTabVBox(scroll);
 
-		// Brightness Row
 		var brightnessHBox = new HBoxContainer();
 		brightnessHBox.AddThemeConstantOverride("separation", 5);
 		brightnessHBox.CustomMinimumSize = new Vector2(160, 20);
 
 		_brightnessSlider = new HSlider();
-		_brightnessSlider.MinValue = 0.5f;
-		_brightnessSlider.MaxValue = 1.5f;
+		_brightnessSlider.MinValue = 1.0f;
+		_brightnessSlider.MaxValue = 2.0f;
 		_brightnessSlider.Step = 0.05f;
 		_brightnessSlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		_brightnessSlider.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		_brightnessSlider.ValueChanged += (val) => _brightnessValueLabel.Text = string.Format("{0:0.00}", val);
+		DungeonVisuals.StyleSlider(_brightnessSlider, DungeonVisuals.BrassGold);
 		brightnessHBox.AddChild(_brightnessSlider);
 
 		_brightnessValueLabel = CreateLabel("1.00", font, 12);
@@ -332,7 +285,6 @@ public partial class SettingsMenu : CanvasLayer
 
 		vbox.AddChild(CreateOptionRow("Brightness", brightnessHBox, font));
 
-		// FPS Limit Option Button
 		_fpsOption = new OptionButton();
 		_fpsOption.AddThemeFontOverride("font", font);
 		_fpsOption.AddThemeFontSizeOverride("font_size", 16);
@@ -344,7 +296,6 @@ public partial class SettingsMenu : CanvasLayer
 		_fpsOption.CustomMinimumSize = new Vector2(80, 20);
 		vbox.AddChild(CreateOptionRow("FPS Limit", _fpsOption, font));
 
-		// VSync CheckBox
 		_vsyncCheck = new CheckBox();
 		_vsyncCheck.Text = "Enabled";
 		_vsyncCheck.AddThemeFontOverride("font", font);
@@ -357,7 +308,6 @@ public partial class SettingsMenu : CanvasLayer
 		var scroll = CreateScrollContainer("Immersion");
 		var vbox = CreateTabVBox(scroll);
 
-		// Screen Shake Slider Row
 		var shakeHBox = new HBoxContainer();
 		shakeHBox.AddThemeConstantOverride("separation", 5);
 		shakeHBox.CustomMinimumSize = new Vector2(160, 20);
@@ -369,6 +319,7 @@ public partial class SettingsMenu : CanvasLayer
 		_screenshakeSlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		_screenshakeSlider.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		_screenshakeSlider.ValueChanged += (val) => _screenshakeValueLabel.Text = string.Format("{0:0.0}", val);
+		DungeonVisuals.StyleSlider(_screenshakeSlider, DungeonVisuals.CrimsonBright);
 		shakeHBox.AddChild(_screenshakeSlider);
 
 		_screenshakeValueLabel = CreateLabel("1.0", font, 12);
@@ -383,7 +334,6 @@ public partial class SettingsMenu : CanvasLayer
 		var scroll = CreateScrollContainer("Audio");
 		var vbox = CreateTabVBox(scroll);
 
-		// Master
 		var mHBox = new HBoxContainer();
 		mHBox.AddThemeConstantOverride("separation", 5);
 		mHBox.CustomMinimumSize = new Vector2(160, 20);
@@ -394,7 +344,6 @@ public partial class SettingsMenu : CanvasLayer
 		mHBox.AddChild(_masterValueLabel);
 		vbox.AddChild(CreateOptionRow("Master Volume", mHBox, font));
 
-		// Music
 		var musHBox = new HBoxContainer();
 		musHBox.AddThemeConstantOverride("separation", 5);
 		musHBox.CustomMinimumSize = new Vector2(160, 20);
@@ -405,7 +354,6 @@ public partial class SettingsMenu : CanvasLayer
 		musHBox.AddChild(_musicValueLabel);
 		vbox.AddChild(CreateOptionRow("Music Volume", musHBox, font));
 
-		// SFX
 		var sfxHBox = new HBoxContainer();
 		sfxHBox.AddThemeConstantOverride("separation", 5);
 		sfxHBox.CustomMinimumSize = new Vector2(160, 20);
@@ -414,7 +362,7 @@ public partial class SettingsMenu : CanvasLayer
 		sfxHBox.AddChild(_sfxSlider);
 		_sfxValueLabel = CreateLabel("70%", font, 12);
 		sfxHBox.AddChild(_sfxValueLabel);
-		vbox.AddChild(CreateOptionRow("SFX Volume", sfxHBox, font));
+		vbox.AddChild(CreateOptionRow("SFX & UI Volume", sfxHBox, font));
 	}
 
 	private void CreateControlsTab(Font font)
@@ -422,52 +370,20 @@ public partial class SettingsMenu : CanvasLayer
 		var scroll = CreateScrollContainer("Controls");
 		var vbox = CreateTabVBox(scroll);
 
-		// Mouse Sensitivity
-		var sensHBox = new HBoxContainer();
-		sensHBox.AddThemeConstantOverride("separation", 5);
-		sensHBox.CustomMinimumSize = new Vector2(160, 20);
-		_sensitivitySlider = new HSlider();
-		_sensitivitySlider.MinValue = 0.1f;
-		_sensitivitySlider.MaxValue = 3.0f;
-		_sensitivitySlider.Step = 0.05f;
-		_sensitivitySlider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
-		_sensitivitySlider.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-		_sensitivitySlider.ValueChanged += (val) => _sensitivityValueLabel.Text = string.Format("{0:0.00}", val);
-		sensHBox.AddChild(_sensitivitySlider);
-		_sensitivityValueLabel = CreateLabel("1.00", font, 12);
-		_sensitivityValueLabel.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
-		sensHBox.AddChild(_sensitivityValueLabel);
-		vbox.AddChild(CreateOptionRow("Mouse Sensitivity", sensHBox, font));
-
-		// Keybinds section header
 		var keybindsHeader = new MarginContainer();
-		keybindsHeader.AddThemeConstantOverride("margin_top", 10);
+		keybindsHeader.AddThemeConstantOverride("margin_top", 4);
 		keybindsHeader.AddThemeConstantOverride("margin_bottom", 5);
 		var headerLabel = CreateLabel("Key Bindings (Esc to cancel)", font, 14);
 		headerLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.75f, 0.15f));
 		keybindsHeader.AddChild(headerLabel);
 		vbox.AddChild(keybindsHeader);
 
-		foreach (var action in SettingsManager.KeyBinds.Keys)
+		foreach (var action in _pendingKeyBinds.Keys)
 		{
-			// Button for mapping key
 			var bindBtn = new Button();
-			bindBtn.Text = SettingsManager.KeyBinds[action].ToString();
-			bindBtn.AddThemeFontOverride("font", font);
-			bindBtn.AddThemeFontSizeOverride("font_size", 16);
-			bindBtn.CustomMinimumSize = new Vector2(100, 20);
-			bindBtn.Flat = true;
-
-			// Add a simple border/flat hover style to bind buttons
-			var btnNormal = new StyleBoxEmpty();
-			var btnHover = new StyleBoxFlat();
-			btnHover.BgColor = new Color(1, 1, 1, 0.05f);
-			btnHover.BorderColor = new Color(1, 1, 1, 0.2f);
-			btnHover.BorderWidthBottom = btnHover.BorderWidthLeft = btnHover.BorderWidthRight = btnHover.BorderWidthTop = 1;
-			bindBtn.AddThemeStyleboxOverride("normal", btnNormal);
-			bindBtn.AddThemeStyleboxOverride("hover", btnHover);
-			bindBtn.AddThemeStyleboxOverride("pressed", btnNormal);
-			bindBtn.AddThemeStyleboxOverride("focus", btnNormal);
+			bindBtn.Text = _pendingKeyBinds[action].ToString();
+			bindBtn.CustomMinimumSize = new Vector2(105, 22);
+			DungeonVisuals.StyleButton(bindBtn, DungeonVisuals.BrassGold, font, 15, 3, DungeonVisuals.ObsidianDeep, 8, 2);
 
 			string actionKey = action;
 			bindBtn.Pressed += () => StartListeningForBind(actionKey);
@@ -525,7 +441,6 @@ public partial class SettingsMenu : CanvasLayer
 		control.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		rowHBox.AddChild(control);
 
-		// Add separator line below the row
 		var separator = new ColorRect();
 		separator.Color = new Color(1.0f, 1.0f, 1.0f, 0.12f);
 		separator.CustomMinimumSize = new Vector2(0, 1);
@@ -549,6 +464,7 @@ public partial class SettingsMenu : CanvasLayer
 		slider.Step = 1;
 		slider.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		slider.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
+		DungeonVisuals.StyleSlider(slider, DungeonVisuals.ArcaneCyan);
 		return slider;
 	}
 
@@ -564,8 +480,8 @@ public partial class SettingsMenu : CanvasLayer
 
 	private void LoadCurrentSettingsIntoUI()
 	{
-		_brightnessSlider.Value = SettingsManager.Brightness;
-		_brightnessValueLabel.Text = string.Format("{0:0.00}", SettingsManager.Brightness);
+		_brightnessSlider.Value = Mathf.Clamp(SettingsManager.Brightness, 1.0f, 2.0f);
+		_brightnessValueLabel.Text = string.Format("{0:0.00}", _brightnessSlider.Value);
 
 		for (int i = 0; i < _fpsOption.ItemCount; i++)
 		{
@@ -590,9 +506,6 @@ public partial class SettingsMenu : CanvasLayer
 		_sfxSlider.Value = SettingsManager.SFXVolume;
 		_sfxValueLabel.Text = $"{(int)SettingsManager.SFXVolume}%";
 
-		_sensitivitySlider.Value = SettingsManager.MouseSensitivity;
-		_sensitivityValueLabel.Text = string.Format("{0:0.00}", SettingsManager.MouseSensitivity);
-
 		UpdateBindButtonLabels();
 	}
 
@@ -600,7 +513,10 @@ public partial class SettingsMenu : CanvasLayer
 	{
 		foreach (var pair in _bindButtons)
 		{
-			pair.Value.Text = SettingsManager.KeyBinds[pair.Key].ToString();
+			if (_pendingKeyBinds.TryGetValue(pair.Key, out Key key))
+			{
+				pair.Value.Text = key.ToString();
+			}
 		}
 	}
 
@@ -619,15 +535,16 @@ public partial class SettingsMenu : CanvasLayer
 		{
 			if (@event.IsActionPressed("ui_cancel"))
 			{
-				OnBackPressed();
+				OnCancelPressed();
 				GetViewport().SetInputAsHandled();
 			}
 			return;
 		}
 
-		if (@event is InputEventKey keyEvent && keyEvent.Pressed)
+		if (@event is InputEventKey keyEvent && keyEvent.Pressed && !keyEvent.Echo)
 		{
-			if (keyEvent.Keycode == Key.Escape)
+			Key capturedKey = keyEvent.PhysicalKeycode != Key.None ? keyEvent.PhysicalKeycode : keyEvent.Keycode;
+			if (capturedKey == Key.Escape || keyEvent.Keycode == Key.Escape)
 			{
 				_isListeningForBind = false;
 				_actionToBind = null;
@@ -636,8 +553,10 @@ public partial class SettingsMenu : CanvasLayer
 				return;
 			}
 
-			// Map key
-			SettingsManager.KeyBinds[_actionToBind] = keyEvent.Keycode;
+			if (capturedKey != Key.None)
+			{
+				GameLogic.AssignKeyBind(_pendingKeyBinds, _actionToBind, capturedKey, Key.None);
+			}
 			_isListeningForBind = false;
 			_actionToBind = null;
 			UpdateBindButtonLabels();
@@ -654,23 +573,18 @@ public partial class SettingsMenu : CanvasLayer
 		_masterSlider.Value = 80.0f;
 		_musicSlider.Value = 70.0f;
 		_sfxSlider.Value = 70.0f;
-		_sensitivitySlider.Value = 1.0f;
 
-		SettingsManager.KeyBinds["move_left"] = Key.A;
-		SettingsManager.KeyBinds["move_right"] = Key.D;
-		SettingsManager.KeyBinds["move_up"] = Key.W;
-		SettingsManager.KeyBinds["move_down"] = Key.S;
-		SettingsManager.KeyBinds["interact"] = Key.E;
-		SettingsManager.KeyBinds["reload"] = Key.R;
-		SettingsManager.KeyBinds["ability_1"] = Key.Q;
-		SettingsManager.KeyBinds["ability_2"] = Key.V;
-
+		_pendingKeyBinds = SettingsManager.CreateDefaultKeyBinds();
 		UpdateBindButtonLabels();
 	}
 
-	private void OnBackPressed()
+	private void OnCancelPressed()
 	{
-		// Save settings from UI back to SettingsManager
+		QueueFree();
+	}
+
+	private void OnSaveAndBackPressed()
+	{
 		SettingsManager.Brightness = (float)_brightnessSlider.Value;
 
 		int selectedIdx = _fpsOption.Selected;
@@ -683,19 +597,18 @@ public partial class SettingsMenu : CanvasLayer
 		SettingsManager.MusicVolume = (float)_musicSlider.Value;
 		SettingsManager.SFXVolume = (float)_sfxSlider.Value;
 
-		SettingsManager.MouseSensitivity = (float)_sensitivitySlider.Value;
+		SettingsManager.KeyBinds = new Dictionary<string, Key>(_pendingKeyBinds);
 
 		SettingsManager.SaveSettings();
 		SettingsManager.ApplySettings();
 
-		// Apply brightness dynamically to level if active
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		if (level != null)
 		{
 			var modulate = level.GetNodeOrNull<CanvasModulate>("CanvasModulate");
 			if (modulate != null)
 			{
-				float ambient = Mathf.Clamp((SettingsManager.Brightness - 1.0f) * 0.5f, 0.0f, 0.5f);
+				float ambient = GameLogic.CalculateAmbientLight(SettingsManager.Brightness);
 				modulate.Color = new Color(ambient, ambient, ambient, 1.0f);
 			}
 		}

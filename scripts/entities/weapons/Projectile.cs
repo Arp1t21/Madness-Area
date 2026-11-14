@@ -9,7 +9,7 @@ public partial class Projectile : Node2D
 	public Vector2 Direction = Vector2.Right;
 	public bool IsPlayerOwned = true;
 	public bool IsPiercing = false;
-	public float KnockbackForce = 5.0f;
+	public float KnockbackForce = 2.5f;
 
 	[Export] public bool EnableSoftGlow = false;
 	[Export] public bool DrawOrbVisual = false;
@@ -38,10 +38,7 @@ public partial class Projectile : Node2D
 
 		if (EnableSoftGlow || DrawOrbVisual)
 		{
-			var unshaded = new CanvasItemMaterial
-			{
-				LightMode = CanvasItemMaterial.LightModeEnum.Unshaded
-			};
+			var unshaded = GameResourceCache.GetUnshadedMaterial();
 			Material = unshaded;
 			foreach (var child in GetChildren())
 			{
@@ -61,31 +58,20 @@ public partial class Projectile : Node2D
 
 	private void SetupSoftLight()
 	{
-		var light = new PointLight2D();
-		light.Name = "SoftProjectileLight";
-		light.ShadowEnabled = false;
-		light.Color = GlowColor;
-		light.Energy = GlowEnergy;
-
-		var gradient = new Gradient();
-		gradient.Colors = new Color[]
-		{
+		var gradTex = GameResourceCache.GetRadialGlowTexture(
 			new Color(1.0f, 1.0f, 1.0f, 1.0f),
 			new Color(0.85f, 0.95f, 1.0f, 0.65f),
-			new Color(0.0f, 0.0f, 0.0f, 0.0f)
-		};
-		gradient.Offsets = new float[] { 0.0f, 0.45f, 1.0f };
+			0.45f,
+			GlowTextureSize);
 
-		var gradTex = new GradientTexture2D();
-		gradTex.Gradient = gradient;
-		gradTex.Fill = GradientTexture2D.FillEnum.Radial;
-		gradTex.FillFrom = new Vector2(0.5f, 0.5f);
-		gradTex.FillTo = new Vector2(0.5f, 0.0f);
-		gradTex.Width = GlowTextureSize;
-		gradTex.Height = GlowTextureSize;
-
-		light.Texture = gradTex;
-		AddChild(light);
+		GameResourceCache.CreateGlowLight(
+			this,
+			"SoftProjectileLight",
+			Vector2.Zero,
+			GlowColor,
+			GlowEnergy,
+			gradTex,
+			shadowEnabled: false);
 	}
 
 	public override void _Draw()
@@ -176,6 +162,15 @@ public partial class Projectile : Node2D
 		{
 			_hitTargets.Add(hitNode.GetInstanceId());
 			enemy.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
+			DungeonVisuals.SpawnImpactSparks(
+				GetTree().CurrentScene ?? GetTree().Root,
+				GlobalPosition,
+				-Direction,
+				GlowColor != default ? GlowColor : new Color(1.0f, 0.86f, 0.42f),
+				6,
+				135.0f,
+				70.0f,
+				1.45f);
 
 			if (!IsPiercing)
 			{
@@ -187,6 +182,15 @@ public partial class Projectile : Node2D
 		{
 			_hitTargets.Add(hitNode.GetInstanceId());
 			player.TakeDamage(Damage, GlobalPosition, KnockbackForce, false);
+			DungeonVisuals.SpawnImpactSparks(
+				GetTree().CurrentScene ?? GetTree().Root,
+				GlobalPosition,
+				-Direction,
+				new Color(1.0f, 0.35f, 0.28f),
+				6,
+				130.0f,
+				70.0f,
+				1.45f);
 
 			if (!IsPiercing)
 			{
@@ -201,6 +205,10 @@ public partial class Projectile : Node2D
 				 hitNode.Name.ToString().Contains("Wall") ||
 				 hitNode.Name.ToString().Contains("Floor"))
 		{
+			Node vfxHost = GetTree().CurrentScene ?? GetTree().Root;
+			Color wallSparkCol = IsPlayerOwned ? new Color(0.95f, 0.84f, 0.56f) : GlowColor;
+			DungeonVisuals.SpawnMuzzleFlash(vfxHost, GlobalPosition, wallSparkCol, 4.5f);
+			DungeonVisuals.SpawnImpactSparks(vfxHost, GlobalPosition, -Direction, wallSparkCol, 6, 115.0f, 80.0f, 1.3f);
 			_isDestroyed = true;
 			QueueFree();
 		}

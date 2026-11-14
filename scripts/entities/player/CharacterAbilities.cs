@@ -9,7 +9,8 @@ using System;
 public abstract class CharacterAbilitySet
 {
 	protected readonly Player Player;
-	protected PackedScene FireballScene;
+	protected readonly PackedScene FireballScene;
+	protected readonly AudioStream BuffSound;
 
 	public virtual string Ability1Name => "Fireball";
 	public virtual string Ability2Name => "Arcane Shield";
@@ -24,15 +25,109 @@ public abstract class CharacterAbilitySet
 	{
 		Player = player;
 		FireballScene = GD.Load<PackedScene>("res://scene/abilities/fireball.tscn");
+		BuffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
 	}
 
-	public abstract void UseAbility1();
-	public abstract void UseAbility2();
-	public abstract float ApplyPassiveAndActiveDefense(float incomingDamage, ref float knockForce);
+	public virtual void UseAbility1()
+	{
+		if (Player.Ability1Level <= 0 || Player.FireballCooldownTimer > 0.0f) return;
+
+		if (Player.CurrentMana < Ability1ManaCost)
+		{
+			Player.ShowNoManaWarning();
+			return;
+		}
+
+		Player.CurrentMana -= Ability1ManaCost;
+		Player.FireballCooldownTimer = Ability1CooldownMax;
+
+		Vector2 mousePos = Player.GetGlobalMousePosition();
+		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
+
+		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
+		fireball.GlobalPosition = Player.GlobalPosition;
+		fireball.Direction = dir;
+		fireball.Damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
+		Player.GetParent().AddChild(fireball);
+	}
+
+	public virtual void UseAbility2()
+	{
+		if (Player.Ability2Level <= 0 || Player.ShieldCooldownTimer > 0.0f) return;
+
+		if (Player.CurrentMana < Ability2ManaCost)
+		{
+			Player.ShowNoManaWarning();
+			return;
+		}
+
+		Player.CurrentMana -= Ability2ManaCost;
+		Player.ShieldCooldownTimer = Ability2CooldownMax;
+		Player.ActivateShieldEffect(2.5f + (Player.Ability2Level - 1) * 0.7f);
+
+		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
+		if (moveDir == Vector2.Zero)
+		{
+			moveDir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
+		}
+		Vector2 dashDir = moveDir.Normalized();
+		Player.SetDashVelocity(dashDir * 680.0f);
+		Player.PlayDashVisuals(dashDir);
+
+		float pulseRadius = 52.0f * World.Scale;
+		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
+		foreach (Node node in Player.GetTree().GetNodesInGroup("Enemies"))
+		{
+			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
+			{
+				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
+				{
+					enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false);
+					DungeonVisuals.SpawnImpactSparks(
+						Player.GetParent(),
+						enemy.GlobalPosition + new Vector2(0, -18),
+						enemy.GlobalPosition - Player.GlobalPosition,
+						new Color(0.45f, 0.92f, 1.0f),
+						8,
+						150.0f,
+						75.0f,
+						1.6f);
+				}
+			}
+		}
+
+		if (BuffSound != null)
+		{
+			GameResourceCache.PlayPooledSound(Player.GetTree(), BuffSound, "SFX");
+		}
+
+		Player.QueueRedraw();
+	}
+
+	public virtual float ApplyPassiveAndActiveDefense(float incomingDamage, ref float knockForce)
+	{
+		if (Player.Ability2Level > 0)
+		{
+			float shieldRes = 0.05f + (Player.Ability2Level - 1) * 0.05f;
+			incomingDamage *= (1.0f - shieldRes);
+		}
+
+		if (Player.IsShieldActive)
+		{
+			incomingDamage *= 0.4f;
+			knockForce = 0.0f;
+		}
+
+		return incomingDamage;
+	}
 
 	// Специальная атака на Правую Кнопку Мыши (ПКМ).
 	// По умолчанию у персонажей, которым спец-атака еще не назначена, ничего не происходит.
 	public virtual void UpdateSpecialAttack(double delta, bool isRmbPressed)
+	{
+	}
+
+	public virtual void CancelSpecialAttack()
 	{
 	}
 
@@ -67,91 +162,6 @@ public class KnightAbilitySet : CharacterAbilitySet
 	public KnightAbilitySet(Player player) : base(player)
 	{
 	}
-
-	// Способность 1 Рыцаря (клавиша Q)
-	public override void UseAbility1()
-	{
-		if (Player.Ability1Level <= 0 || Player.FireballCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability1ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability1ManaCost;
-		Player.FireballCooldownTimer = Ability1CooldownMax;
-
-		Vector2 mousePos = Player.GetGlobalMousePosition();
-		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
-
-		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
-		fireball.GlobalPosition = Player.GlobalPosition;
-		fireball.Direction = dir;
-		fireball.Damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
-		Player.GetParent().AddChild(fireball);
-	}
-
-	// Способность 2 Рыцаря (клавиша V)
-	public override void UseAbility2()
-	{
-		if (Player.Ability2Level <= 0 || Player.ShieldCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability2ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability2ManaCost;
-		Player.ShieldCooldownTimer = Ability2CooldownMax;
-		Player.ActivateShieldEffect(2.5f + (Player.Ability2Level - 1) * 0.7f);
-
-		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
-		if (moveDir == Vector2.Zero)
-		{
-			moveDir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
-		}
-		Player.SetDashVelocity(moveDir.Normalized() * 680.0f);
-
-		float pulseRadius = 52.0f * World.Scale;
-		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
-		foreach (Node node in Player.GetTree().GetNodesInGroup("enemy"))
-		{
-			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
-			{
-				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
-				{
-					enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false);
-				}
-			}
-		}
-
-		var buffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-		if (buffSound != null)
-		{
-			MainMenu.PlayUISound(buffSound);
-		}
-
-		Player.QueueRedraw();
-	}
-
-	public override float ApplyPassiveAndActiveDefense(float incomingDamage, ref float knockForce)
-	{
-		if (Player.Ability2Level > 0)
-		{
-			float shieldRes = 0.05f + (Player.Ability2Level - 1) * 0.05f;
-			incomingDamage *= (1.0f - shieldRes);
-		}
-
-		if (Player.IsShieldActive)
-		{
-			incomingDamage *= 0.4f;
-			knockForce = 0.0f;
-		}
-
-		return incomingDamage;
-	}
 }
 
 /// <summary>
@@ -162,89 +172,6 @@ public class MagicianAbilitySet : CharacterAbilitySet
 	public MagicianAbilitySet(Player player) : base(player)
 	{
 	}
-
-	public override void UseAbility1()
-	{
-		if (Player.Ability1Level <= 0 || Player.FireballCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability1ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability1ManaCost;
-		Player.FireballCooldownTimer = Ability1CooldownMax;
-
-		Vector2 mousePos = Player.GetGlobalMousePosition();
-		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
-
-		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
-		fireball.GlobalPosition = Player.GlobalPosition;
-		fireball.Direction = dir;
-		fireball.Damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
-		Player.GetParent().AddChild(fireball);
-	}
-
-	public override void UseAbility2()
-	{
-		if (Player.Ability2Level <= 0 || Player.ShieldCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability2ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability2ManaCost;
-		Player.ShieldCooldownTimer = Ability2CooldownMax;
-		Player.ActivateShieldEffect(2.5f + (Player.Ability2Level - 1) * 0.7f);
-
-		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
-		if (moveDir == Vector2.Zero)
-		{
-			moveDir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
-		}
-		Player.SetDashVelocity(moveDir.Normalized() * 680.0f);
-
-		float pulseRadius = 52.0f * World.Scale;
-		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
-		foreach (Node node in Player.GetTree().GetNodesInGroup("enemy"))
-		{
-			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
-			{
-				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
-				{
-					enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false);
-				}
-			}
-		}
-
-		var buffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-		if (buffSound != null)
-		{
-			MainMenu.PlayUISound(buffSound);
-		}
-
-		Player.QueueRedraw();
-	}
-
-	public override float ApplyPassiveAndActiveDefense(float incomingDamage, ref float knockForce)
-	{
-		if (Player.Ability2Level > 0)
-		{
-			float shieldRes = 0.05f + (Player.Ability2Level - 1) * 0.05f;
-			incomingDamage *= (1.0f - shieldRes);
-		}
-
-		if (Player.IsShieldActive)
-		{
-			incomingDamage *= 0.4f;
-			knockForce = 0.0f;
-		}
-
-		return incomingDamage;
-	}
 }
 
 /// <summary>
@@ -254,89 +181,6 @@ public class RogueAbilitySet : CharacterAbilitySet
 {
 	public RogueAbilitySet(Player player) : base(player)
 	{
-	}
-
-	public override void UseAbility1()
-	{
-		if (Player.Ability1Level <= 0 || Player.FireballCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability1ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability1ManaCost;
-		Player.FireballCooldownTimer = Ability1CooldownMax;
-
-		Vector2 mousePos = Player.GetGlobalMousePosition();
-		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
-
-		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
-		fireball.GlobalPosition = Player.GlobalPosition;
-		fireball.Direction = dir;
-		fireball.Damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
-		Player.GetParent().AddChild(fireball);
-	}
-
-	public override void UseAbility2()
-	{
-		if (Player.Ability2Level <= 0 || Player.ShieldCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability2ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability2ManaCost;
-		Player.ShieldCooldownTimer = Ability2CooldownMax;
-		Player.ActivateShieldEffect(2.5f + (Player.Ability2Level - 1) * 0.7f);
-
-		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
-		if (moveDir == Vector2.Zero)
-		{
-			moveDir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
-		}
-		Player.SetDashVelocity(moveDir.Normalized() * 680.0f);
-
-		float pulseRadius = 52.0f * World.Scale;
-		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
-		foreach (Node node in Player.GetTree().GetNodesInGroup("enemy"))
-		{
-			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
-			{
-				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
-				{
-					enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false);
-				}
-			}
-		}
-
-		var buffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-		if (buffSound != null)
-		{
-			MainMenu.PlayUISound(buffSound);
-		}
-
-		Player.QueueRedraw();
-	}
-
-	public override float ApplyPassiveAndActiveDefense(float incomingDamage, ref float knockForce)
-	{
-		if (Player.Ability2Level > 0)
-		{
-			float shieldRes = 0.05f + (Player.Ability2Level - 1) * 0.05f;
-			incomingDamage *= (1.0f - shieldRes);
-		}
-
-		if (Player.IsShieldActive)
-		{
-			incomingDamage *= 0.4f;
-			knockForce = 0.0f;
-		}
-
-		return incomingDamage;
 	}
 }
 
@@ -360,17 +204,27 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 	{
 	}
 
+	public override void CancelSpecialAttack()
+	{
+		if (_isCharging)
+		{
+			ResetChargeState();
+		}
+	}
+
+	private void ResetChargeState()
+	{
+		_isCharging = false;
+		_chargeSeconds = 0.0f;
+		_fullChargeAnimTime = 0.0f;
+		Player.QueueRedraw();
+	}
+
 	public override void UpdateSpecialAttack(double delta, bool isRmbPressed)
 	{
 		if (_isBoomerangInFlight)
 		{
-			if (_isCharging)
-			{
-				_isCharging = false;
-				_chargeSeconds = 0.0f;
-				_fullChargeAnimTime = 0.0f;
-				Player.QueueRedraw();
-			}
+			if (_isCharging) ResetChargeState();
 			return;
 		}
 
@@ -382,13 +236,7 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 
 		if (!hasMeleeWeapon)
 		{
-			if (_isCharging)
-			{
-				_isCharging = false;
-				_chargeSeconds = 0.0f;
-				_fullChargeAnimTime = 0.0f;
-				Player.QueueRedraw();
-			}
+			if (_isCharging) ResetChargeState();
 			return;
 		}
 
@@ -409,10 +257,7 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 		else if (_isCharging)
 		{
 			float chargeRatio = Mathf.Clamp(_chargeSeconds / MaxChargeSeconds, 0.0f, 1.0f);
-			_isCharging = false;
-			_chargeSeconds = 0.0f;
-			_fullChargeAnimTime = 0.0f;
-			Player.QueueRedraw();
+			ResetChargeState();
 
 			// Даже если атака заряжена не полностью, топор всегда вылетает (на меньшую дистанцию)
 			LaunchBoomerang(activeSlot, activeWeapon, chargeRatio);
@@ -563,88 +408,5 @@ public class BerserkerAbilitySet : CharacterAbilitySet
 				player.DrawRect(fillRect, fillCol);
 			}
 		}
-	}
-
-	public override void UseAbility1()
-	{
-		if (Player.Ability1Level <= 0 || Player.FireballCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability1ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability1ManaCost;
-		Player.FireballCooldownTimer = Ability1CooldownMax;
-
-		Vector2 mousePos = Player.GetGlobalMousePosition();
-		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
-
-		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
-		fireball.GlobalPosition = Player.GlobalPosition;
-		fireball.Direction = dir;
-		fireball.Damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
-		Player.GetParent().AddChild(fireball);
-	}
-
-	public override void UseAbility2()
-	{
-		if (Player.Ability2Level <= 0 || Player.ShieldCooldownTimer > 0.0f) return;
-
-		if (Player.CurrentMana < Ability2ManaCost)
-		{
-			Player.ShowNoManaWarning();
-			return;
-		}
-
-		Player.CurrentMana -= Ability2ManaCost;
-		Player.ShieldCooldownTimer = Ability2CooldownMax;
-		Player.ActivateShieldEffect(2.5f + (Player.Ability2Level - 1) * 0.7f);
-
-		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
-		if (moveDir == Vector2.Zero)
-		{
-			moveDir = (Player.GetGlobalMousePosition() - Player.GlobalPosition).Normalized();
-		}
-		Player.SetDashVelocity(moveDir.Normalized() * 680.0f);
-
-		float pulseRadius = 52.0f * World.Scale;
-		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
-		foreach (Node node in Player.GetTree().GetNodesInGroup("enemy"))
-		{
-			if (node is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
-			{
-				if (Player.GlobalPosition.DistanceTo(enemy.GlobalPosition) <= pulseRadius)
-				{
-					enemy.TakeDamage(pulseDamage, Player.GlobalPosition, 16.0f, false);
-				}
-			}
-		}
-
-		var buffSound = GD.Load<AudioStream>("res://assets/sounds/buff_collecting.wav");
-		if (buffSound != null)
-		{
-			MainMenu.PlayUISound(buffSound);
-		}
-
-		Player.QueueRedraw();
-	}
-
-	public override float ApplyPassiveAndActiveDefense(float incomingDamage, ref float knockForce)
-	{
-		if (Player.Ability2Level > 0)
-		{
-			float shieldRes = 0.05f + (Player.Ability2Level - 1) * 0.05f;
-			incomingDamage *= (1.0f - shieldRes);
-		}
-
-		if (Player.IsShieldActive)
-		{
-			incomingDamage *= 0.4f;
-			knockForce = 0.0f;
-		}
-
-		return incomingDamage;
 	}
 }

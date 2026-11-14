@@ -19,9 +19,24 @@ public partial class Fireball : Area2D
 	{
 		Scale = new Vector2(3.0f, 3.0f);
 		_startPos = GlobalPosition;
+		Material = GameResourceCache.GetUnshadedMaterial();
 
 		CollisionLayer = 0;
 		CollisionMask = 1 | 2 | 4;
+
+		var fireGlowTex = GameResourceCache.GetRadialGlowTexture(
+			new Color(1.0f, 0.92f, 0.65f, 1.0f),
+			new Color(1.0f, 0.45f, 0.10f, 0.55f),
+			0.45f,
+			96);
+		GameResourceCache.CreateGlowLight(
+			this,
+			"FireballLight",
+			Vector2.Zero,
+			new Color(1.0f, 0.62f, 0.22f, 1.0f),
+			0.95f,
+			fireGlowTex,
+			shadowEnabled: false);
 
 		_trail = GetNodeOrNull<CpuParticles2D>("Trail") ?? GetNodeOrNull<CpuParticles2D>("CpuParticles2D");
 
@@ -29,6 +44,8 @@ public partial class Fireball : Area2D
 		{
 			_trail = new CpuParticles2D();
 			_trail.Name = "Trail";
+			_trail.Texture = DungeonVisuals.GetPixelSquareTexture();
+			_trail.Material = GameResourceCache.GetUnshadedMaterial();
 			_trail.Amount = 50;
 			_trail.Lifetime = 0.35f;
 			_trail.LocalCoords = false;
@@ -157,9 +174,19 @@ public partial class Fireball : Area2D
 		var explosion = new FireballExplosion();
 		explosion.GlobalPosition = GlobalPosition;
 		GetParent().AddChild(explosion);
+		DungeonVisuals.SpawnMuzzleFlash(GetParent(), GlobalPosition, new Color(1.0f, 0.72f, 0.24f), 22.0f);
+		DungeonVisuals.SpawnImpactSparks(
+			GetParent(),
+			GlobalPosition,
+			Vector2.Up,
+			new Color(1.0f, 0.72f, 0.22f),
+			18,
+			210.0f,
+			180.0f,
+			2.0f);
 
 		// Наносим АОЕ урон врагам в радиусе взрыва (избегая двойного полного урона по уже пробитым целям)
-		var enemies = GetTree().GetNodesInGroup("enemy");
+		var enemies = GetTree().GetNodesInGroup("Enemies");
 		foreach (Node enemyNode in enemies)
 		{
 			if (enemyNode is Enemy enemy && GodotObject.IsInstanceValid(enemy) && enemy.CurrentHealth > 0)
@@ -193,6 +220,8 @@ public partial class FireballExplosion : CpuParticles2D
 	public override void _Ready()
 	{
 		Scale = new Vector2(3.0f, 3.0f);
+		Texture = DungeonVisuals.GetPixelSquareTexture();
+		Material = GameResourceCache.GetUnshadedMaterial();
 		Emitting = true;
 		OneShot = true;
 		Explosiveness = 1.0f;

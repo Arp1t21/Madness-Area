@@ -1,3 +1,19 @@
 # Godot 4+ specific ignores
 .godot/
 /android/
+.mono/
+data_*
+export_presets.cfg
+
+# .NET / IDEs / OS clutter
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.tmp
+*~
+*.bak
+.DS_Store
+Thumbs.db
