@@ -74,6 +74,7 @@ public partial class Player : CharacterBody2D
 
 	public StatusEffectManager StatusManager => _statusManager;
 	public bool HasRelic(string relicId) => !string.IsNullOrEmpty(relicId) && _relics.Contains(relicId);
+	public int RelicCount => _relics?.Count ?? 0;
 
 	public List<string> GetRelicIdsList() => new List<string>(_relics);
 
@@ -136,7 +137,7 @@ public partial class Player : CharacterBody2D
 			else
 			{
 				_vampiricKillCounter++;
-				if (_vampiricKillCounter >= 3)
+				if (_vampiricKillCounter >= 7)
 				{
 					_vampiricKillCounter = 0;
 					healAmt = 1;
@@ -208,6 +209,10 @@ public partial class Player : CharacterBody2D
 	public float HealthRegenEffective => (Config != null ? Config.HealthRegen : 0.0f) + BonusHealthRegen;
 	public float ManaRegenEffective => (Config != null ? Config.ManaRegen : 0.0f) + BonusManaRegen;
 	public float WalkSpeedEffective => (Config != null ? Config.WalkSpeed : 60.0f) + BonusMoveSpeed;
+	/// <summary>
+	/// Real-time movement speed magnitude computed on each physics tick (0 when standing still, WalkSpeedEffective when walking, higher while sprinting/dashing).
+	/// </summary>
+	public float CurrentMoveSpeed { get; private set; } = 0.0f;
 
 	private StatusEffectManager _statusManager;
 	private Vector2 _externalVelocity = Vector2.Zero;
@@ -220,6 +225,13 @@ public partial class Player : CharacterBody2D
 	public int Ability2Level = 0; // Passive Shield + Active Arcane Barrier & Dash (V)
 	public int SkillPoints = 0;
 
+	public float Ability1CooldownScale = 1.0f;
+	public float Ability2CooldownScale = 1.0f;
+	public float Ability1DamageMultiplier = 1.0f;
+	public float Ability1RadiusMultiplier = 1.0f;
+	public float Ability2DamageMultiplier = 1.0f;
+	public float Ability2RadiusMultiplier = 1.0f;
+
 	[ExportGroup("Abilities")]
 	[Export] public float FireballBaseDamage = 20.0f;
 	[Export] public float FireballDamagePerLevel = 6.0f;
@@ -229,6 +241,18 @@ public partial class Player : CharacterBody2D
 
 	public float ShieldCooldownTimer = 0.0f;
 	public const float ShieldCooldownMax = 8.0f;
+
+	public float GetAbility1CooldownMax()
+	{
+		float scale = Mathf.Clamp(Ability1CooldownScale, 0.35f, 1.0f);
+		return Mathf.Max(1.0f, FireballCooldownMax * scale);
+	}
+
+	public float GetAbility2CooldownMax()
+	{
+		float scale = Mathf.Clamp(Ability2CooldownScale, 0.35f, 1.0f);
+		return Mathf.Max(1.0f, ShieldCooldownMax * scale);
+	}
 	public float ActiveShieldTimer = 0.0f;
 	public bool IsShieldActive => ActiveShieldTimer > 0.0f;
 	private double _shieldPulseTime = 0.0;
@@ -277,17 +301,26 @@ public partial class Player : CharacterBody2D
 		// Гарантируем, что бинды и аудио-шины инициализированы даже при запуске напрямую со сцены уровня
 		SettingsManager.ApplySettings();
 
-		// Подгружаем конфиг выбранного героя из сохранения (Knight, Magician, Rogue, Berserker)
+		// Подгружаем актуальный конфиг выбранного героя с диска (Knight, Magician, Rogue, Berserker)
+		GameDataRegistry.EnsureVerifiedAtStartup();
 		if (!IsCoopSession && SaveManager.CurrentSave != null && !string.IsNullOrEmpty(SaveManager.CurrentSave.CharacterName))
 		{
 			string savedName = SaveManager.CurrentSave.CharacterName;
 			string charPath = GameLogic.ResolveCharacterDataPath(savedName);
 
-			var loadedConfig = GD.Load<PlayerData>(charPath);
+			var loadedConfig = GameDataRegistry.LoadFreshPlayer(charPath);
 			if (loadedConfig != null)
 			{
 				Config = loadedConfig;
 			}
+		}
+		else if (Config != null && GodotObject.IsInstanceValid(Config) && !string.IsNullOrEmpty(Config.ResourcePath))
+		{
+			Config = GameDataRegistry.LoadFreshPlayer(Config.ResourcePath) ?? Config;
+		}
+		else if (Config == null || !GodotObject.IsInstanceValid(Config))
+		{
+			Config = GameDataRegistry.LoadFreshPlayer(GameLogic.ResolveCharacterDataPath("Knight"));
 		}
 
 		// Создаем индивидуальный набор способностей для текущего персонажа (KnightAbilitySet / MagicianAbilitySet)
@@ -330,8 +363,16 @@ public partial class Player : CharacterBody2D
 			BonusManaRegen = save.BonusManaRegen;
 			BonusMoveSpeed = save.BonusMoveSpeed;
 			WeaponDamageMultiplier = save.WeaponDamageMultiplier > 0.01f ? save.WeaponDamageMultiplier : 1.0f;
-			CurrentHealth = Mathf.Clamp(save.CurrentHealth, 1.0f, MaxHealthEffective);
-			CurrentMana = Mathf.Clamp(save.CurrentMana, 0.0f, MaxManaEffective);
+			Ability1CooldownScale = save.Ability1CooldownScale > 0.01f ? save.Ability1CooldownScale : 1.0f;
+			Ability2CooldownScale = save.Ability2CooldownScale > 0.01f ? save.Ability2CooldownScale : 1.0f;
+			Ability1DamageMultiplier = save.Ability1DamageMultiplier > 0.01f ? save.Ability1DamageMultiplier : 1.0f;
+			Ability1RadiusMultiplier = save.Ability1RadiusMultiplier > 0.01f ? save.Ability1RadiusMultiplier : 1.0f;
+			Ability2DamageMultiplier = save.Ability2DamageMultiplier > 0.01f ? save.Ability2DamageMultiplier : 1.0f;
+			Ability2RadiusMultiplier = save.Ability2RadiusMultiplier > 0.01f ? save.Ability2RadiusMultiplier : 1.0f;
+			float baseMaxHp = Config != null ? Config.MaxHealth : 100.0f;
+			float baseMaxMp = Config != null ? Config.MaxMana : 100.0f;
+			CurrentHealth = GameLogic.AdjustCurrentResourceForBaseChange(save.CurrentHealth, save.SavedBaseMaxHealth, baseMaxHp, BonusMaxHealth, 1.0f);
+			CurrentMana = GameLogic.AdjustCurrentResourceForBaseChange(save.CurrentMana, save.SavedBaseMaxMana, baseMaxMp, BonusMaxMana, 0.0f);
 			CoinCount = save.Coins;
 			SkillPoints = save.SkillPoints;
 			Ability1Level = save.Ability1Level;
@@ -379,24 +420,19 @@ public partial class Player : CharacterBody2D
 				CurrentMana = MaxManaEffective;
 				save.CurrentHealth = CurrentHealth;
 				save.CurrentMana = CurrentMana;
+				save.SavedBaseMaxHealth = Config != null ? Config.MaxHealth : 100.0f;
+				save.SavedBaseMaxMana = Config != null ? Config.MaxMana : 100.0f;
 
 				if (Config != null && Config.StartingWeapons != null)
 				{
-					for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++)
-					{
-						var weaponData = Config.StartingWeapons[i];
-						if (weaponData != null)
-						{
-							WeaponSlots[i].CurrentWeapon = weaponData;
-							WeaponSlots[i].ApplyWeaponSettings();
-						}
-					}
+					EquipFreshStartingWeapons();
 					SaveManager.CapturePlayerInventory(this, save);
 					SaveManager.SaveGame(save);
 				}
 			}
 			else
 			{
+				bool hasSingleUpgradesInSave = GameLogic.HasAnySingleWeaponPurchase(save.ShopPurchaseCounts);
 				for (int i = 0; i < save.WeaponResourcePaths.Count && i < 3; i++)
 				{
 					string resPath = save.WeaponResourcePaths[i];
@@ -405,7 +441,7 @@ public partial class Player : CharacterBody2D
 						var customStats = (save.WeaponSlotCustomStats != null && i < save.WeaponSlotCustomStats.Count)
 							? save.WeaponSlotCustomStats[i]
 							: null;
-						var weaponData = SaveManager.RestoreWeaponWithStats(resPath, customStats);
+						var weaponData = SaveManager.RestoreWeaponWithStats(resPath, customStats, hasSingleUpgradesInSave);
 						if (weaponData != null)
 						{
 							WeaponSlots[i].CurrentWeapon = weaponData;
@@ -432,6 +468,7 @@ public partial class Player : CharacterBody2D
 		_torchLight.ShadowEnabled = true;
 		_torchLight.ShadowFilter = Light2D.ShadowFilterEnum.Pcf5;
 		_torchLight.Position = new Vector2(0, -9);
+		_torchLight.RangeItemCullMask = 3;
 
 		_torchLight.Texture = GameResourceCache.GetRadialGlowTexture(
 			new Color(1f, 0.92f, 0.75f, 1f),
@@ -471,6 +508,7 @@ public partial class Player : CharacterBody2D
 		{
 			Text = PlayerDisplayName,
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(-48, -32),
 			Size = new Vector2(96, 14),
 			MouseFilter = Control.MouseFilterEnum.Ignore
@@ -532,6 +570,7 @@ public partial class Player : CharacterBody2D
 
 		if (IsDead)
 		{
+			CurrentMoveSpeed = 0.0f;
 			Velocity = Vector2.Zero;
 			var deadSlot = (WeaponSlots.Count > 0 && _currentSlotIndex < WeaponSlots.Count) ? WeaponSlots[_currentSlotIndex] : null;
 			deadSlot?.SetContinuousTriggerHeld(false);
@@ -562,6 +601,7 @@ public partial class Player : CharacterBody2D
 		if (_statusManager.HasEffect(StatusEffectType.Stun) || _statusManager.HasEffect(StatusEffectType.Root))
 		{
 			CharacterAbilities?.CancelSpecialAttack();
+			CurrentMoveSpeed = 0.0f;
 			Velocity = Vector2.Zero;
 			MoveAndSlide();
 			UpdateAnimation(Vector2.Zero);
@@ -573,22 +613,33 @@ public partial class Player : CharacterBody2D
 		Vector2 direction = Input.GetVector("move_left", "move_right", "move_up", "move_down");
 
 		float slowStrength = _statusManager.GetEffectStrength(StatusEffectType.Slow);
-		float speedMod = 1.0f - Mathf.Clamp(slowStrength, 0.0f, 0.95f);
-		float currentSpeed = WalkSpeedEffective * speedMod;
+		float manaCostPerSec = Config != null ? Config.ManaCostPerSecondRunning : 0.0f;
+		float runMult = Config != null ? Config.RunMultiplier : 1.0f;
 
 		bool isRunningPressed = direction != Vector2.Zero && Input.IsActionPressed("shift");
-		bool hasManaToRun = CurrentMana >= Config.ManaCostPerSecondRunning * (float)delta;
+		bool hasManaToRun = CurrentMana >= manaCostPerSec * (float)delta;
 		bool isRunning = isRunningPressed && hasManaToRun;
+		float currentSpeed = GameLogic.CalculatePlayerMoveSpeed(WalkSpeedEffective, slowStrength, isRunning, runMult);
 		if (isRunning)
 		{
-			currentSpeed *= Config.RunMultiplier;
-			CurrentMana = Mathf.Max(0.0f, CurrentMana - Config.ManaCostPerSecondRunning * (float)delta);
+			CurrentMana = Mathf.Max(0.0f, CurrentMana - manaCostPerSec * (float)delta);
 		}
-		else if (isRunningPressed && !hasManaToRun && Config.ManaCostPerSecondRunning > 0)
+		else if (isRunningPressed && !hasManaToRun && manaCostPerSec > 0)
 		{
 			ShowNoManaWarning();
 		}
 
+		CurrentMoveSpeed = GameLogic.CalculateRealTimeMoveSpeed(
+			false,
+			false,
+			direction.X,
+			direction.Y,
+			WalkSpeedEffective,
+			slowStrength,
+			isRunning,
+			runMult,
+			_externalVelocity.X,
+			_externalVelocity.Y);
 		Velocity = direction * currentSpeed + _externalVelocity;
 		MoveAndSlide();
 
@@ -889,6 +940,7 @@ public partial class Player : CharacterBody2D
 		}
 
 		IsDead = true;
+		CurrentMoveSpeed = 0.0f;
 		PlayDeathSoundSafe();
 
 		if (!string.IsNullOrEmpty(SaveManager.ActiveSlotId))
@@ -1104,6 +1156,24 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
+	private void EquipFreshStartingWeapons()
+	{
+		if (Config == null || Config.StartingWeapons == null) return;
+		for (int i = 0; i < Config.StartingWeapons.Count && i < 3 && i < WeaponSlots.Count; i++)
+		{
+			var weaponData = Config.StartingWeapons[i];
+			if (weaponData == null || !GodotObject.IsInstanceValid(weaponData)) continue;
+
+			string effPath = weaponData.GetEffectiveResourcePath();
+			if (!string.IsNullOrEmpty(effPath))
+			{
+				weaponData = GameDataRegistry.LoadFreshWeapon(effPath) ?? weaponData;
+			}
+			WeaponSlots[i].CurrentWeapon = weaponData;
+			WeaponSlots[i].ApplyWeaponSettings();
+		}
+	}
+
 	private void SpawnStartingWeapons()
 	{
 		foreach (Node child in _abilityManager.GetChildren())
@@ -1122,18 +1192,7 @@ public partial class Player : CharacterBody2D
 			controllerInstance.Visible = false;
 		}
 
-		if (Config == null || Config.StartingWeapons == null) return;
-
-		for (int i = 0; i < Config.StartingWeapons.Count && i < 3; i++)
-		{
-			var weaponData = Config.StartingWeapons[i];
-			if (weaponData != null)
-			{
-				WeaponSlots[i].CurrentWeapon = weaponData;
-				WeaponSlots[i].ApplyWeaponSettings();
-			}
-		}
-
+		EquipFreshStartingWeapons();
 		SelectSlot(0);
 	}
 
@@ -1388,6 +1447,7 @@ public partial class Player : CharacterBody2D
 		IsDead = dead;
 		if (dead)
 		{
+			CurrentMoveSpeed = 0.0f;
 			CurrentHealth = 0.0f;
 			_statusManager?.ClearEffects();
 			CharacterAbilities?.CancelSpecialAttack();
@@ -1610,7 +1670,13 @@ public partial class Player : CharacterBody2D
 			BonusMoveSpeed,
 			WeaponDamageMultiplier,
 			CurrentHealth,
-			CurrentMana
+			CurrentMana,
+			Ability1CooldownScale,
+			Ability2CooldownScale,
+			Ability1DamageMultiplier,
+			Ability1RadiusMultiplier,
+			Ability2DamageMultiplier,
+			Ability2RadiusMultiplier
 		};
 
 		int[] scalarInts = new int[]
@@ -1682,6 +1748,15 @@ public partial class Player : CharacterBody2D
 			}
 			CurrentMana = Mathf.Clamp(scalarFloats[7], 0.0f, MaxManaEffective);
 		}
+		if (scalarFloats != null && scalarFloats.Length >= 14)
+		{
+			Ability1CooldownScale = scalarFloats[8] > 0.01f ? scalarFloats[8] : 1.0f;
+			Ability2CooldownScale = scalarFloats[9] > 0.01f ? scalarFloats[9] : 1.0f;
+			Ability1DamageMultiplier = scalarFloats[10] > 0.01f ? scalarFloats[10] : 1.0f;
+			Ability1RadiusMultiplier = scalarFloats[11] > 0.01f ? scalarFloats[11] : 1.0f;
+			Ability2DamageMultiplier = scalarFloats[12] > 0.01f ? scalarFloats[12] : 1.0f;
+			Ability2RadiusMultiplier = scalarFloats[13] > 0.01f ? scalarFloats[13] : 1.0f;
+		}
 
 		if (scalarInts != null && scalarInts.Length >= 4)
 		{
@@ -1737,30 +1812,30 @@ public partial class Player : CharacterBody2D
 		}
 	}
 
-	public void BroadcastSpawnFireball(Vector2 spawnPos, Vector2 dir, float damage)
+	public void BroadcastSpawnFireball(Vector2 spawnPos, Vector2 dir, float damage, float explosionRadius)
 	{
-		Rpc(nameof(RpcSpawnFireball), spawnPos, dir, damage);
+		Rpc(nameof(RpcSpawnFireball), spawnPos, dir, damage, explosionRadius);
 	}
 
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-	private void RpcSpawnFireball(Vector2 spawnPos, Vector2 dir, float damage)
+	private void RpcSpawnFireball(Vector2 spawnPos, Vector2 dir, float damage, float explosionRadius)
 	{
 		int sender = Multiplayer.GetRemoteSenderId();
 		if (sender != 0 && sender != PeerId) return;
-		CharacterAbilities?.ExecuteFireballVisualAndSpawn(spawnPos, dir, damage);
+		CharacterAbilities?.ExecuteFireballVisualAndSpawn(spawnPos, dir, damage, explosionRadius);
 	}
 
-	public void BroadcastActivateShieldPulse(Vector2 dashDir, float shieldDuration, float pulseDamage, bool hasFrostAegis)
+	public void BroadcastActivateShieldPulse(Vector2 dashDir, float shieldDuration, float pulseDamage, float effectiveRadius, bool hasFrostAegis)
 	{
-		Rpc(nameof(RpcActivateShieldPulse), dashDir, shieldDuration, pulseDamage, hasFrostAegis);
+		Rpc(nameof(RpcActivateShieldPulse), dashDir, shieldDuration, pulseDamage, effectiveRadius, hasFrostAegis);
 	}
 
 	[Rpc(MultiplayerApi.RpcMode.AnyPeer, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-	private void RpcActivateShieldPulse(Vector2 dashDir, float shieldDuration, float pulseDamage, bool hasFrostAegis)
+	private void RpcActivateShieldPulse(Vector2 dashDir, float shieldDuration, float pulseDamage, float effectiveRadius, bool hasFrostAegis)
 	{
 		int sender = Multiplayer.GetRemoteSenderId();
 		if (sender != 0 && sender != PeerId) return;
-		CharacterAbilities?.ExecuteShieldPulseVisualAndHit(dashDir, shieldDuration, pulseDamage, hasFrostAegis);
+		CharacterAbilities?.ExecuteShieldPulseVisualAndHit(dashDir, shieldDuration, pulseDamage, effectiveRadius, hasFrostAegis);
 	}
 
 	public void BroadcastThrowBoomerang(int slotIdx, Vector2 dir, float throwDistance, float speed, float damage, float knockback)

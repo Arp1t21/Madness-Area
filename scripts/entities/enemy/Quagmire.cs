@@ -177,6 +177,12 @@ public partial class Quagmire : Enemy
 			_owner = owner;
 		}
 
+		public override void _Ready()
+		{
+			Material = GameResourceCache.GetLightOnlyMaterial();
+			LightMask = 2;
+		}
+
 		public override void _Draw()
 		{
 			if (_owner == null || !GodotObject.IsInstanceValid(_owner)) return;

@@ -110,6 +110,7 @@ public partial class Level : Node2D
 	public override void _Ready()
 	{
 		AddToGroup("Level");
+		GameDataRegistry.EnsureVerifiedAtStartup();
 
 		if (SaveManager.CurrentSave != null) {
 			_currentLevelIndex = SaveManager.CurrentSave.CurrentLevelIndex;
@@ -428,7 +429,75 @@ public partial class Level : Node2D
 		AddChild(_entryLadder);
 	}
 
+	public Vector2 GetValidChestSpawnPosition(Vector2 lastEnemyPos)
+	{
+		Vector2 target = lastEnemyPos;
+		if (target == Vector2.Zero && _player != null && GodotObject.IsInstanceValid(_player))
+		{
+			target = _player.GlobalPosition;
+		}
+		return FindNearestFreeSpot(target);
+	}
+
+	public Vector2 PickRandomExitStairsPosition(Vector2 avoidWorldPos)
+	{
+		if (_floorLayer == null)
+		{
+			return _stairsPosition;
+		}
+
+		var floorCells = _floorLayer.GetUsedCells();
+		var strictCandidates = new List<Vector2I>();
+		var fallbackCandidates = new List<Vector2I>();
+
+		foreach (var cell in floorCells)
+		{
+			if (_currentLevelIndex == 1 && cell.Y <= -_halfH - 2) continue;
+			if (!IsCellFree(cell)) continue;
+
+			Vector2 worldPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(cell));
+			if (worldPos.DistanceTo(avoidWorldPos) < 24.0f) continue;
+
+			fallbackCandidates.Add(cell);
+
+			if (worldPos.DistanceTo(avoidWorldPos) < 48.0f) continue;
+
+			bool hasMargin = true;
+			for (int dx = -1; dx <= 1 && hasMargin; dx++)
+			{
+				for (int dy = -1; dy <= 1; dy++)
+				{
+					if (!IsCellFree(new Vector2I(cell.X + dx, cell.Y + dy)))
+					{
+						hasMargin = false;
+						break;
+					}
+				}
+			}
+			if (hasMargin)
+			{
+				strictCandidates.Add(cell);
+			}
+		}
+
+		var pool = strictCandidates.Count > 0 ? strictCandidates : fallbackCandidates;
+		if (pool.Count == 0)
+		{
+			return _stairsPosition;
+		}
+
+		Vector2I chosenCell = pool[_rng.RandiRange(0, pool.Count - 1)];
+		return _floorLayer.ToGlobal(_floorLayer.MapToLocal(chosenCell));
+	}
+
 	public void OnWaveCleared()
+	{
+		Vector2 chestPos = GetValidChestSpawnPosition(Vector2.Zero);
+		Vector2 stairsPos = PickRandomExitStairsPosition(chestPos);
+		OnWaveCleared(chestPos, stairsPos);
+	}
+
+	public void OnWaveCleared(Vector2 chestWorldPos, Vector2 stairsWorldPos)
 	{
 		// 1. Входная лестница исчезает
 		if (GodotObject.IsInstanceValid(_entryLadder)) {
@@ -436,8 +505,22 @@ public partial class Level : Node2D
 			_entryLadder = null;
 		}
 
-		// 2. Делаем выходную лестницу видимой и спавним триггер взаимодействия
-		if (_stairsLayer != null) {
+		// 2. Размещаем выходную лестницу в случайной клетке пола и спавним триггер взаимодействия
+		if (_stairsLayer != null && _floorLayer != null)
+		{
+			Vector2 validStairsPos = stairsWorldPos != Vector2.Zero
+				? FindNearestFreeSpot(stairsWorldPos)
+				: PickRandomExitStairsPosition(chestWorldPos);
+			Vector2I stairCell = _stairsLayer.LocalToMap(_stairsLayer.ToLocal(validStairsPos));
+			_stairsLayer.Clear();
+			_stairsLayer.SetCell(stairCell, 1, new Vector2I(0, 5));
+			_stairsPosition = _stairsLayer.ToGlobal(_stairsLayer.MapToLocal(stairCell));
+			_hasStairs = true;
+			_stairsLayer.Visible = true;
+			_spikesLayer?.EraseCell(stairCell);
+		}
+		else if (_stairsLayer != null)
+		{
 			_stairsLayer.Visible = true;
 		}
 
@@ -445,11 +528,11 @@ public partial class Level : Node2D
 			SpawnExitLadderTrigger();
 		}
 
-		// 3. Спавним Алтарь снабжения рядом с лестницей/игроком
-		SpawnSupplyAltar();
+		// 3. Спавним Сундук (Алтарь снабжения) там, где умер последний моб этажа
+		SpawnSupplyAltar(chestWorldPos);
 	}
 
-	private void SpawnSupplyAltar()
+	private void SpawnSupplyAltar(Vector2 targetWorldPos)
 	{
 		if (GodotObject.IsInstanceValid(_supplyAltar))
 		{
@@ -458,26 +541,11 @@ public partial class Level : Node2D
 			_supplyAltar = null;
 		}
 
-		Vector2 basePos = _hasStairs ? _stairsPosition : (_player != null && GodotObject.IsInstanceValid(_player) ? _player.GlobalPosition : Vector2.Zero);
-		Vector2 altarPos = basePos + new Vector2(0, -16);
-		if (_floorLayer != null)
+		Vector2 altarPos = GetValidChestSpawnPosition(targetWorldPos);
+		if (_floorLayer != null && _spikesLayer != null)
 		{
-			Vector2I baseCell = _floorLayer.LocalToMap(_floorLayer.ToLocal(basePos));
-			Vector2I[] offsets = new[]
-			{
-				new Vector2I(0, -2), new Vector2I(2, 0), new Vector2I(-2, 0), new Vector2I(0, 2),
-				new Vector2I(1, -1), new Vector2I(-1, -1), new Vector2I(1, 1), new Vector2I(-1, 1)
-			};
-			foreach (var off in offsets)
-			{
-				Vector2I candidate = baseCell + off;
-				if (_floorLayer.GetCellSourceId(candidate) == -1) continue;
-				if (_wallsVerticalLayer != null && _wallsVerticalLayer.GetCellSourceId(candidate) != -1) continue;
-				if (_wallsHorizontalLayer != null && _wallsHorizontalLayer.GetCellSourceId(candidate) != -1) continue;
-				if (_columnsLayer != null && _columnsLayer.GetCellSourceId(candidate) != -1) continue;
-				altarPos = _floorLayer.ToGlobal(_floorLayer.MapToLocal(candidate));
-				break;
-			}
+			Vector2I chestCell = _floorLayer.LocalToMap(_floorLayer.ToLocal(altarPos));
+			_spikesLayer.EraseCell(chestCell);
 		}
 
 		_supplyAltar = new SupplyAltar { Name = "SupplyAltar" };
@@ -1945,7 +2013,7 @@ public partial class Level : Node2D
 			if (pickup != null)
 			{
 				string path = weaponPaths[random.Next(weaponPaths.Length)];
-				var weaponData = GD.Load<WeaponData>(path);
+				var weaponData = GameDataRegistry.LoadFreshWeapon(path) ?? GD.Load<WeaponData>(path);
 				pickup.WeaponToGive = weaponData;
 				pickup.GlobalPosition = door.GlobalPosition + offsets[i];
 				AddChild(pickup);
@@ -2043,7 +2111,7 @@ public partial class Level : Node2D
 			{
 				pickup.Name = $"WeaponDrop_{netId}";
 			}
-			var weaponData = GD.Load<WeaponData>(weaponPath);
+			var weaponData = GameDataRegistry.LoadFreshWeapon(weaponPath) ?? GD.Load<WeaponData>(weaponPath);
 			pickup.WeaponToGive = weaponData;
 			pickup.GlobalPosition = pos;
 			CallDeferred(MethodName.AddChild, pickup);
@@ -2246,7 +2314,7 @@ public partial class Level : Node2D
 			p.IsCoopSpawned = true;
 
 			string charPath = GameLogic.ResolveCharacterDataPath(chars[i]);
-			var loadedConfig = GD.Load<PlayerData>(charPath);
+			var loadedConfig = GameDataRegistry.LoadFreshPlayer(charPath) ?? GD.Load<PlayerData>(charPath);
 			if (loadedConfig != null) p.Config = loadedConfig;
 
 			p.GlobalPosition = spawnPositions[i];

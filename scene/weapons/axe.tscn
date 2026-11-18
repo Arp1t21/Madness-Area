@@ -187,7 +187,7 @@ _data = {
 }
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_3xb4p"]
-size = Vector2(28.563362, 9.57476)
+size = Vector2(30.071156, 9.57476)
 
 [node name="Axe" type="Node2D"]
 script = ExtResource("1_0hmv7")

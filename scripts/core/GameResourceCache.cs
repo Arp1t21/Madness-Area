@@ -7,9 +7,13 @@ using System.Collections.Generic;
 /// </summary>
 public static class GameResourceCache
 {
+	public const float SilverBaselineOffset = 0.135f;
+	public const float ForwardBaselineOffset = 0.13f;
+
 	private static Font _silverFont;
 	private static Font _forwardFont;
 	private static CanvasItemMaterial _unshadedMaterial;
+	private static CanvasItemMaterial _lightOnlyMaterial;
 
 	private static readonly Dictionary<string, GradientTexture2D> _radialGlowTextures =
 		new Dictionary<string, GradientTexture2D>();
@@ -26,7 +30,19 @@ public static class GameResourceCache
 	{
 		if (_silverFont == null)
 		{
-			_silverFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+			_silverFont = GD.Load<Font>("res://assets/fonts/silver/SilverCentered.tres");
+			if (_silverFont == null)
+			{
+				var raw = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+				if (raw != null)
+				{
+					_silverFont = new FontVariation
+					{
+						BaseFont = raw,
+						BaselineOffset = SilverBaselineOffset
+					};
+				}
+			}
 		}
 		return _silverFont;
 	}
@@ -35,9 +51,81 @@ public static class GameResourceCache
 	{
 		if (_forwardFont == null)
 		{
-			_forwardFont = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+			_forwardFont = GD.Load<Font>("res://assets/fonts/fff-forward/FffForwardCentered.tres");
+			if (_forwardFont == null)
+			{
+				var raw = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+				if (raw != null)
+				{
+					_forwardFont = new FontVariation
+					{
+						BaseFont = raw,
+						BaselineOffset = ForwardBaselineOffset
+					};
+				}
+			}
 		}
 		return _forwardFont;
+	}
+
+	/// <summary>
+	/// Walks wrapped FontVariation layers to obtain the underlying FontFile.
+	/// </summary>
+	public static FontFile UnwrapFontFile(Font font)
+	{
+		Font cur = font;
+		for (int i = 0; i < 8 && cur is FontVariation fv; i++)
+		{
+			cur = fv.BaseFont;
+		}
+		return cur as FontFile;
+	}
+
+	/// <summary>
+	/// Resolves the vertical-centering baseline offset for Silver / FFF Forward fonts.
+	/// </summary>
+	public static float GetCenteredBaselineOffset(Font font)
+	{
+		if (font is FontVariation fv && Mathf.Abs(fv.BaselineOffset) > 0.0001f)
+		{
+			return fv.BaselineOffset;
+		}
+
+		FontFile ff = UnwrapFontFile(font);
+		string path = ff?.ResourcePath ?? font?.ResourcePath ?? "";
+		if (path.Contains("Silver", StringComparison.OrdinalIgnoreCase))
+		{
+			return SilverBaselineOffset;
+		}
+		if (path.Contains("FFFFORWA", StringComparison.OrdinalIgnoreCase)
+			|| path.Contains("FffForward", StringComparison.OrdinalIgnoreCase))
+		{
+			return ForwardBaselineOffset;
+		}
+		return 0.0f;
+	}
+
+	/// <summary>
+	/// Creates a single-layer FontVariation that preserves vertical centering alongside styling overrides.
+	/// </summary>
+	public static Font CreateFontVariation(
+		Font baseFont,
+		float embolden = 0.0f,
+		int spacingGlyph = 0,
+		int spacingTop = 0,
+		int spacingBottom = 0)
+	{
+		if (baseFont == null) return null;
+		Font rootBase = (Font)UnwrapFontFile(baseFont) ?? baseFont;
+		return new FontVariation
+		{
+			BaseFont = rootBase,
+			BaselineOffset = GetCenteredBaselineOffset(baseFont),
+			VariationEmbolden = embolden,
+			SpacingGlyph = spacingGlyph,
+			SpacingTop = spacingTop,
+			SpacingBottom = spacingBottom
+		};
 	}
 
 	public static CanvasItemMaterial GetUnshadedMaterial()
@@ -50,6 +138,18 @@ public static class GameResourceCache
 			};
 		}
 		return _unshadedMaterial;
+	}
+
+	public static CanvasItemMaterial GetLightOnlyMaterial()
+	{
+		if (_lightOnlyMaterial == null)
+		{
+			_lightOnlyMaterial = new CanvasItemMaterial
+			{
+				LightMode = CanvasItemMaterial.LightModeEnum.LightOnly
+			};
+		}
+		return _lightOnlyMaterial;
 	}
 
 	public static GradientTexture2D GetRadialGlowTexture(
@@ -110,7 +210,8 @@ public static class GameResourceCache
 		Color color,
 		float energy,
 		Texture2D texture,
-		bool shadowEnabled = false)
+		bool shadowEnabled = false,
+		int itemCullMask = 1)
 	{
 		var light = new PointLight2D
 		{
@@ -119,7 +220,8 @@ public static class GameResourceCache
 			ShadowEnabled = shadowEnabled,
 			Color = color,
 			Energy = energy,
-			Texture = texture
+			Texture = texture,
+			RangeItemCullMask = itemCullMask
 		};
 		parent?.AddChild(light);
 		return light;

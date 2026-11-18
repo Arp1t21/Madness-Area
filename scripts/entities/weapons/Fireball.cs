@@ -37,7 +37,8 @@ public partial class Fireball : Area2D
 			new Color(1.0f, 0.62f, 0.22f, 1.0f),
 			0.95f,
 			fireGlowTex,
-			shadowEnabled: false);
+			shadowEnabled: false,
+			itemCullMask: 3);
 
 		_trail = GetNodeOrNull<CpuParticles2D>("Trail") ?? GetNodeOrNull<CpuParticles2D>("CpuParticles2D");
 
@@ -176,8 +177,11 @@ public partial class Fireball : Area2D
 		SetDeferred("monitoring", false);
 		SetDeferred("monitorable", false);
 
+		float radiusScale = Mathf.Max(0.5f, ExplosionRadius / 45.0f);
 		var explosion = new FireballExplosion();
 		explosion.GlobalPosition = GlobalPosition;
+		explosion.Scale = Vector2.One * radiusScale;
+		explosion.Amount = Mathf.Clamp(Mathf.RoundToInt(35 * radiusScale), 35, 80);
 		GetParent().AddChild(explosion);
 		DungeonVisuals.SpawnMuzzleFlash(GetParent(), GlobalPosition, new Color(1.0f, 0.72f, 0.24f), 7.5f);
 		DungeonVisuals.SpawnImpactSparks(

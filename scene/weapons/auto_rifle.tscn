@@ -1,4 +1,4 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=5 format=3 uid="uid://dmqj5538vlwsw"]
 
 [ext_resource type="Script" uid="uid://m5n70dsws8w1" path="res://scripts/entities/weapons/RangedWeaponVisual.cs" id="1_ranged"]
 [ext_resource type="Texture2D" uid="uid://bvqagjmbp0tx6" path="res://assets/Zombie Asset Pack/weapons/automatic rifle.png" id="2_rifle"]
@@ -35,7 +35,7 @@ animations = [{
 script = ExtResource("1_ranged")
 
 [node name="Muzzle" type="Marker2D" parent="."]
-position = Vector2(11, -1)
+position = Vector2(12, -2)
 
 [node name="WeaponSprite" type="Sprite2D" parent="."]
 visible = false
@@ -54,7 +54,6 @@ scale = Vector2(2, 2)
 emitting = false
 amount = 1
 texture = ExtResource("3_bullet")
-lifetime = 1.0
 one_shot = true
 explosiveness = 1.0
 fract_delta = false
@@ -64,4 +63,3 @@ gravity = Vector2(0, 750)
 initial_velocity_min = 60.0
 initial_velocity_max = 100.0
 scale_amount_min = 0.8
-scale_amount_max = 1.0

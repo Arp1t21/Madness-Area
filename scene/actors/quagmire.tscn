@@ -9,8 +9,7 @@
 [ext_resource type="Texture2D" uid="uid://bf6m7ak00tipp" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f1.png" id="7_qrrfk"]
 [ext_resource type="Texture2D" uid="uid://dm4j0k5mgaow1" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f2.png" id="8_cylgr"]
 [ext_resource type="Texture2D" uid="uid://vo8c5h1huyac" path="res://assets/sprites/big_zombie/big_zombie_run_anim_f3.png" id="9_ms0uk"]
-
-[ext_resource type="Resource" path="res://data/enemies/quagmire.tres" id="12_qdata"]
+[ext_resource type="Resource" uid="uid://c8kv50vg4ye4e" path="res://data/enemies/quagmire.tres" id="12_qdata"]
 
 [sub_resource type="SpriteFrames" id="SpriteFrames_7hmbb"]
 animations = [{
@@ -50,7 +49,7 @@ animations = [{
 }]
 
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_32qc2"]
-size = Vector2(18, 20)
+size = Vector2(18, 24.5)
 
 [node name="Quagmire" type="CharacterBody2D"]
 script = ExtResource("1_lngsv")
@@ -61,10 +60,10 @@ position = Vector2(0, -18)
 sprite_frames = SubResource("SpriteFrames_7hmbb")
 animation = &"Idle"
 autoplay = "Idle"
-frame_progress = 0.506472
+frame_progress = 0.49629927
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -10)
+position = Vector2(0, -12)
 shape = SubResource("RectangleShape2D_32qc2")
 
 [node name="Area2DHitBox" type="Area2D" parent="." groups=["enemy"]]
@@ -72,8 +71,7 @@ collision_layer = 0
 collision_mask = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Area2DHitBox"]
-position = Vector2(0, -10)
+position = Vector2(0, -12)
 shape = SubResource("RectangleShape2D_32qc2")
 
 [connection signal="area_entered" from="Area2DHitBox" to="." method="_on_area_2d_area_entered"]
-

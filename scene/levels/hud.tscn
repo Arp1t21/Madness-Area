@@ -2,7 +2,7 @@
 
 [ext_resource type="Script" uid="uid://b7bikpxya28tb" path="res://scripts/entities/player/HUD.cs" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dnvqer6ird6v1" path="res://assets/objects/coin/coin_anim_f0.png" id="2_icon"]
-[ext_resource type="FontFile" uid="uid://clxpal7bjk6jp" path="res://assets/fonts/silver/Silver.ttf" id="4_m5x7"]
+[ext_resource type="FontVariation" path="res://assets/fonts/silver/SilverCentered.tres" id="4_m5x7"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_bg"]
 bg_color = Color(0.2, 0, 0, 0.6)
@@ -99,7 +99,7 @@ anchor_top = 1.0
 anchor_bottom = 1.0
 offset_left = 18.0
 offset_top = -72.0
-offset_right = 256.0
+offset_right = 220.0
 offset_bottom = -16.0
 grow_vertical = 0
 
@@ -146,10 +146,10 @@ layout_mode = 1
 anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
-offset_left = 136.0
+offset_left = 135.0
 offset_top = -24.0
-offset_right = 232.0
-offset_bottom = 2.0
+offset_right = 196.0
+offset_bottom = 1.0
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("4_m5x7")
 theme_override_font_sizes/font_size = 28
@@ -161,10 +161,10 @@ layout_mode = 1
 anchors_preset = 4
 anchor_top = 0.5
 anchor_bottom = 0.5
-offset_left = 136.0
-offset_top = 2.0
-offset_right = 232.0
-offset_bottom = 26.0
+offset_left = 135.0
+offset_top = -1.0
+offset_right = 196.0
+offset_bottom = 24.0
 grow_vertical = 2
 theme_override_fonts/font = ExtResource("4_m5x7")
 theme_override_font_sizes/font_size = 28

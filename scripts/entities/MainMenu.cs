@@ -68,6 +68,9 @@ public partial class MainMenu : CanvasLayer
 
 	public override void _Ready()
 	{
+		// Re-verify all base weapon, mob, and character .tres stats from disk on every startup.
+		GameDataRegistry.VerifyAndRefreshInitialStats(forceReload: true);
+
 		if (ButtonHoverSound == null) {
 			ButtonHoverSound = GD.Load<AudioStream>("res://assets/sounds/hover.mp3");
 		}
@@ -228,8 +231,8 @@ public partial class MainMenu : CanvasLayer
 	{
 		if (_menuRoot == null) return;
 
-		var silverFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
-		var mainFont = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+		var silverFont = GameResourceCache.GetSilverFont();
+		var mainFont = GameResourceCache.GetForwardFont();
 
 		const float panelW = 264.0f;
 		const float panelH = 256.0f;
@@ -249,7 +252,8 @@ public partial class MainMenu : CanvasLayer
 		var badgeLabel = new Label
 		{
 			Text = "- DUNGEON ARENA ROGUELIKE -",
-			HorizontalAlignment = HorizontalAlignment.Center
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center
 		};
 		badgeLabel.AddThemeFontOverride("font", mainFont);
 		badgeLabel.AddThemeFontSizeOverride("font_size", 10);
@@ -260,7 +264,8 @@ public partial class MainMenu : CanvasLayer
 		var titleLabel = new Label
 		{
 			Text = "MADNESS AREA",
-			HorizontalAlignment = HorizontalAlignment.Center
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center
 		};
 		titleLabel.AddThemeFontOverride("font", silverFont);
 		titleLabel.AddThemeFontSizeOverride("font_size", 68);
@@ -282,6 +287,7 @@ public partial class MainMenu : CanvasLayer
 		{
 			Text = "WASD MOVE   •   LMB ATTACK   •   Q / V ABILITIES   •   E INTERACT",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(0, viewSize.Y - 28.0f),
 			Size = new Vector2(viewSize.X, 20.0f),
 			MouseFilter = Control.MouseFilterEnum.Ignore
@@ -369,7 +375,7 @@ public partial class MainMenu : CanvasLayer
 
 	private void ShowDisconnectNoticeBanner(string message, Vector2 viewSize)
 	{
-		var mainFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		var mainFont = GameResourceCache.GetSilverFont();
 		var banner = new PanelContainer
 		{
 			Position = new Vector2(Mathf.Max(20f, (viewSize.X - 420f) * 0.5f), 14f),
@@ -426,17 +432,18 @@ public partial class MainMenu : CanvasLayer
 		vig.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		charSelectRoot.AddChild(vig);
 
-		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
-		var knightData = GD.Load<PlayerData>("res://data/characters/knight.tres");
-		var magicianData = GD.Load<PlayerData>("res://data/characters/magician.tres");
-		var rogueData = GD.Load<PlayerData>("res://data/characters/rogue.tres");
-		var berserkerData = GD.Load<PlayerData>("res://data/characters/berserker.tres");
+		var titleFont = GameResourceCache.GetSilverFont();
+		var knightData = GameDataRegistry.LoadFreshPlayer("res://data/characters/knight.tres") ?? GD.Load<PlayerData>("res://data/characters/knight.tres");
+		var magicianData = GameDataRegistry.LoadFreshPlayer("res://data/characters/magician.tres") ?? GD.Load<PlayerData>("res://data/characters/magician.tres");
+		var rogueData = GameDataRegistry.LoadFreshPlayer("res://data/characters/rogue.tres") ?? GD.Load<PlayerData>("res://data/characters/rogue.tres");
+		var berserkerData = GameDataRegistry.LoadFreshPlayer("res://data/characters/berserker.tres") ?? GD.Load<PlayerData>("res://data/characters/berserker.tres");
 
 		// Title
 		var title = new Label
 		{
 			Text = "CHOOSE YOUR HERO",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(0, 14),
 			Size = new Vector2(W, 46)
 		};
@@ -450,6 +457,7 @@ public partial class MainMenu : CanvasLayer
 		{
 			Text = "Select a hero card to inspect stats, or double-click to embark",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(0, 60),
 			Size = new Vector2(W, 28)
 		};
@@ -503,6 +511,7 @@ public partial class MainMenu : CanvasLayer
 			{
 				Text = cardRoles[i],
 				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
 				Position = new Vector2(0, 12),
 				Size = new Vector2(cardW, 24)
 			};
@@ -567,6 +576,7 @@ public partial class MainMenu : CanvasLayer
 			{
 				Text = cardNames[i],
 				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
 				Position = new Vector2(0, 42 + portraitH + 18),
 				Size = new Vector2(cardW, 35)
 			};
@@ -579,6 +589,7 @@ public partial class MainMenu : CanvasLayer
 			var statusLbl = new Label
 			{
 				HorizontalAlignment = HorizontalAlignment.Center,
+				VerticalAlignment = VerticalAlignment.Center,
 				Position = new Vector2(0, cardH - 49),
 				Size = new Vector2(cardW, 32)
 			};
@@ -604,6 +615,7 @@ public partial class MainMenu : CanvasLayer
 
 		var infoHeader = new Label
 		{
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(20, 14),
 			Size = new Vector2(infoPanel.Size.X - 40, 38)
 		};
@@ -640,6 +652,7 @@ public partial class MainMenu : CanvasLayer
 			var kLbl = new Label
 			{
 				Text = statTitle,
+				VerticalAlignment = VerticalAlignment.Center,
 				SizeFlagsHorizontal = Control.SizeFlags.ExpandFill,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
@@ -652,6 +665,7 @@ public partial class MainMenu : CanvasLayer
 			var vLbl = new Label
 			{
 				HorizontalAlignment = HorizontalAlignment.Right,
+				VerticalAlignment = VerticalAlignment.Center,
 				MouseFilter = Control.MouseFilterEnum.Ignore
 			};
 			vLbl.AddThemeFontOverride("font", titleFont);
@@ -926,12 +940,13 @@ public partial class MainMenu : CanvasLayer
 		vig.SetAnchorsAndOffsetsPreset(Control.LayoutPreset.FullRect);
 		slotSelectRoot.AddChild(vig);
 
-		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		var titleFont = GameResourceCache.GetSilverFont();
 
 		var title = new Label
 		{
 			Text = isLoadMode ? "LOAD EXPEDITION (23 SLOTS)" : "CHOOSE SAVE SLOT (23 SLOTS)",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(0, 14),
 			Size = new Vector2(W, 46)
 		};
@@ -949,7 +964,8 @@ public partial class MainMenu : CanvasLayer
 			Size = new Vector2(318, listHeight)
 		};
 		listPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
-			DungeonVisuals.ObsidianDeep, DungeonVisuals.IronBorder, 2, 6, 6));
+			DungeonVisuals.ObsidianDeep, DungeonVisuals.BrassDim, 2, 6, 8));
+		DungeonVisuals.AttachFrameAccent(listPanel, DungeonVisuals.BrassDim, 5);
 		slotSelectRoot.AddChild(listPanel);
 
 		var scroll = new ScrollContainer
@@ -981,6 +997,7 @@ public partial class MainMenu : CanvasLayer
 		{
 			Text = "EXPEDITION CHRONICLE",
 			HorizontalAlignment = HorizontalAlignment.Left,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(20, 14),
 			Size = new Vector2(infoPanel.Size.X - 40, 34)
 		};
@@ -1172,7 +1189,7 @@ public partial class MainMenu : CanvasLayer
 			}
 		}
 
-		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		var titleFont = GameResourceCache.GetSilverFont();
 		foreach (var entry in _slotButtons)
 		{
 			if (!GodotObject.IsInstanceValid(entry.Btn)) continue;
@@ -1234,6 +1251,9 @@ public partial class MainMenu : CanvasLayer
 
 	private void LaunchSlot(string slotId, bool isLoadMode)
 	{
+		// Re-check disk .tres stats right before launching a new run or loading a saved floor.
+		GameDataRegistry.VerifyAndRefreshInitialStats(forceReload: true);
+
 		if (isLoadMode)
 		{
 			var data = SaveManager.LoadSave(slotId);
@@ -1249,7 +1269,7 @@ public partial class MainMenu : CanvasLayer
 			// Start new game in this slot (overwriting if exists)
 			string charPath = GameLogic.ResolveCharacterDataPath(_selectedCharacterName);
 
-			var charData = GD.Load<PlayerData>(charPath);
+			var charData = GameDataRegistry.LoadFreshPlayer(charPath) ?? GD.Load<PlayerData>(charPath);
 			float startHp = charData != null ? charData.MaxHealth : 55f;
 			float startMp = charData != null ? charData.MaxMana : 100f;
 
@@ -1260,6 +1280,8 @@ public partial class MainMenu : CanvasLayer
 				CurrentLevelIndex = 1,
 				CurrentHealth = startHp,
 				CurrentMana = startMp,
+				SavedBaseMaxHealth = startHp,
+				SavedBaseMaxMana = startMp,
 				Coins = 0
 			};
 			SaveManager.SaveGame(SaveManager.CurrentSave);

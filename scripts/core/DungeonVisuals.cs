@@ -8,20 +8,20 @@ using System;
 public static class DungeonVisuals
 {
 	// Core Obsidian & Brass Palette
-	public static readonly Color ObsidianDeep = new Color(0.045f, 0.048f, 0.072f, 0.96f);
-	public static readonly Color ObsidianPanel = new Color(0.068f, 0.072f, 0.105f, 0.96f);
-	public static readonly Color ObsidianCard = new Color(0.095f, 0.10f, 0.145f, 0.96f);
-	public static readonly Color ObsidianElevated = new Color(0.125f, 0.132f, 0.19f, 0.98f);
-	public static readonly Color BrassGold = new Color(0.98f, 0.78f, 0.28f, 1.0f);
-	public static readonly Color BrassDim = new Color(0.55f, 0.46f, 0.28f, 1.0f);
-	public static readonly Color IronBorder = new Color(0.28f, 0.30f, 0.38f, 1.0f);
-	public static readonly Color Parchment = new Color(0.95f, 0.92f, 0.86f, 1.0f);
-	public static readonly Color MutedSlate = new Color(0.62f, 0.65f, 0.74f, 1.0f);
+	public static readonly Color ObsidianDeep = new Color(0.042f, 0.046f, 0.072f, 0.96f);
+	public static readonly Color ObsidianPanel = new Color(0.066f, 0.072f, 0.108f, 0.96f);
+	public static readonly Color ObsidianCard = new Color(0.092f, 0.100f, 0.148f, 0.96f);
+	public static readonly Color ObsidianElevated = new Color(0.132f, 0.144f, 0.208f, 0.98f);
+	public static readonly Color BrassGold = new Color(0.97f, 0.79f, 0.31f, 1.0f);
+	public static readonly Color BrassDim = new Color(0.58f, 0.48f, 0.29f, 1.0f);
+	public static readonly Color IronBorder = new Color(0.30f, 0.33f, 0.42f, 1.0f);
+	public static readonly Color Parchment = new Color(0.96f, 0.93f, 0.87f, 1.0f);
+	public static readonly Color MutedSlate = new Color(0.65f, 0.68f, 0.77f, 1.0f);
 	public static readonly Color Crimson = new Color(0.92f, 0.22f, 0.28f, 1.0f);
-	public static readonly Color CrimsonBright = new Color(1.0f, 0.36f, 0.36f, 1.0f);
-	public static readonly Color ManaBlue = new Color(0.22f, 0.62f, 0.98f, 1.0f);
-	public static readonly Color Emerald = new Color(0.32f, 0.90f, 0.56f, 1.0f);
-	public static readonly Color ArcaneCyan = new Color(0.32f, 0.86f, 1.0f, 1.0f);
+	public static readonly Color CrimsonBright = new Color(1.0f, 0.38f, 0.38f, 1.0f);
+	public static readonly Color ManaBlue = new Color(0.24f, 0.64f, 0.99f, 1.0f);
+	public static readonly Color Emerald = new Color(0.32f, 0.92f, 0.56f, 1.0f);
+	public static readonly Color ArcaneCyan = new Color(0.34f, 0.88f, 1.0f, 1.0f);
 
 	private static Texture2D _groundShadowTex;
 	private static Texture2D _pixelSquareTex;
@@ -89,14 +89,19 @@ public static class DungeonVisuals
 
 		Color normalBg = baseBg ?? ObsidianCard;
 		Color hoverBg = normalBg.Lightened(0.14f);
-		Color pressedBg = normalBg.Darkened(0.18f);
-		Color disabledBg = new Color(0.07f, 0.07f, 0.09f, 0.72f);
+		Color pressedBg = normalBg.Darkened(0.16f);
+		Color disabledBg = new Color(0.065f, 0.068f, 0.09f, 0.74f);
 
-		var normal = CreatePillStyle(normalBg, accent.Darkened(0.28f), 2, cornerRadius, padH, padV);
-		var hover = CreatePillStyle(hoverBg, accent, 2, cornerRadius, padH, padV);
-		hover.ShadowColor = new Color(accent.R, accent.G, accent.B, 0.28f);
-		hover.ShadowSize = 4;
-		var pressed = CreatePillStyle(pressedBg, accent.Lightened(0.2f), 2, cornerRadius, padH, padV);
+		var normal = CreatePillStyle(normalBg, accent.Darkened(0.24f), 2, cornerRadius, padH, padV);
+		normal.ShadowSize = 3;
+		normal.ShadowOffset = new Vector2(0, 2);
+		var hover = CreatePillStyle(hoverBg, accent.Lightened(0.12f), 2, cornerRadius, padH, padV);
+		hover.ShadowColor = new Color(accent.R, accent.G, accent.B, 0.34f);
+		hover.ShadowSize = 5;
+		hover.ShadowOffset = new Vector2(0, 2);
+		var pressed = CreatePillStyle(pressedBg, accent.Lightened(0.24f), 2, cornerRadius, padH, padV);
+		pressed.ShadowSize = 1;
+		pressed.ShadowOffset = new Vector2(0, 1);
 		var disabled = CreatePillStyle(disabledBg, IronBorder.Darkened(0.35f), 1, cornerRadius, padH, padV);
 		disabled.ShadowSize = 0;
 
@@ -110,9 +115,11 @@ public static class DungeonVisuals
 		if (fontSize > 0) btn.AddThemeFontSizeOverride("font_size", fontSize);
 
 		btn.AddThemeColorOverride("font_color", Parchment);
-		btn.AddThemeColorOverride("font_hover_color", accent.Lightened(0.25f));
+		btn.AddThemeColorOverride("font_hover_color", accent.Lerp(Colors.White, 0.42f));
 		btn.AddThemeColorOverride("font_pressed_color", Colors.White);
-		btn.AddThemeColorOverride("font_disabled_color", new Color(0.45f, 0.45f, 0.50f, 0.8f));
+		btn.AddThemeColorOverride("font_disabled_color", new Color(0.46f, 0.48f, 0.54f, 0.80f));
+		btn.AddThemeConstantOverride("outline_size", 2);
+		btn.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.02f, 0.04f, 0.94f));
 		btn.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
 
 		const string HoverAnimMeta = "_dv_hover_anim";
@@ -159,11 +166,25 @@ public static class DungeonVisuals
 	}
 
 	private static AudioStream s_uiClickStream;
+	private static bool s_uiClickLoadAttempted;
 
 	public static void PlayUiClickSound(Node context, float pitchScale = 1.0f)
 	{
 		if (context == null || !GodotObject.IsInstanceValid(context) || !context.IsInsideTree()) return;
-		s_uiClickStream ??= GD.Load<AudioStream>("res://assets/sounds/coin.wav");
+		if (!s_uiClickLoadAttempted)
+		{
+			s_uiClickLoadAttempted = true;
+			const string clickPath = "res://assets/sounds/click.mp3";
+			const string fallbackPath = "res://assets/sounds/coin_collecting.wav";
+			if (ResourceLoader.Exists(clickPath))
+			{
+				s_uiClickStream = GD.Load<AudioStream>(clickPath);
+			}
+			else if (ResourceLoader.Exists(fallbackPath))
+			{
+				s_uiClickStream = GD.Load<AudioStream>(fallbackPath);
+			}
+		}
 		if (s_uiClickStream != null)
 		{
 			GameResourceCache.PlayPooledSound(context.GetTree(), s_uiClickStream, "SFX");
@@ -171,7 +192,7 @@ public static class DungeonVisuals
 	}
 
 	/// <summary>
-	/// Styles an in-world interaction prompt label (e.g. "[E] Open") as a crisp, readable floating badge.
+	/// Styles an in-world interaction prompt label (e.g. "[E] Open") as clean floating text without a background box.
 	/// </summary>
 	public static void StyleWorldPromptLabel(Label label, Color accent, float centerYOffset = -23.0f)
 	{
@@ -181,24 +202,19 @@ public static class DungeonVisuals
 		{
 			label.AddThemeFontOverride("font", font);
 		}
-		label.AddThemeFontSizeOverride("font_size", 11);
+		label.AddThemeFontSizeOverride("font_size", 8);
 		label.AddThemeConstantOverride("letter_spacing", 0);
-		label.AddThemeColorOverride("font_color", accent.Lightened(0.22f));
+		label.AddThemeColorOverride("font_color", accent.Lightened(0.25f));
 		ApplyPixelOutline(label, 2, new Color(0.02f, 0.02f, 0.04f, 0.98f), 1, 1);
 
-		var pill = CreatePillStyle(
-			new Color(0.04f, 0.045f, 0.075f, 0.88f),
-			new Color(accent.R, accent.G, accent.B, 0.72f),
-			1, 3, 5, 1);
-		pill.ShadowSize = 2;
-		pill.ShadowColor = new Color(0f, 0f, 0f, 0.65f);
-		label.AddThemeStyleboxOverride("normal", pill);
-
+		label.AddThemeStyleboxOverride("normal", new StyleBoxEmpty());
+		label.SetAnchorsPreset(Control.LayoutPreset.TopLeft);
 		label.HorizontalAlignment = HorizontalAlignment.Center;
 		label.VerticalAlignment = VerticalAlignment.Center;
+		label.MouseFilter = Control.MouseFilterEnum.Ignore;
 		label.ZIndex = 15;
-		label.Size = new Vector2(68, 14);
-		label.Position = new Vector2(-34, centerYOffset);
+		label.Size = new Vector2(96, 12);
+		label.Position = new Vector2(-48, centerYOffset);
 	}
 
 	/// <summary>
@@ -244,6 +260,16 @@ public static class DungeonVisuals
 		label.AddThemeColorOverride("font_shadow_color", new Color(0f, 0f, 0f, 0.78f));
 		label.AddThemeConstantOverride("shadow_offset_x", shadowX);
 		label.AddThemeConstantOverride("shadow_offset_y", shadowY);
+	}
+
+	/// <summary>
+	/// Computes a CanvasItem.DrawString baseline Y coordinate that vertically centers the font box within [boxTopY, boxTopY + boxHeight].
+	/// </summary>
+	public static float GetCenteredDrawStringBaseline(Font font, int fontSize, float boxTopY, float boxHeight)
+	{
+		if (font == null) return boxTopY + boxHeight * 0.5f;
+		float lineHeight = font.GetHeight(fontSize);
+		return boxTopY + (boxHeight - lineHeight) * 0.5f + font.GetAscent(fontSize);
 	}
 
 	public static void StyleProgressBar(
@@ -666,13 +692,21 @@ void fragment() {
 		};
 	}
 
-	public static DungeonRuneAura CreateRuneAura(float radius, Color color, int spokeCount = 6, int zIndex = 0)
+	public static DungeonRuneAura CreateRuneAura(
+		float radius,
+		Color color,
+		int spokeCount = 6,
+		int zIndex = 0,
+		DungeonRuneAura.AuraVisualStyle style = DungeonRuneAura.AuraVisualStyle.Sanctuary,
+		bool isUnshaded = true)
 	{
 		return new DungeonRuneAura
 		{
 			Radius = radius,
 			AuraColor = color,
 			SpokeCount = spokeCount,
+			Style = style,
+			IsUnshaded = isUnshaded,
 			ZIndex = zIndex
 		};
 	}
@@ -1080,19 +1114,34 @@ public partial class DungeonFrameOverlay : Control
 		Vector2 s = Size;
 		if (s.X < 20 || s.Y < 20) return;
 
-		Color c = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.88f);
-		Color bracket = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.42f);
-		Color highlight = new Color(1f, 1f, 1f, 0.09f);
-		DrawLine(new Vector2(6, 2), new Vector2(s.X - 6, 2), highlight, 1.0f);
+		Color c = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.92f);
+		Color bright = CornerColor.Lerp(Colors.White, 0.38f);
+		Color bracket = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.48f);
+		Color hairline = new Color(CornerColor.R, CornerColor.G, CornerColor.B, 0.14f);
+		Color topSheen = new Color(1f, 0.96f, 0.86f, 0.12f);
+		Color botShade = new Color(0f, 0f, 0f, 0.34f);
+
+		// Subtle inner bevel (top specular highlight + bottom shadow)
+		DrawLine(new Vector2(6, 2), new Vector2(s.X - 6, 2), topSheen, 1.0f);
+		DrawLine(new Vector2(6, s.Y - 2), new Vector2(s.X - 6, s.Y - 2), botShade, 1.0f);
+
+		// Faint inner inset hairline frame
+		if (s.X >= 36 && s.Y >= 26)
+		{
+			float inPad = Inset + 1.5f;
+			DrawRect(new Rect2(inPad, inPad, s.X - inPad * 2.0f, s.Y - inPad * 2.0f), hairline, false, 1.0f);
+		}
 
 		float r = 2.0f;
-		float arm = 7.0f;
+		float arm = Mathf.Min(8.0f, Mathf.Min(s.X, s.Y) * 0.22f);
 		// Top-left bracket + rivet
 		DrawRect(new Rect2(Inset, Inset, r, r), c);
+		DrawRect(new Rect2(Inset, Inset, 1.0f, 1.0f), bright);
 		DrawLine(new Vector2(Inset + r + 1, Inset + 0.5f), new Vector2(Inset + r + arm, Inset + 0.5f), bracket, 1.0f);
 		DrawLine(new Vector2(Inset + 0.5f, Inset + r + 1), new Vector2(Inset + 0.5f, Inset + r + arm), bracket, 1.0f);
 		// Top-right bracket + rivet
 		DrawRect(new Rect2(s.X - Inset - r, Inset, r, r), c);
+		DrawRect(new Rect2(s.X - Inset - 1.0f, Inset, 1.0f, 1.0f), bright);
 		DrawLine(new Vector2(s.X - Inset - r - 1, Inset + 0.5f), new Vector2(s.X - Inset - r - arm, Inset + 0.5f), bracket, 1.0f);
 		DrawLine(new Vector2(s.X - Inset - 0.5f, Inset + r + 1), new Vector2(s.X - Inset - 0.5f, Inset + r + arm), bracket, 1.0f);
 		// Bottom-left bracket + rivet
@@ -1104,34 +1153,56 @@ public partial class DungeonFrameOverlay : Control
 		DrawLine(new Vector2(s.X - Inset - r - 1, s.Y - Inset - 0.5f), new Vector2(s.X - Inset - r - arm, s.Y - Inset - 0.5f), bracket, 1.0f);
 		DrawLine(new Vector2(s.X - Inset - 0.5f, s.Y - Inset - r - 1), new Vector2(s.X - Inset - 0.5f, s.Y - Inset - r - arm), bracket, 1.0f);
 
-		// Center top/bottom ornamental brass studs on wide panels
-		if (s.X >= 120)
+		// Center top/bottom ornamental brass keystone studs on wide panels
+		if (s.X >= 110)
 		{
 			float midX = s.X * 0.5f;
 			DrawRect(new Rect2(midX - 1.5f, Inset - 0.5f, 3.0f, 2.0f), c);
-			DrawLine(new Vector2(midX - 16.0f, Inset + 0.5f), new Vector2(midX - 4.0f, Inset + 0.5f), bracket, 1.0f);
-			DrawLine(new Vector2(midX + 4.0f, Inset + 0.5f), new Vector2(midX + 16.0f, Inset + 0.5f), bracket, 1.0f);
+			DrawRect(new Rect2(midX - 0.5f, Inset - 0.5f, 1.0f, 1.0f), bright);
+			DrawLine(new Vector2(midX - 18.0f, Inset + 0.5f), new Vector2(midX - 4.0f, Inset + 0.5f), bracket, 1.0f);
+			DrawLine(new Vector2(midX + 4.0f, Inset + 0.5f), new Vector2(midX + 18.0f, Inset + 0.5f), bracket, 1.0f);
 
 			DrawRect(new Rect2(midX - 1.5f, s.Y - Inset - 1.5f, 3.0f, 2.0f), c);
-			DrawLine(new Vector2(midX - 14.0f, s.Y - Inset - 0.5f), new Vector2(midX - 4.0f, s.Y - Inset - 0.5f), bracket, 1.0f);
-			DrawLine(new Vector2(midX + 4.0f, s.Y - Inset - 0.5f), new Vector2(midX + 14.0f, s.Y - Inset - 0.5f), bracket, 1.0f);
+			DrawLine(new Vector2(midX - 15.0f, s.Y - Inset - 0.5f), new Vector2(midX - 4.0f, s.Y - Inset - 0.5f), bracket, 1.0f);
+			DrawLine(new Vector2(midX + 4.0f, s.Y - Inset - 0.5f), new Vector2(midX + 15.0f, s.Y - Inset - 0.5f), bracket, 1.0f);
 		}
 	}
 }
 
 /// <summary>
-/// Unshaded pulsing magical floor rune ring for interactive altars and exit ladders.
+/// Pulsing thematic floor rune rings for shrines/ladders (unshaded) and enemy Boss/Elite auras (light-only in darkness).
 /// </summary>
 public partial class DungeonRuneAura : Node2D
 {
+	public enum AuraVisualStyle
+	{
+		Sanctuary = 0,
+		Boss = 1,
+		Berserker = 2,
+		Frost = 3,
+		Inferno = 4,
+		Volatile = 5
+	}
+
 	public float Radius { get; set; } = 22.0f;
 	public Color AuraColor { get; set; } = DungeonVisuals.ArcaneCyan;
 	public int SpokeCount { get; set; } = 6;
+	public AuraVisualStyle Style { get; set; } = AuraVisualStyle.Sanctuary;
+	public bool IsUnshaded { get; set; } = true;
 	private float _phase = 0.0f;
 
 	public override void _Ready()
 	{
-		Material = GameResourceCache.GetUnshadedMaterial();
+		if (IsUnshaded)
+		{
+			Material = GameResourceCache.GetUnshadedMaterial();
+			LightMask = 1;
+		}
+		else
+		{
+			Material = GameResourceCache.GetLightOnlyMaterial();
+			LightMask = 2;
+		}
 	}
 
 	public override void _Process(double delta)
@@ -1142,19 +1213,267 @@ public partial class DungeonRuneAura : Node2D
 
 	public override void _Draw()
 	{
-		float pulse = 0.65f + 0.35f * Mathf.Sin(_phase * 2.8f);
-		Color outer = new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.28f * pulse);
-		Color inner = new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.55f * pulse);
-
-		DrawArc(Vector2.Zero, Radius, 0, Mathf.Tau, 32, outer, 1.4f, false);
-		DrawArc(Vector2.Zero, Radius * 0.72f, 0, Mathf.Tau, 24, new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.16f * pulse), 1.0f, false);
-
-		for (int i = 0; i < SpokeCount; i++)
+		float px = 1.0f / Mathf.Max(0.45f, Mathf.Abs(GlobalScale.X));
+		switch (Style)
 		{
-			float ang = _phase * 0.7f + (Mathf.Tau / SpokeCount) * i;
-			Vector2 p1 = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * (Radius * 0.72f);
-			Vector2 p2 = new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * Radius;
-			DrawLine(p1, p2, inner, 1.2f);
+			case AuraVisualStyle.Boss:
+				DrawBossSeal(px);
+				break;
+			case AuraVisualStyle.Berserker:
+				DrawBerserkerSeal(px);
+				break;
+			case AuraVisualStyle.Frost:
+				DrawFrostSeal(px);
+				break;
+			case AuraVisualStyle.Inferno:
+				DrawInfernoSeal(px);
+				break;
+			case AuraVisualStyle.Volatile:
+				DrawVolatileSeal(px);
+				break;
+			default:
+				DrawSanctuarySeal(px);
+				break;
+		}
+	}
+
+	private static Vector2 Unit(float angle) => new Vector2(Mathf.Cos(angle), Mathf.Sin(angle));
+
+	private void DrawDiamond(Vector2 center, Vector2 dir, float length, float halfWidth, Color color)
+	{
+		Vector2 tang = new Vector2(-dir.Y, dir.X);
+		Vector2[] pts =
+		{
+			center + dir * length,
+			center + tang * halfWidth,
+			center - dir * (length * 0.55f),
+			center - tang * halfWidth
+		};
+		DrawColoredPolygon(pts, color);
+	}
+
+	private void DrawRegularPolygonOutline(int sides, float r, float angleOffset, Color color, float width)
+	{
+		float step = Mathf.Tau / sides;
+		Vector2 prev = Unit(angleOffset) * r;
+		for (int i = 1; i <= sides; i++)
+		{
+			Vector2 next = Unit(angleOffset + step * i) * r;
+			DrawLine(prev, next, color, width);
+			prev = next;
+		}
+	}
+
+	private void DrawSanctuarySeal(float px)
+	{
+		float pulse = 0.70f + 0.30f * Mathf.Sin(_phase * 2.6f);
+		DrawCircle(Vector2.Zero, Radius, new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.06f * pulse));
+		DrawArc(Vector2.Zero, Radius, 0, Mathf.Tau, 32, new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.42f * pulse), 1.3f * px, false);
+		DrawArc(Vector2.Zero, Radius * 0.72f, 0, Mathf.Tau, 24, new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.24f * pulse), 0.9f * px, false);
+
+		int count = Math.Max(4, SpokeCount);
+		for (int i = 0; i < count; i++)
+		{
+			float ang = _phase * 0.6f + (Mathf.Tau / count) * i;
+			Vector2 d = Unit(ang);
+			DrawLine(d * (Radius * 0.72f), d * Radius, new Color(AuraColor.R, AuraColor.G, AuraColor.B, 0.58f * pulse), 1.0f * px);
+			DrawDiamond(d * (Radius * 0.86f), d, 1.5f * px, 1.1f * px, new Color(1.0f, 0.98f, 0.85f, 0.65f * pulse));
+		}
+	}
+
+	private void DrawBossSeal(float px)
+	{
+		float pulse = 0.76f + 0.24f * Mathf.Sin(_phase * 2.4f);
+		Color crimsonDeep = new Color(0.75f, 0.09f, 0.14f, 0.11f * pulse);
+		Color crimsonBright = new Color(0.98f, 0.20f, 0.24f, 0.86f * pulse);
+		Color goldBright = new Color(1.0f, 0.84f, 0.30f, 0.88f * pulse);
+		Color goldSoft = new Color(0.95f, 0.68f, 0.18f, 0.38f * pulse);
+
+		DrawCircle(Vector2.Zero, Radius, crimsonDeep);
+		DrawArc(Vector2.Zero, Radius * 1.02f, 0, Mathf.Tau, 40, new Color(0.82f, 0.10f, 0.14f, 0.30f * pulse), 2.8f * px, false);
+		DrawArc(Vector2.Zero, Radius, 0, Mathf.Tau, 40, crimsonBright, 1.35f * px, false);
+		DrawArc(Vector2.Zero, Radius * 0.74f, 0, Mathf.Tau, 32, goldBright, 1.25f * px, false);
+		DrawArc(Vector2.Zero, Radius * 0.56f, 0, Mathf.Tau, 24, goldSoft, 0.8f * px, false);
+
+		for (int i = 0; i < 4; i++)
+		{
+			float spearAng = _phase * 0.35f + i * (Mathf.Tau / 4.0f);
+			Vector2 d = Unit(spearAng);
+			DrawDiamond(d * (Radius * 0.96f), d, 5.2f * px, 2.3f * px, crimsonBright);
+			DrawDiamond(d * (Radius * 0.98f), d, 3.3f * px, 1.1f * px, goldBright);
+
+			float gemAng = -_phase * 0.35f + (i + 0.5f) * (Mathf.Tau / 4.0f);
+			Vector2 gd = Unit(gemAng);
+			DrawDiamond(gd * (Radius * 0.74f), gd, 2.5f * px, 1.7f * px, goldBright);
+		}
+	}
+
+	private void DrawBerserkerSeal(float px)
+	{
+		float rage = 0.72f + 0.28f * Mathf.Sin(_phase * 5.4f);
+		Color bloodFill = new Color(0.68f, 0.04f, 0.12f, 0.10f * rage);
+		Color crimsonGlow = new Color(0.72f, 0.06f, 0.16f, 0.48f * rage);
+		Color scarletEdge = new Color(1.0f, 0.16f, 0.28f, 0.92f * rage);
+		Color roseHighlight = new Color(1.0f, 0.65f, 0.72f, 0.90f * rage);
+
+		DrawCircle(Vector2.Zero, Radius * 0.95f, bloodFill);
+		DrawArc(Vector2.Zero, Radius * 0.60f, 0, Mathf.Tau, 24, new Color(0.88f, 0.10f, 0.20f, 0.42f * rage), 0.95f * px, false);
+
+		float baseSpin = _phase * 1.9f;
+		const float arcSpan = 0.92f;
+		for (int i = 0; i < 4; i++)
+		{
+			float startAng = baseSpin + i * (Mathf.Tau / 4.0f);
+			float endAng = startAng + arcSpan;
+			DrawArc(Vector2.Zero, Radius * 0.94f, startAng, endAng, 12, crimsonGlow, 2.3f * px, false);
+			DrawArc(Vector2.Zero, Radius * 0.94f, startAng, endAng, 12, scarletEdge, 1.15f * px, false);
+
+			// Swept crimson fang-blade at leading edge of each arc
+			Vector2 tipAnchor = Unit(endAng) * (Radius * 0.94f);
+			Vector2 radialOut = Unit(endAng);
+			Vector2 spinFwd = new Vector2(-radialOut.Y, radialOut.X);
+			Vector2[] fang =
+			{
+				tipAnchor + spinFwd * (4.6f * px) + radialOut * (1.8f * px),
+				tipAnchor + radialOut * (2.6f * px) - spinFwd * (0.8f * px),
+				tipAnchor - radialOut * (1.8f * px) - spinFwd * (1.2f * px)
+			};
+			DrawColoredPolygon(fang, scarletEdge);
+			DrawLine(tipAnchor, fang[0], roseHighlight, 0.85f * px);
+
+			// Rising fury sparks
+			float sparkCycle = (_phase * 1.35f + i * 0.25f) % 1.0f;
+			float sparkAng = -baseSpin * 0.6f + i * (Mathf.Tau / 4.0f) + Mathf.Sin(_phase * 4.0f + i) * 0.2f;
+			Vector2 sparkPos = Unit(sparkAng) * (Radius * (0.65f + 0.40f * sparkCycle)) + new Vector2(0, -sparkCycle * 4.0f * px);
+			DrawCircle(sparkPos, (1.3f - 0.5f * sparkCycle) * px, new Color(1.0f, 0.30f, 0.40f, (1.0f - sparkCycle) * 0.85f));
+		}
+	}
+
+	private void DrawFrostSeal(float px)
+	{
+		float pulse = 0.74f + 0.26f * Mathf.Sin(_phase * 2.8f);
+		Color mistFill = new Color(0.16f, 0.72f, 1.0f, 0.085f * pulse);
+		Color iceHalo = new Color(0.24f, 0.82f, 1.0f, 0.30f * pulse);
+		Color crystalCyan = new Color(0.45f, 0.94f, 1.0f, 0.82f * pulse);
+		Color crystalWhite = new Color(0.86f, 0.98f, 1.0f, 0.92f * pulse);
+
+		DrawCircle(Vector2.Zero, Radius * 0.92f, mistFill);
+		DrawArc(Vector2.Zero, Radius * 0.94f, 0, Mathf.Tau, 32, iceHalo, 2.0f * px, false);
+
+		float outerSpin = _phase * 0.42f;
+		float innerSpin = -_phase * 0.32f + Mathf.Pi / 6.0f;
+		DrawRegularPolygonOutline(6, Radius * 0.86f, outerSpin, crystalCyan, 1.1f * px);
+		DrawRegularPolygonOutline(6, Radius * 0.56f, innerSpin, new Color(0.70f, 0.96f, 1.0f, 0.48f * pulse), 0.85f * px);
+
+		for (int i = 0; i < 6; i++)
+		{
+			float ang = outerSpin + i * (Mathf.Tau / 6.0f);
+			Vector2 dir = Unit(ang);
+			Vector2 tang = new Vector2(-dir.Y, dir.X);
+
+			// Main snowflake crystal spoke + branched V-chevrons + crystal tip diamond
+			Vector2 startPt = dir * (Radius * 0.50f);
+			Vector2 branchBase = dir * (Radius * 0.84f);
+			Vector2 tipPt = dir * (Radius * 1.14f);
+			DrawLine(startPt, tipPt, crystalWhite, 1.05f * px);
+			DrawLine(branchBase, branchBase + (dir * 0.75f + tang * 0.65f) * (3.0f * px), crystalCyan, 0.95f * px);
+			DrawLine(branchBase, branchBase + (dir * 0.75f - tang * 0.65f) * (3.0f * px), crystalCyan, 0.95f * px);
+			DrawDiamond(tipPt, dir, 1.6f * px, 1.1f * px, crystalWhite);
+
+			// Twinkling frost motes between crystal rays
+			float moteAng = ang + Mathf.Pi / 6.0f;
+			float twinkle = 0.35f + 0.65f * Mathf.Abs(Mathf.Sin(_phase * 3.4f + i * 1.1f));
+			DrawCircle(Unit(moteAng) * (Radius * 0.70f), 0.95f * px, new Color(0.88f, 0.99f, 1.0f, 0.78f * twinkle));
+		}
+	}
+
+	private void DrawInfernoSeal(float px)
+	{
+		float flicker = 0.78f + 0.22f * Mathf.Sin(_phase * 6.8f);
+		Color outerHeat = new Color(1.0f, 0.28f, 0.05f, 0.08f * flicker);
+		Color innerHeat = new Color(1.0f, 0.54f, 0.10f, 0.05f * flicker);
+		Color ringGlow = new Color(1.0f, 0.26f, 0.04f, 0.34f * flicker);
+		Color ringBright = new Color(1.0f, 0.66f, 0.16f, 0.76f * flicker);
+
+		DrawCircle(Vector2.Zero, Radius, outerHeat);
+		DrawCircle(Vector2.Zero, Radius * 0.62f, innerHeat);
+		DrawArc(Vector2.Zero, Radius, 0, Mathf.Tau, 40, ringGlow, 2.4f * px, false);
+		DrawArc(Vector2.Zero, Radius * 0.97f, 0, Mathf.Tau, 40, ringBright, 1.05f * px, false);
+
+		float spin = _phase * 0.52f;
+		const int flameCount = 8;
+		for (int i = 0; i < flameCount; i++)
+		{
+			float ang = spin + i * (Mathf.Tau / flameCount);
+			Vector2 radial = Unit(ang);
+			Vector2 tang = new Vector2(-radial.Y, radial.X);
+			float tongueBeat = 0.72f + 0.28f * Mathf.Sin(_phase * 7.8f + i * 2.15f);
+			Vector2 flameBase = radial * (Radius * 0.95f);
+			Vector2 flameAim = (radial * 0.85f + Vector2.Up * 0.35f + tang * 0.18f).Normalized();
+
+			// Outer orange-red flame tongue
+			float outerH = 6.4f * px * tongueBeat;
+			float outerHalfW = 1.9f * px;
+			Vector2[] outerFlame =
+			{
+				flameBase - tang * outerHalfW,
+				flameBase + flameAim * outerH,
+				flameBase + tang * outerHalfW
+			};
+			DrawColoredPolygon(outerFlame, new Color(1.0f, 0.34f, 0.06f, 0.86f * flicker));
+
+			// Inner bright gold core flame
+			float innerH = 3.8f * px * tongueBeat;
+			float innerHalfW = 0.95f * px;
+			Vector2[] innerFlame =
+			{
+				flameBase - tang * innerHalfW,
+				flameBase + flameAim * innerH,
+				flameBase + tang * innerHalfW
+			};
+			DrawColoredPolygon(innerFlame, new Color(1.0f, 0.90f, 0.42f, 0.94f * flicker));
+
+			// Drifting ember sparks
+			float emberPhase = (_phase * 0.9f + i * 0.125f) % 1.0f;
+			Vector2 emberPos = Unit(ang + 0.22f) * (Radius * (0.78f + 0.28f * emberPhase)) + new Vector2(0, -emberPhase * 4.5f * px);
+			DrawCircle(emberPos, (1.1f - 0.4f * emberPhase) * px, new Color(1.0f, 0.84f, 0.34f, (1.0f - emberPhase) * 0.90f));
+		}
+	}
+
+	private void DrawVolatileSeal(float px)
+	{
+		float jitter = 0.96f + 0.045f * Mathf.Sin(_phase * 8.8f);
+		float r = Radius * jitter;
+		Color voidFill = new Color(0.45f, 0.12f, 0.88f, 0.10f);
+		Color glowPurple = new Color(0.62f, 0.20f, 1.0f, 0.45f);
+		Color electricMagenta = new Color(0.92f, 0.44f, 1.0f, 0.92f);
+		Color coreLavender = new Color(0.98f, 0.84f, 1.0f, 0.94f);
+
+		DrawCircle(Vector2.Zero, r * 0.92f, voidFill);
+		DrawArc(Vector2.Zero, Radius * 0.46f * (2.0f - jitter), 0, Mathf.Tau, 24, new Color(0.86f, 0.46f, 1.0f, 0.48f), 1.0f * px, false);
+
+		float spin = _phase * 0.95f;
+		const float bracketSpan = 0.98f;
+		for (int i = 0; i < 4; i++)
+		{
+			float bracketStart = spin + i * (Mathf.Tau / 4.0f);
+			DrawArc(Vector2.Zero, r, bracketStart, bracketStart + bracketSpan, 12, glowPurple, 2.2f * px, false);
+			DrawArc(Vector2.Zero, r, bracketStart, bracketStart + bracketSpan, 12, electricMagenta, 1.1f * px, false);
+
+			// Inward explosive hazard crosshair arrows in the gaps between brackets
+			float tickAng = bracketStart + bracketSpan + (Mathf.Tau / 4.0f - bracketSpan) * 0.5f;
+			Vector2 d = Unit(tickAng);
+			DrawDiamond(d * (Radius * 1.02f), -d, 3.2f * px, 1.5f * px, coreLavender);
+
+			// Orbiting charge orbs + crackling energy filament toward inner ring
+			float orbAng = -spin * 1.35f + i * (Mathf.Tau / 4.0f);
+			Vector2 orbPos = Unit(orbAng) * (Radius * 0.74f);
+			Vector2 innerAnchor = Unit(orbAng + 0.22f * Mathf.Sin(_phase * 14.0f + i)) * (Radius * 0.46f);
+			Vector2 midPt = (orbPos + innerAnchor) * 0.5f + Unit(orbAng + Mathf.Pi * 0.5f) * (Mathf.Sin(_phase * 23.0f + i * 3.1f) * 2.2f * px);
+			DrawLine(innerAnchor, midPt, electricMagenta, 0.85f * px);
+			DrawLine(midPt, orbPos, coreLavender, 0.85f * px);
+			DrawCircle(orbPos, 1.75f * px, glowPurple);
+			DrawCircle(orbPos, 1.05f * px, coreLavender);
 		}
 	}
 }

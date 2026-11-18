@@ -36,7 +36,8 @@ public partial class DungeonTorch : Node2D
 			new Color(1.0f, 0.74f, 0.36f, 1.0f),
 			_baseEnergy,
 			gradTex,
-			shadowEnabled: false);
+			shadowEnabled: false,
+			itemCullMask: 3);
 	}
 
 	private void SetupEmbers()

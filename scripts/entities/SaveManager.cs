@@ -26,34 +26,91 @@ public static class SaveManager
 			IsPiercing = w.IsPiercing,
 			AllowMultiHit = w.AllowMultiHit,
 			IsContinuousLaser = w.IsContinuousLaser,
-			SplashRadius = w.SplashRadius
+			SplashRadius = w.SplashRadius,
+			AppliedUpgrades = w.AppliedUpgrades != null ? new List<string>(w.AppliedUpgrades) : new List<string>()
 		};
 	}
 
-	public static WeaponData RestoreWeaponWithStats(string resourcePath, SavedWeaponStats stats)
+	private static void ApplyStatsToWeaponData(WeaponData target, SavedWeaponStats stats, bool copyAppliedUpgrades)
+	{
+		if (target == null || stats == null) return;
+
+		target.Damage = stats.Damage;
+		target.AttackCooldown = stats.AttackCooldown;
+		target.MaxAmmo = stats.MaxAmmo;
+		target.ReloadTime = stats.ReloadTime;
+		target.ManaCost = stats.ManaCost;
+		target.KnockbackForce = stats.KnockbackForce;
+
+		if (stats.BulletCount.HasValue) target.BulletCount = stats.BulletCount.Value;
+		if (stats.Spread.HasValue) target.Spread = stats.Spread.Value;
+		if (stats.BulletSpeed.HasValue) target.BulletSpeed = stats.BulletSpeed.Value;
+		if (stats.IsPiercing.HasValue) target.IsPiercing = stats.IsPiercing.Value;
+		if (stats.AllowMultiHit.HasValue) target.AllowMultiHit = stats.AllowMultiHit.Value;
+		if (stats.IsContinuousLaser.HasValue) target.IsContinuousLaser = stats.IsContinuousLaser.Value;
+		if (stats.SplashRadius.HasValue) target.SplashRadius = stats.SplashRadius.Value;
+
+		if (copyAppliedUpgrades)
+		{
+			target.AppliedUpgrades = stats.AppliedUpgrades != null
+				? new List<string>(stats.AppliedUpgrades)
+				: new List<string>();
+		}
+	}
+
+	/// <summary>
+	/// Applies a single-weapon upgrade using canonical GameLogic rules and records its ID on the weapon.
+	/// </summary>
+	public static bool ApplyUpgradeToWeaponData(WeaponData weapon, string upgradeId, out int bonusAmmoAdded)
+	{
+		bonusAmmoAdded = 0;
+		if (weapon == null || string.IsNullOrEmpty(upgradeId)) return false;
+
+		var temp = CaptureWeaponStats(weapon);
+		if (!GameLogic.ApplySingleWeaponUpgrade(temp, upgradeId, out bonusAmmoAdded))
+		{
+			return false;
+		}
+
+		ApplyStatsToWeaponData(weapon, temp, copyAppliedUpgrades: false);
+		weapon.AppliedUpgrades ??= new List<string>();
+		weapon.AppliedUpgrades.Add(upgradeId);
+		return true;
+	}
+
+	public static WeaponData RestoreWeaponWithStats(string resourcePath, SavedWeaponStats stats, bool hasSingleWeaponUpgradesInSave = true)
 	{
 		if (string.IsNullOrEmpty(resourcePath)) return null;
-		var weaponData = GD.Load<WeaponData>(resourcePath);
-		if (weaponData == null) return null;
-		if (stats == null) return weaponData;
+		var freshWeapon = GameDataRegistry.LoadFreshWeapon(resourcePath);
+		if (freshWeapon == null) return null;
+		if (stats == null) return freshWeapon;
 
-		weaponData = weaponData.CreateUniqueCopy();
-		weaponData.Damage = stats.Damage;
-		weaponData.AttackCooldown = stats.AttackCooldown;
-		weaponData.MaxAmmo = stats.MaxAmmo;
-		weaponData.ReloadTime = stats.ReloadTime;
-		weaponData.ManaCost = stats.ManaCost;
-		weaponData.KnockbackForce = stats.KnockbackForce;
+		// Tracked save: always rebuild from fresh disk .tres base stats + ordered upgrade IDs.
+		if (stats.AppliedUpgrades != null)
+		{
+			if (stats.AppliedUpgrades.Count == 0)
+			{
+				return freshWeapon;
+			}
 
-		if (stats.BulletCount.HasValue) weaponData.BulletCount = stats.BulletCount.Value;
-		if (stats.Spread.HasValue) weaponData.Spread = stats.Spread.Value;
-		if (stats.BulletSpeed.HasValue) weaponData.BulletSpeed = stats.BulletSpeed.Value;
-		if (stats.IsPiercing.HasValue) weaponData.IsPiercing = stats.IsPiercing.Value;
-		if (stats.AllowMultiHit.HasValue) weaponData.AllowMultiHit = stats.AllowMultiHit.Value;
-		if (stats.IsContinuousLaser.HasValue) weaponData.IsContinuousLaser = stats.IsContinuousLaser.Value;
-		if (stats.SplashRadius.HasValue) weaponData.SplashRadius = stats.SplashRadius.Value;
+			var upgraded = freshWeapon.CreateUniqueCopy();
+			var recomputed = CaptureWeaponStats(freshWeapon);
+			recomputed.AppliedUpgrades = new List<string>(stats.AppliedUpgrades);
+			GameLogic.ReplaySingleWeaponUpgrades(recomputed, stats.AppliedUpgrades);
+			ApplyStatsToWeaponData(upgraded, recomputed, copyAppliedUpgrades: true);
+			return upgraded;
+		}
 
-		return weaponData;
+		// Legacy save without AppliedUpgrades: if no single-weapon upgrades were bought in the save,
+		// discard the frozen stat snapshot so updated .tres weapon stats take effect cleanly.
+		if (!hasSingleWeaponUpgradesInSave)
+		{
+			return freshWeapon;
+		}
+
+		var legacyWeapon = freshWeapon.CreateUniqueCopy();
+		ApplyStatsToWeaponData(legacyWeapon, stats, copyAppliedUpgrades: false);
+		return legacyWeapon;
 	}
 
 	public static void CapturePlayerInventory(Player player, SaveData save)
@@ -89,6 +146,8 @@ public static class SaveManager
 		save.Coins = player.CoinCount;
 		save.CurrentHealth = player.CurrentHealth;
 		save.CurrentMana = player.CurrentMana;
+		save.SavedBaseMaxHealth = player.Config != null ? player.Config.MaxHealth : 100.0f;
+		save.SavedBaseMaxMana = player.Config != null ? player.Config.MaxMana : 100.0f;
 		save.BonusMaxHealth = player.BonusMaxHealth;
 		save.BonusMaxMana = player.BonusMaxMana;
 		save.BonusHealthRegen = player.BonusHealthRegen;
@@ -98,6 +157,12 @@ public static class SaveManager
 		save.SkillPoints = player.SkillPoints;
 		save.Ability1Level = player.Ability1Level;
 		save.Ability2Level = player.Ability2Level;
+		save.Ability1CooldownScale = player.Ability1CooldownScale;
+		save.Ability2CooldownScale = player.Ability2CooldownScale;
+		save.Ability1DamageMultiplier = player.Ability1DamageMultiplier;
+		save.Ability1RadiusMultiplier = player.Ability1RadiusMultiplier;
+		save.Ability2DamageMultiplier = player.Ability2DamageMultiplier;
+		save.Ability2RadiusMultiplier = player.Ability2RadiusMultiplier;
 		save.PlayedTimeSeconds += level.ConsumePlayedTime();
 		save.ShopPurchaseCounts = new Dictionary<string, int>(player.ShopPurchaseCounts);
 		save.UnlockedRelics = player.GetRelicIdsList();
@@ -120,9 +185,15 @@ public static class SaveManager
 		try
 		{
 			var data = JsonSerializer.Deserialize<SaveData>(json);
-			if (data != null && data.WeaponDamageMultiplier <= 0.01f)
+			if (data != null)
 			{
-				data.WeaponDamageMultiplier = 1.0f;
+				if (data.WeaponDamageMultiplier <= 0.01f) data.WeaponDamageMultiplier = 1.0f;
+				if (data.Ability1CooldownScale <= 0.01f) data.Ability1CooldownScale = 1.0f;
+				if (data.Ability2CooldownScale <= 0.01f) data.Ability2CooldownScale = 1.0f;
+				if (data.Ability1DamageMultiplier <= 0.01f) data.Ability1DamageMultiplier = 1.0f;
+				if (data.Ability1RadiusMultiplier <= 0.01f) data.Ability1RadiusMultiplier = 1.0f;
+				if (data.Ability2DamageMultiplier <= 0.01f) data.Ability2DamageMultiplier = 1.0f;
+				if (data.Ability2RadiusMultiplier <= 0.01f) data.Ability2RadiusMultiplier = 1.0f;
 			}
 			return data;
 		}

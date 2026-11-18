@@ -10,11 +10,11 @@
 [resource]
 script = ExtResource("1_7nkeh")
 WeaponName = "Shotgun"
-Damage = 2
+Damage = 3
 AttackCooldown = 1.4
-KnockbackForce = 2.0
-Recoil = 4.0
-ManaCost = 7.0
+KnockbackForce = 1.5
+Recoil = 3.0
+ManaCost = 6.0
 AttackSound = ExtResource("1_uhuv7")
 ReloadSound = ExtResource("3_4wkow")
 EmptySound = ExtResource("3_ykmn8")
@@ -23,7 +23,7 @@ IsRanged = true
 BulletPrefab = ExtResource("1_kfiy3")
 BulletSpeed = 400.0
 BulletCount = 12
-Spread = 0.75
-MaxAmmo = 4
+Spread = 0.6
+MaxAmmo = 5
 ReloadTime = 2.3
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

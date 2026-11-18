@@ -8,6 +8,7 @@ EnemyName = "Orc"
 Speed = 40.0
 MaxHealth = 28
 AttackRange = 25.0
+PreAttackDelay = 0.4
 StopDuration = 0.2
 CoinDropChance = 0.25
 ManaCrystalDropChance = 0.5

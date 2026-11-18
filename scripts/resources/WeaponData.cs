@@ -42,16 +42,56 @@ public partial class WeaponData : Resource
 	// Путь к исходному .tres ресурсу при создании уникальной копии оружия для прокачки одного слота
 	public string OriginalResourcePath { get; set; } = "";
 
+	// Список применённых одиночных прокачек (порядок покупок) для пересчёта поверх свежих базовых статов .tres при загрузке
+	public System.Collections.Generic.List<string> AppliedUpgrades { get; set; } = new System.Collections.Generic.List<string>();
+
 	public string GetEffectiveResourcePath()
 	{
 		return !string.IsNullOrEmpty(ResourcePath) ? ResourcePath : OriginalResourcePath;
 	}
 
+	/// <summary>
+	/// Creates a standalone WeaponData clone in managed C# without invoking C++ Resource.Duplicate()
+	/// across the C++/Mono script boundary.
+	/// </summary>
 	public WeaponData CreateUniqueCopy()
 	{
 		string origPath = GetEffectiveResourcePath();
-		var copy = (WeaponData)Duplicate();
-		copy.OriginalResourcePath = origPath;
+		var copy = new WeaponData
+		{
+			ResourceName = ResourceName,
+			WeaponName = WeaponName,
+			Damage = Damage,
+			AttackCooldown = AttackCooldown,
+			AttackRange = AttackRange,
+			KnockbackForce = KnockbackForce,
+			Recoil = Recoil,
+			ManaCost = ManaCost,
+			AllowMultiHit = AllowMultiHit,
+			IsAutoAim = IsAutoAim,
+			OrientationOffset = OrientationOffset,
+			FlipOrientationOffset = FlipOrientationOffset,
+			AttackSound = AttackSound,
+			ReloadSound = ReloadSound,
+			EquipSound = EquipSound,
+			EmptySound = EmptySound,
+			WeaponVisualPrefab = WeaponVisualPrefab,
+			IsRanged = IsRanged,
+			BulletPrefab = BulletPrefab,
+			BulletSpeed = BulletSpeed,
+			BulletCount = BulletCount,
+			Spread = Spread,
+			IsPiercing = IsPiercing,
+			MaxAmmo = MaxAmmo,
+			ReloadTime = ReloadTime,
+			IsContinuousLaser = IsContinuousLaser,
+			SplashRadius = SplashRadius,
+			LaserColor = LaserColor,
+			OriginalResourcePath = origPath,
+			AppliedUpgrades = AppliedUpgrades != null
+				? new System.Collections.Generic.List<string>(AppliedUpgrades)
+				: new System.Collections.Generic.List<string>()
+		};
 		return copy;
 	}
 }

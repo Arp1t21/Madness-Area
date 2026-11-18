@@ -4,21 +4,21 @@ using System.Collections.Generic;
 
 public partial class DeathScreen : CanvasLayer
 {
-	private string _charName;
+	private string _charName = "Hero";
 	private SpriteFrames _charAnimations;
 	private int _levelReached;
 	private float _timePlayed;
 	private int _coins;
-	private List<string> _weapons;
+	private List<string> _weapons = new List<string>();
 
 	public void SetupStats(string name, SpriteFrames anims, int level, float time, int coins, List<string> weapons)
 	{
-		_charName = name;
+		_charName = string.IsNullOrEmpty(name) ? "Hero" : name;
 		_charAnimations = anims;
 		_levelReached = level;
 		_timePlayed = time;
 		_coins = coins;
-		_weapons = weapons;
+		_weapons = weapons ?? new List<string>();
 	}
 
 	private bool _introCanSkip = false;
@@ -87,7 +87,8 @@ public partial class DeathScreen : CanvasLayer
 		var subDiedLabel = new Label
 		{
 			Text = $"FALLEN ON FLOOR {_levelReached}   •   CLICK OR PRESS ANY KEY",
-			HorizontalAlignment = HorizontalAlignment.Center
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center
 		};
 		if (titleFont != null) subDiedLabel.AddThemeFontOverride("font", titleFont);
 		subDiedLabel.AddThemeFontSizeOverride("font_size", 20);
@@ -198,6 +199,7 @@ public partial class DeathScreen : CanvasLayer
 
 		var statsTitle = new Label();
 		statsTitle.Text = "EXPEDITION FALLEN";
+		statsTitle.VerticalAlignment = VerticalAlignment.Center;
 		statsTitle.AddThemeFontOverride("font", titleFont);
 		statsTitle.AddThemeFontSizeOverride("font_size", 42);
 		statsTitle.AddThemeColorOverride("font_color", DungeonVisuals.CrimsonBright);
@@ -244,6 +246,8 @@ public partial class DeathScreen : CanvasLayer
 		var keyLabel = new Label();
 		keyLabel.Text = labelText;
 		keyLabel.CustomMinimumSize = new Vector2(180, 0);
+		keyLabel.VerticalAlignment = VerticalAlignment.Center;
+		keyLabel.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		keyLabel.AddThemeFontOverride("font", font);
 		keyLabel.AddThemeFontSizeOverride("font_size", 24);
 		keyLabel.AddThemeColorOverride("font_color", DungeonVisuals.MutedSlate);
@@ -252,7 +256,9 @@ public partial class DeathScreen : CanvasLayer
 		var valLabel = new Label();
 		valLabel.Text = valueText;
 		valLabel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
+		valLabel.SizeFlagsVertical = Control.SizeFlags.ShrinkCenter;
 		valLabel.HorizontalAlignment = HorizontalAlignment.Right;
+		valLabel.VerticalAlignment = VerticalAlignment.Center;
 		valLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		valLabel.AddThemeFontOverride("font", font);
 		valLabel.AddThemeFontSizeOverride("font_size", 26);

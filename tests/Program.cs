@@ -37,11 +37,14 @@ internal static class Program
 	{
 		Test_ResolveCharacterDataPath();
 		Test_CalculateWaveEnemyCount();
+		Test_CalculateWaveSpawnInterval();
 		Test_AbilityLevelCaps();
 		Test_CalculateAmbientLight();
 		Test_FormatWeaponList();
 		Test_AssignKeyBind();
 		Test_SaveModelsSerializationAndLegacyCompat();
+		Test_SaveDataAbilityMultipliers();
+		Test_WeaponUpgradeReplayAndBaseStatRefresh();
 		Test_ComputeHorizontalWallSide();
 		Test_StatusAndBladeSynergies();
 		Test_RelicDraftAndMilestoneFloors();
@@ -50,6 +53,8 @@ internal static class Program
 		Test_CoopScalingAndRevive();
 		Test_Enemy5FloorScalingAndLowHpDanger();
 		Test_SpikeRatiosAndSpikeEvent();
+		Test_RealTimeMoveSpeedCalculation();
+		Test_TresResourcePropertyParsing();
 
 		Console.WriteLine($"Unit tests finished: {_passed} passed, {_failed} failed.");
 		return _failed == 0 ? 0 : 1;
@@ -76,6 +81,16 @@ internal static class Program
 		AssertEqual(4, GameLogic.CalculateWaveEnemyCount(1, 0.5f), "Floor 1 min clamp");
 		AssertEqual(8, GameLogic.CalculateWaveEnemyCount(5, 0.5f), "Floor 5 scaled boss");
 		AssertEqual(6, GameLogic.CalculateWaveEnemyCount(0, 1.0f), "Floor 0 no boss");
+	}
+
+	private static void Test_CalculateWaveSpawnInterval()
+	{
+		Assert(MathF.Abs(GameLogic.CalculateWaveSpawnInterval(1) - 0.40f) < 0.0001f, "Wave 1 spawn interval 0.40s");
+		Assert(MathF.Abs(GameLogic.CalculateWaveSpawnInterval(2) - 0.45f) < 0.0001f, "Wave 2 spawn interval 0.45s");
+		Assert(MathF.Abs(GameLogic.CalculateWaveSpawnInterval(5) - 0.60f) < 0.0001f, "Wave 5 spawn interval 0.60s");
+		Assert(MathF.Abs(GameLogic.CalculateWaveSpawnInterval(11) - 0.90f) < 0.0001f, "Wave 11 spawn interval capped at 0.90s");
+		Assert(MathF.Abs(GameLogic.CalculateWaveSpawnInterval(30) - 0.90f) < 0.0001f, "Wave 30 spawn interval capped at 0.90s");
+		Assert(MathF.Abs(GameLogic.CalculateWaveSpawnInterval(0) - 0.40f) < 0.0001f, "Wave 0 clamped at 0.40s");
 	}
 
 	private static void Test_AbilityLevelCaps()
@@ -230,6 +245,116 @@ internal static class Program
 		Assert(!st.AllowMultiHit.HasValue, "Legacy AllowMultiHit stays null");
 		Assert(!st.IsContinuousLaser.HasValue, "Legacy IsContinuousLaser stays null");
 		Assert(!st.SplashRadius.HasValue, "Legacy SplashRadius stays null");
+		Assert(MathF.Abs(legacy.Ability1CooldownScale - 1.0f) < 0.001f, "Legacy Ability1CooldownScale defaults to 1.0f");
+		Assert(MathF.Abs(legacy.Ability2CooldownScale - 1.0f) < 0.001f, "Legacy Ability2CooldownScale defaults to 1.0f");
+		Assert(MathF.Abs(legacy.Ability1DamageMultiplier - 1.0f) < 0.001f, "Legacy Ability1DamageMultiplier defaults to 1.0f");
+		Assert(MathF.Abs(legacy.Ability1RadiusMultiplier - 1.0f) < 0.001f, "Legacy Ability1RadiusMultiplier defaults to 1.0f");
+		Assert(MathF.Abs(legacy.Ability2DamageMultiplier - 1.0f) < 0.001f, "Legacy Ability2DamageMultiplier defaults to 1.0f");
+		Assert(MathF.Abs(legacy.Ability2RadiusMultiplier - 1.0f) < 0.001f, "Legacy Ability2RadiusMultiplier defaults to 1.0f");
+		Assert(st.AppliedUpgrades == null, "Legacy SavedWeaponStats AppliedUpgrades stays null");
+		Assert(MathF.Abs(legacy.SavedBaseMaxHealth) < 0.001f, "Legacy SavedBaseMaxHealth defaults to 0");
+		Assert(MathF.Abs(legacy.SavedBaseMaxMana) < 0.001f, "Legacy SavedBaseMaxMana defaults to 0");
+	}
+
+	private static void Test_SaveDataAbilityMultipliers()
+	{
+		var data = new SaveData
+		{
+			Ability1CooldownScale = 0.7744f,
+			Ability2CooldownScale = 0.69696f,
+			Ability1DamageMultiplier = 1.44f,
+			Ability1RadiusMultiplier = 1.36f,
+			Ability2DamageMultiplier = 1.50f,
+			Ability2RadiusMultiplier = 1.40f
+		};
+		string json = JsonSerializer.Serialize(data);
+		var roundTrip = JsonSerializer.Deserialize<SaveData>(json);
+		Assert(roundTrip != null, "SaveData ability multipliers deserialized");
+		Assert(MathF.Abs(roundTrip!.Ability1CooldownScale - 0.7744f) < 0.001f, "Ability1CooldownScale round-trip");
+		Assert(MathF.Abs(roundTrip.Ability2CooldownScale - 0.69696f) < 0.001f, "Ability2CooldownScale round-trip");
+		Assert(MathF.Abs(roundTrip.Ability1DamageMultiplier - 1.44f) < 0.001f, "Ability1DamageMultiplier round-trip");
+		Assert(MathF.Abs(roundTrip.Ability1RadiusMultiplier - 1.36f) < 0.001f, "Ability1RadiusMultiplier round-trip");
+		Assert(MathF.Abs(roundTrip.Ability2DamageMultiplier - 1.50f) < 0.001f, "Ability2DamageMultiplier round-trip");
+		Assert(MathF.Abs(roundTrip.Ability2RadiusMultiplier - 1.40f) < 0.001f, "Ability2RadiusMultiplier round-trip");
+	}
+
+	private static void Test_WeaponUpgradeReplayAndBaseStatRefresh()
+	{
+		// 1. Tracked empty vs populated AppliedUpgrades survives JSON round-trip cleanly.
+		var emptyTracked = new SavedWeaponStats
+		{
+			Damage = 15,
+			AppliedUpgrades = new List<string>()
+		};
+		var emptyRoundTrip = JsonSerializer.Deserialize<SavedWeaponStats>(JsonSerializer.Serialize(emptyTracked));
+		Assert(emptyRoundTrip != null && emptyRoundTrip.AppliedUpgrades != null && emptyRoundTrip.AppliedUpgrades.Count == 0,
+			"Empty tracked AppliedUpgrades remains non-null");
+
+		// 2. Simulate reaching Floor 9 with upgrades bought, then editing base weapon stats on disk.
+		var applied = new List<string> { "SINGLE_SHARPENED_CORE", "SINGLE_QUICKLOADER" };
+		var newBaseStats = new SavedWeaponStats
+		{
+			Damage = 30,
+			AttackCooldown = 0.25f,
+			ReloadTime = 1.0f,
+			MaxAmmo = 8,
+			ManaCost = 4.0f,
+			KnockbackForce = 6.0f,
+			AppliedUpgrades = applied
+		};
+		GameLogic.ReplaySingleWeaponUpgrades(newBaseStats, applied);
+		// +17% of 30 -> Round(35.1) = 35
+		AssertEqual(35, newBaseStats.Damage, "Replayed Sharpened Core uses updated base Damage");
+		Assert(MathF.Abs(newBaseStats.AttackCooldown - 0.2275f) < 0.001f, "Replayed Quickloader uses updated base Cooldown");
+		Assert(MathF.Abs(newBaseStats.ReloadTime - 0.90f) < 0.001f, "Replayed Quickloader uses updated base ReloadTime");
+
+		// 3. Test all other SINGLE_* upgrade formulas consistently.
+		var rangedStats = new SavedWeaponStats
+		{
+			Damage = 20,
+			AttackCooldown = 0.50f,
+			ReloadTime = 1.0f,
+			MaxAmmo = 6,
+			ManaCost = 10.0f,
+			KnockbackForce = 4.0f,
+			BulletCount = 1,
+			Spread = 0.02f,
+			BulletSpeed = 400.0f,
+			IsPiercing = false,
+			AllowMultiHit = false
+		};
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_EXTENDED_MAG", out int bonusAmmo) && bonusAmmo == 5 && rangedStats.MaxAmmo == 11,
+			"SINGLE_EXTENDED_MAG +5 MaxAmmo");
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_MANA_REDUCTION", out _) && MathF.Abs(rangedStats.ManaCost - 8.0f) < 0.001f,
+			"SINGLE_MANA_REDUCTION -20% ManaCost");
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_IMPACT_CORE", out _) && MathF.Abs(rangedStats.KnockbackForce - 5.0f) < 0.001f && MathF.Abs(rangedStats.AttackCooldown - 0.465f) < 0.001f,
+			"SINGLE_IMPACT_CORE +25% Knockback & -7% Cooldown");
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_FEATHER_GRIP", out _) && MathF.Abs(rangedStats.AttackCooldown - (0.465f * 0.88f)) < 0.001f,
+			"SINGLE_FEATHER_GRIP -12% Cooldown");
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_PIERCING", out _) && rangedStats.IsPiercing == true && rangedStats.Damage == 22,
+			"SINGLE_PIERCING enables pierce & +9% DMG");
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_MULTISHOT", out _) && rangedStats.BulletCount == 2 && MathF.Abs((rangedStats.Spread ?? 0f) - 0.08f) < 0.001f,
+			"SINGLE_MULTISHOT +1 projectile & min spread");
+		Assert(GameLogic.ApplySingleWeaponUpgrade(rangedStats, "SINGLE_VELOCITY_CORE", out _) && MathF.Abs((rangedStats.BulletSpeed ?? 0f) - 500.0f) < 0.001f && rangedStats.Damage == 24,
+			"SINGLE_VELOCITY_CORE +25% BulletSpeed & +7% DMG");
+
+		var meleeStats = new SavedWeaponStats { Damage = 10, AllowMultiHit = false };
+		Assert(GameLogic.ApplySingleWeaponUpgrade(meleeStats, "SINGLE_CLEAVE_EDGE", out _) && meleeStats.AllowMultiHit == true && meleeStats.Damage == 12,
+			"SINGLE_CLEAVE_EDGE enables MultiHit & +8% (min +2) DMG");
+
+		Assert(!GameLogic.ApplySingleWeaponUpgrade(meleeStats, "UNKNOWN_ID", out _), "Unknown upgrade returns false");
+
+		// 4. HasAnySingleWeaponPurchase detects SINGLE_* entries accurately.
+		Assert(!GameLogic.HasAnySingleWeaponPurchase(new Dictionary<string, int> { ["STAT_MAX_HP"] = 2 }), "Non-single purchases return false");
+		Assert(GameLogic.HasAnySingleWeaponPurchase(new Dictionary<string, int> { ["STAT_MAX_HP"] = 1, ["SINGLE_FEATHER_GRIP"] = 1 }), "SINGLE_* purchase returns true");
+
+		// 5. Player HP/MP scaling when base character MaxHealth changes in .tres.
+		float scaledFull = GameLogic.AdjustCurrentResourceForBaseChange(80.0f, 55.0f, 100.0f, 25.0f, 1.0f);
+		Assert(MathF.Abs(scaledFull - 125.0f) < 0.001f, "Full HP stays 100% when character base MaxHealth increases");
+		float scaledHalf = GameLogic.AdjustCurrentResourceForBaseChange(40.0f, 55.0f, 100.0f, 25.0f, 1.0f);
+		Assert(MathF.Abs(scaledHalf - 62.5f) < 0.001f, "Partial HP preserves ratio when character base MaxHealth changes");
+		float legacyHp = GameLogic.AdjustCurrentResourceForBaseChange(50.0f, 0.0f, 40.0f, 0.0f, 1.0f);
+		Assert(MathF.Abs(legacyHp - 40.0f) < 0.001f, "Legacy HP without SavedBaseMaxHealth clamps cleanly");
 	}
 
 	private static void Test_ComputeHorizontalWallSide()
@@ -446,20 +571,25 @@ internal static class Program
 		Assert(MathF.Abs(GameLogic.CalculateSpikeFloorRatio(2) - 0.007f) < 0.0001f, "Floor 2 spike ratio ~0.7%");
 		Assert(MathF.Abs(GameLogic.CalculateSpikeFloorRatio(3) - 0.009f) < 0.0001f, "Floor 3 spike ratio ~0.9%");
 
-		// Floor 15 stays comfortably below 18% cap (not 97%)
-		float f15 = GameLogic.CalculateSpikeFloorRatio(15);
-		Assert(f15 > 0.10f && f15 < 0.18f, "Floor 15 spike ratio moderated below 18% cap");
+		// Floor 9 stays comfortably below 6% cap
+		float f9 = GameLogic.CalculateSpikeFloorRatio(9);
+		Assert(f9 > 0.04f && f9 < 0.06f, "Floor 9 spike ratio moderated below 6% cap");
 
-		// Deep floors strictly capped at 18%
-		AssertEqual(0.18f, GameLogic.CalculateSpikeFloorRatio(20), "Floor 20 capped at 18%");
-		AssertEqual(0.18f, GameLogic.CalculateSpikeFloorRatio(50), "Floor 50 capped at 18%");
-		AssertEqual(0.18f, GameLogic.CalculateSpikeFloorRatio(100), "Floor 100 capped at 18%");
+		// Deep floors strictly capped at 6%
+		AssertEqual(0.06f, GameLogic.CalculateSpikeFloorRatio(10), "Floor 10 capped at 6%");
+		AssertEqual(0.06f, GameLogic.CalculateSpikeFloorRatio(15), "Floor 15 capped at 6%");
+		AssertEqual(0.06f, GameLogic.CalculateSpikeFloorRatio(20), "Floor 20 capped at 6%");
+		AssertEqual(0.06f, GameLogic.CalculateSpikeFloorRatio(50), "Floor 50 capped at 6%");
+		AssertEqual(0.06f, GameLogic.CalculateSpikeFloorRatio(100), "Floor 100 capped at 6%");
 
-		// 1% Spike Chamber event overrides floor ratio to 60%
-		AssertEqual(0.60f, GameLogic.CalculateSpikeFloorRatio(1, GameLogic.FloorEventType.SpikeChamber), "SpikeChamber ratio 60%");
-		AssertEqual(0.60f, GameLogic.CalculateSpikeFloorRatio(15, GameLogic.FloorEventType.SpikeChamber), "SpikeChamber ratio 60% on floor 15");
+		// 1% Spike Chamber event overrides floor ratio to 40%
+		AssertEqual(0.40f, GameLogic.CalculateSpikeFloorRatio(2, GameLogic.FloorEventType.SpikeChamber), "SpikeChamber ratio 40%");
+		AssertEqual(0.40f, GameLogic.CalculateSpikeFloorRatio(15, GameLogic.FloorEventType.SpikeChamber), "SpikeChamber ratio 40% on floor 15");
 
-		// Exact 1% roll validation (only roll == 0 out of 0..99)
+		// SpikeChamber is disabled on Floor 1
+		AssertEqual(GameLogic.FloorEventType.None, GameLogic.RollFloorEventWithSpike(1, 10, 0), "SpikeChamber disabled on Floor 1");
+
+		// Exact 1% roll validation on Floor 2+ (only roll == 0 out of 0..99)
 		int spikeHits = 0;
 		for (int r = 0; r < 100; r++)
 		{
@@ -470,6 +600,91 @@ internal static class Program
 		}
 		AssertEqual(1, spikeHits, "SpikeChamber triggers on exact 1 out of 100 rolls (1%)");
 		AssertEqual(GameLogic.FloorEventType.PitchBlack, GameLogic.RollFloorEventWithSpike(3, 10, 42), "Non-spike roll preserves normal floor events");
-		AssertEqual("SPIKE CHAMBER (60%)", GameLogic.GetFloorEventTitle(GameLogic.FloorEventType.SpikeChamber), "SpikeChamber HUD title");
+		AssertEqual("SPIKE CHAMBER (40%)", GameLogic.GetFloorEventTitle(GameLogic.FloorEventType.SpikeChamber), "SpikeChamber HUD title");
+
+		// Weapon drop every 3 floors
+		Assert(!GameLogic.ShouldDropFloorWeapon(1), "No floor weapon drop on floor 1");
+		Assert(!GameLogic.ShouldDropFloorWeapon(2), "No floor weapon drop on floor 2");
+		Assert(GameLogic.ShouldDropFloorWeapon(3), "Floor weapon drop on floor 3");
+		Assert(!GameLogic.ShouldDropFloorWeapon(4), "No floor weapon drop on floor 4");
+		Assert(!GameLogic.ShouldDropFloorWeapon(5), "No floor weapon drop on floor 5");
+		Assert(GameLogic.ShouldDropFloorWeapon(6), "Floor weapon drop on floor 6");
+
+		// Vampiric Fang +1 HP every 7 kills
+		var vamp = GameLogic.FindRelic(GameLogic.RelicVampiricFang);
+		Assert(vamp != null && vamp.Description.Contains("every 7 kills"), "Vampiric Fang heals +1 HP every 7 kills");
+	}
+
+	private static void Test_RealTimeMoveSpeedCalculation()
+	{
+		// Standing still -> 0 speed even if sprint multiplier is configured
+		AssertEqual(0.0f, GameLogic.CalculateRealTimeMoveSpeed(false, false, 0.0f, 0.0f, 60.0f, 0.0f, false, 1.3f, 0.0f, 0.0f), "Idle returns 0 speed");
+
+		// Walking straight & diagonally with WalkSpeed 60 -> 60
+		AssertEqual(60.0f, GameLogic.CalculateRealTimeMoveSpeed(false, false, 1.0f, 0.0f, 60.0f, 0.0f, false, 1.3f, 0.0f, 0.0f), "Walk straight returns 60");
+		float diag = 1.0f / MathF.Sqrt(2.0f);
+		float diagSpd = GameLogic.CalculateRealTimeMoveSpeed(false, false, diag, -diag, 60.0f, 0.0f, false, 1.3f, 0.0f, 0.0f);
+		Assert(MathF.Abs(diagSpd - 60.0f) < 0.01f, "Walk diagonal returns 60");
+
+		// Running with Shift -> 60 * 1.3 = 78
+		float runSpd = GameLogic.CalculateRealTimeMoveSpeed(false, false, 1.0f, 0.0f, 60.0f, 0.0f, true, 1.3f, 0.0f, 0.0f);
+		Assert(MathF.Abs(runSpd - 78.0f) < 0.01f, "Run speed returns 78");
+
+		// Slowed while walking (25% slow -> 45)
+		float slowSpd = GameLogic.CalculateRealTimeMoveSpeed(false, false, 0.0f, 1.0f, 60.0f, 0.25f, false, 1.3f, 0.0f, 0.0f);
+		Assert(MathF.Abs(slowSpd - 45.0f) < 0.01f, "Slowed walk reduces speed");
+
+		// Dead or stunned/rooted -> 0 even with directional input or external velocity
+		AssertEqual(0.0f, GameLogic.CalculateRealTimeMoveSpeed(true, false, 1.0f, 0.0f, 60.0f, 0.0f, true, 1.3f, 100.0f, 0.0f), "Dead forces 0 speed");
+		AssertEqual(0.0f, GameLogic.CalculateRealTimeMoveSpeed(false, true, 1.0f, 0.0f, 60.0f, 0.0f, true, 1.3f, 100.0f, 0.0f), "Immobilized forces 0 speed");
+
+		// External dash/knockback velocity while standing or moving reflects total magnitude
+		float dashSpd = GameLogic.CalculateRealTimeMoveSpeed(false, false, 0.0f, 0.0f, 60.0f, 0.0f, false, 1.3f, 150.0f, 0.0f);
+		Assert(MathF.Abs(dashSpd - 150.0f) < 0.01f, "Dash external velocity adds real-time speed");
+	}
+
+	private static void Test_TresResourcePropertyParsing()
+	{
+		const string sampleTres = """
+[gd_resource type="Resource" script_class="EnemyData" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://scripts/resources/EnemyData.cs" id="1"]
+
+[sub_resource type="CircleShape2D" id="sub_1"]
+radius = 16.0
+
+[resource]
+script = ExtResource("1")
+DisplayName = "Orc \"Boss\"\nUnit"
+MaxHealth = 45.5
+ExperienceReward = 12
+IsRanged = false
+EmptyKey = 123
+Invalid-Key = 99
+
+[sub_resource type="RectangleShape2D" id="sub_2"]
+MaxHealth = 9999.0
+""";
+
+		var props = GameLogic.ParseTresResourceProperties(sampleTres);
+		Assert(props.Count == 6, "ParseTresResourceProperties reads only valid identifiers in [resource] section");
+		Assert(!props.ContainsKey("radius"), "Does not include properties from preceding [sub_resource]");
+		Assert(!props.ContainsKey("Invalid-Key"), "Ignores non-identifier keys");
+
+		Assert(props.TryGetValue("DisplayName", out string rawName) && GameLogic.TryParseTresString(rawName, out string parsedName)
+			&& parsedName == "Orc \"Boss\"\nUnit", "TryParseTresString unescapes quotes and newlines");
+		float parsedHp = 0.0f;
+		Assert(props.TryGetValue("MaxHealth", out string rawHp) && GameLogic.TryParseTresFloat(rawHp, out parsedHp)
+			&& MathF.Abs(parsedHp - 45.5f) < 0.001f, "TryParseTresFloat parses invariant float and ignores trailing section");
+		Assert(props.TryGetValue("ExperienceReward", out string rawXp) && GameLogic.TryParseTresInt(rawXp, out int parsedXp)
+			&& parsedXp == 12, "TryParseTresInt parses integer");
+		Assert(props.TryGetValue("IsRanged", out string rawRanged) && GameLogic.TryParseTresBool(rawRanged, out bool parsedRanged)
+			&& !parsedRanged, "TryParseTresBool parses false");
+
+		// Negative/invalid scalar checks
+		Assert(!GameLogic.TryParseTresString("unquoted", out _), "TryParseTresString rejects unquoted text");
+		Assert(!GameLogic.TryParseTresFloat("NaN", out _) && !GameLogic.TryParseTresFloat("inf", out _), "TryParseTresFloat rejects NaN/inf");
+		Assert(!GameLogic.TryParseTresInt("12.5", out _), "TryParseTresInt rejects float");
+		Assert(!GameLogic.TryParseTresBool("maybe", out _), "TryParseTresBool rejects non-bool");
 	}
 }

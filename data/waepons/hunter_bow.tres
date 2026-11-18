@@ -1,6 +1,6 @@
-[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3]
+[gd_resource type="Resource" script_class="WeaponData" load_steps=4 format=3 uid="uid://dhcpfejifjnbw"]
 
-[ext_resource type="PackedScene" path="res://scene/weapons/bullets/player_arrow.tscn" id="1_arrow"]
+[ext_resource type="PackedScene" uid="uid://dd0bbnvhbd8ge" path="res://scene/weapons/bullets/player_arrow.tscn" id="1_arrow"]
 [ext_resource type="PackedScene" path="res://scene/weapons/hunter_bow.tscn" id="2_bow"]
 [ext_resource type="Script" uid="uid://de3w7d6rcby3g" path="res://scripts/resources/WeaponData.cs" id="3_script"]
 
@@ -8,16 +8,15 @@
 script = ExtResource("3_script")
 WeaponName = "Hunter Warbow"
 Damage = 20
-AttackCooldown = 0.5
+AttackCooldown = 0.6
 AttackRange = 360.0
-KnockbackForce = 3.5
-ManaCost = 2.0
+KnockbackForce = 0.5
+ManaCost = 3.0
 WeaponVisualPrefab = ExtResource("2_bow")
 IsRanged = true
 BulletPrefab = ExtResource("1_arrow")
 BulletSpeed = 540.0
-Spread = 0.015
-IsPiercing = true
+Spread = 0.01
 MaxAmmo = 12
 ReloadTime = 1.1
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

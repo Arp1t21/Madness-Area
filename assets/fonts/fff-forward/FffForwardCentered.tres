@@ -1,0 +1,7 @@
+[gd_resource type="FontVariation" load_steps=2 format=3]
+
+[ext_resource type="FontFile" uid="uid://0y0jbnp43mqp" path="res://assets/fonts/fff-forward/FFFFORWA.TTF" id="1_forward"]
+
+[resource]
+base_font = ExtResource("1_forward")
+baseline_offset = 0.13

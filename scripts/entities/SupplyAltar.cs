@@ -36,9 +36,9 @@ public class ShopOffer
 		if (lowerId == "stat_fury_draught") return "res://assets/ui/shop_icons/fury_draught.png";
 		if (lowerId == "consumable_heal_boost") return "res://assets/ui/shop_icons/crimson_elixir.png";
 		if (lowerId == "stat_mana_harmony") return "res://assets/ui/shop_icons/mana_harmony.png";
-		if (lowerId == "ability_skill_point") return "res://assets/ui/shop_icons/skill_point.png";
-		if (lowerId == "ability_1_level") return "res://assets/ui/shop_icons/ability_q.png";
-		if (lowerId == "ability_2_level") return "res://assets/ui/shop_icons/ability_v.png";
+		if (lowerId == "ability_skill_point" || lowerId == "ability_cooldown") return "res://assets/ui/shop_icons/skill_point.png";
+		if (lowerId == "ability_1_level" || lowerId == "ability_1_power") return "res://assets/ui/shop_icons/ability_q.png";
+		if (lowerId == "ability_2_level" || lowerId == "ability_2_power") return "res://assets/ui/shop_icons/ability_v.png";
 		if (lowerId.StartsWith("armory")) return "res://assets/ui/shop_icons/armory.png";
 		if (lowerId == "single_extended_mag") return "res://assets/ui/shop_icons/extended_mag.png";
 		if (lowerId == "single_quickloader") return "res://assets/ui/shop_icons/quickloader.png";
@@ -280,14 +280,14 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "STAT_MANA_REGEN",
 				Category = "PERMANENT STAT",
 				Title = "AETHER SPRING",
-				Description = "+2 Mana Regen Forever (during waves)",
+				Description = "+1 Mana Regen Forever (during waves)",
 				BaseCost = 11,
 				AccentColor = new Color(0.45f, 0.85f, 1.0f),
 				IconPath = "res://assets/ui/shop_icons/mana_regen.png",
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.BonusManaRegen += 2.0f;
-					return $"Permanent +2 Mana Regen! (Now {p.ManaRegenEffective:0.#}/s)";
+					p.BonusManaRegen += 1.0f;
+					return $"Permanent +1 Mana Regen! (Now {p.ManaRegenEffective:0.#}/s)";
 				}
 			},
 			new ShopOffer
@@ -310,13 +310,13 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "GLOBAL_WEAPON_DMG",
 				Category = "ITEM UPGRADE",
 				Title = "MASTERWORK WHETSTONE",
-				Description = "+15% All Weapon Damage Forever",
+				Description = "+10% All Weapon Damage Forever",
 				BaseCost = 15,
 				AccentColor = new Color(1.0f, 0.72f, 0.25f),
 				IconPath = "res://assets/ui/shop_icons/dmg_upgrade.png",
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.WeaponDamageMultiplier += 0.15f;
+					p.WeaponDamageMultiplier += 0.10f;
 					return $"All Weapon Damage increased to {(int)Mathf.Round(p.WeaponDamageMultiplier * 100)}%!";
 				}
 			},
@@ -325,13 +325,13 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "STAT_FURY_DRAUGHT",
 				Category = "PERMANENT STAT",
 				Title = "BERSERKER'S DRAUGHT",
-				Description = "+10% All Weapon Damage & +6 Move Speed Forever",
+				Description = "+7% All Weapon Damage & +6 Move Speed Forever",
 				BaseCost = 14,
 				AccentColor = new Color(1.0f, 0.48f, 0.28f),
 				IconPath = "res://assets/ui/shop_icons/fury_draught.png",
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.WeaponDamageMultiplier += 0.10f;
+					p.WeaponDamageMultiplier += 0.07f;
 					p.BonusMoveSpeed += 6.0f;
 					return $"All Damage {(int)Mathf.Round(p.WeaponDamageMultiplier * 100)}% & +6 Move Speed!";
 				}
@@ -341,16 +341,16 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "CONSUMABLE_HEAL_BOOST",
 				Category = "PERMANENT STAT",
 				Title = "CRIMSON ELIXIR",
-				Description = "Heals 45% Max HP & grants +15 Max HP Forever",
+				Description = "+15 Max HP Forever & heals 20% of new Max HP",
 				BaseCost = 11,
 				AccentColor = new Color(0.95f, 0.30f, 0.45f),
 				IconPath = "res://assets/ui/shop_icons/crimson_elixir.png",
 				OnPurchase = (p, lvl, alt) =>
 				{
 					p.BonusMaxHealth += 15.0f;
-					float heal = p.MaxHealthEffective * 0.45f;
+					float heal = p.MaxHealthEffective * 0.20f;
 					p.CurrentHealth = Mathf.Min(p.MaxHealthEffective, p.CurrentHealth + heal);
-					return $"Healed {(int)heal} HP & gained +15 Max HP!";
+					return $"Gained +15 Max HP & healed {(int)heal} HP!";
 				}
 			},
 			new ShopOffer
@@ -358,71 +358,73 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "STAT_MANA_HARMONY",
 				Category = "PERMANENT STAT",
 				Title = "AETHERIC HARMONY",
-				Description = "+30 Max Mana & +1 Mana Regen Forever",
+				Description = "+30 Max Mana & +0.5 Mana Regen Forever",
 				BaseCost = 12,
 				AccentColor = new Color(0.42f, 0.78f, 1.0f),
 				IconPath = "res://assets/ui/shop_icons/mana_harmony.png",
 				OnPurchase = (p, lvl, alt) =>
 				{
 					p.BonusMaxMana += 30.0f;
-					p.BonusManaRegen += 1.0f;
+					p.BonusManaRegen += 0.5f;
 					p.CurrentMana = Mathf.Min(p.MaxManaEffective, p.CurrentMana + 30.0f);
-					return "+30 Max Mana & +1 Mana Regen Forever!";
+					return "+30 Max Mana & +0.5 Mana Regen Forever!";
 				}
 			},
 			new ShopOffer
 			{
-				Id = "ABILITY_SKILL_POINT",
+				Id = "ABILITY_COOLDOWN",
 				Category = "HERO ABILITY",
-				Title = "TOME OF MASTERY",
-				Description = "+1 Skill Point to upgrade any hero ability",
-				BaseCost = 16,
+				Title = "CHRONO GRIMOIRE",
+				Description = "-12% Cooldown for all Hero Abilities [Q] & [V]",
+				BaseCost = 15,
 				AccentColor = new Color(0.82f, 0.52f, 1.0f),
 				IconPath = "res://assets/ui/shop_icons/skill_point.png",
+				CanPurchase = (p) => p != null && (p.Ability1CooldownScale > 0.355f || p.Ability2CooldownScale > 0.355f),
+				UnavailableReason = (_) => "[MIN COOLDOWN CAP]",
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.SkillPoints++;
+					p.Ability1CooldownScale = Mathf.Max(0.35f, p.Ability1CooldownScale * 0.88f);
+					p.Ability2CooldownScale = Mathf.Max(0.35f, p.Ability2CooldownScale * 0.88f);
 					var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
 					hud?.UpdateAbilitiesUI();
-					return "Gained +1 Skill Point!";
+					return $"All Ability Cooldowns reduced! ([Q] {p.GetAbility1CooldownMax():0.#}s / [V] {p.GetAbility2CooldownMax():0.#}s)";
 				}
 			},
 			new ShopOffer
 			{
-				Id = "ABILITY_1_LEVEL",
+				Id = "ABILITY_1_POWER",
 				Category = "HERO ABILITY",
 				Title = "GRIMOIRE OF FLAME [Q]",
-				Description = "+1 Level to Ability 1 (Fireball, Max Lv 4)",
-				BaseCost = 16,
+				Description = "+22% Damage & +18% Explosion Radius for Fireball [Q]",
+				BaseCost = 15,
 				AccentColor = new Color(1.0f, 0.52f, 0.22f),
 				IconPath = "res://assets/ui/shop_icons/ability_q.png",
-				CanPurchase = (p) => p != null && GameLogic.CanUpgradeAbility(p.Ability1Level),
-				UnavailableReason = (_) => "[MAX LEVEL 4/4]",
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.Ability1Level = GameLogic.ClampAbilityLevel(p.Ability1Level + 1);
+					p.Ability1DamageMultiplier += 0.22f;
+					p.Ability1RadiusMultiplier += 0.18f;
 					var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
 					hud?.UpdateAbilitiesUI();
-					return $"Ability 1 upgraded to Level {p.Ability1Level}!";
+					return $"Fireball [Q]: {(int)Mathf.Round(p.Ability1DamageMultiplier * 100)}% DMG & {(int)Mathf.Round(p.Ability1RadiusMultiplier * 100)}% Radius!";
 				}
 			},
 			new ShopOffer
 			{
-				Id = "ABILITY_2_LEVEL",
+				Id = "ABILITY_2_POWER",
 				Category = "HERO ABILITY",
 				Title = "RUNE OF THE AEGIS [V]",
-				Description = "+1 Level to Ability 2 (Arcane Shield & Dash, Max Lv 4)",
-				BaseCost = 16,
+				Description = "-10% Cooldown, +25% Pulse Damage & +20% Pulse Radius for [V]",
+				BaseCost = 15,
 				AccentColor = new Color(0.35f, 0.88f, 1.0f),
 				IconPath = "res://assets/ui/shop_icons/ability_v.png",
-				CanPurchase = (p) => p != null && GameLogic.CanUpgradeAbility(p.Ability2Level),
-				UnavailableReason = (_) => "[MAX LEVEL 4/4]",
 				OnPurchase = (p, lvl, alt) =>
 				{
-					p.Ability2Level = GameLogic.ClampAbilityLevel(p.Ability2Level + 1);
+					p.Ability2CooldownScale = Mathf.Max(0.35f, p.Ability2CooldownScale * 0.90f);
+					p.Ability2DamageMultiplier += 0.25f;
+					p.Ability2RadiusMultiplier += 0.20f;
 					var hud = GetTree().GetFirstNodeInGroup("HUD") as HUD;
 					hud?.UpdateAbilitiesUI();
-					return $"Ability 2 upgraded to Level {p.Ability2Level}!";
+					return $"Aegis Dash [V]: {p.GetAbility2CooldownMax():0.#}s CD, {(int)Mathf.Round(p.Ability2DamageMultiplier * 100)}% Pulse DMG!";
 				}
 			},
 			new ShopOffer
@@ -458,8 +460,8 @@ public partial class SupplyAltar : Area2D, IInteractable
 				IsWeaponCompatible = (w) => w != null && w.IsRanged && w.MaxAmmo < 500,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.MaxAmmo += 5;
-					p.WeaponSlots[slotIdx]?.AddBonusAmmo(5);
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_EXTENDED_MAG", out int bonusAmmo);
+					p.WeaponSlots[slotIdx]?.AddBonusAmmo(bonusAmmo);
 					return $"{w.WeaponName.ToUpper()}: +5 Max Ammo (Now {w.MaxAmmo})!";
 				}
 			},
@@ -468,17 +470,16 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_QUICKLOADER",
 				Category = "SINGLE WEAPON",
 				Title = "QUICKLOADER MECHANISM",
-				Description = "-10% Reload & -10% Cooldown for 1 chosen weapon",
+				Description = "-10% Reload & -9% Attack Cooldown for 1 chosen weapon",
 				BaseCost = 12,
 				AccentColor = new Color(0.45f, 0.95f, 0.75f),
 				IconPath = "res://assets/ui/shop_icons/quickloader.png",
 				RequiresWeaponChoice = true,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.ReloadTime = Mathf.Max(0.15f, w.ReloadTime * 0.90f);
-					w.AttackCooldown = Mathf.Max(0.05f, w.AttackCooldown * 0.90f);
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_QUICKLOADER", out _);
 					p.WeaponSlots[slotIdx]?.ApplyWeaponSettings();
-					return $"{w.WeaponName.ToUpper()}: -10% Reload & Cooldown!";
+					return $"{w.WeaponName.ToUpper()}: -10% Reload & -9% Cooldown!";
 				}
 			},
 			new ShopOffer
@@ -494,7 +495,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				IsWeaponCompatible = (w) => w != null && w.ManaCost > 0.01f,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.ManaCost = Mathf.Max(0.0f, w.ManaCost * 0.80f);
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_MANA_REDUCTION", out _);
 					return $"{w.WeaponName.ToUpper()}: Mana Cost reduced to {w.ManaCost:0.#}!";
 				}
 			},
@@ -503,15 +504,14 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_SHARPENED_CORE",
 				Category = "SINGLE WEAPON",
 				Title = "SHARPENED WEAPON CORE",
-				Description = "+25% Base Damage for 1 chosen weapon",
+				Description = "+17% Base Damage for 1 chosen weapon",
 				BaseCost = 13,
 				AccentColor = new Color(1.0f, 0.55f, 0.35f),
 				IconPath = "res://assets/ui/shop_icons/sharpened_core.png",
 				RequiresWeaponChoice = true,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					int newDmg = Mathf.Max(w.Damage + 2, Mathf.RoundToInt(w.Damage * 1.25f));
-					w.Damage = newDmg;
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_SHARPENED_CORE", out _);
 					return $"{w.WeaponName.ToUpper()}: Base Damage increased to {w.Damage}!";
 				}
 			},
@@ -520,17 +520,16 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_IMPACT_CORE",
 				Category = "SINGLE WEAPON",
 				Title = "HEAVY IMPACT CORE",
-				Description = "+30% Knockback & -8% Cooldown for 1 chosen weapon",
+				Description = "+25% Knockback & -7% Attack Cooldown for 1 chosen weapon",
 				BaseCost = 11,
 				AccentColor = new Color(0.95f, 0.65f, 0.95f),
 				IconPath = "res://assets/ui/shop_icons/impact_core.png",
 				RequiresWeaponChoice = true,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.KnockbackForce = Mathf.Round(w.KnockbackForce * 1.30f * 10f) / 10f;
-					w.AttackCooldown = Mathf.Max(0.05f, w.AttackCooldown * 0.92f);
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_IMPACT_CORE", out _);
 					p.WeaponSlots[slotIdx]?.ApplyWeaponSettings();
-					return $"{w.WeaponName.ToUpper()}: +30% Knockback & -8% Cooldown!";
+					return $"{w.WeaponName.ToUpper()}: +25% Knockback & -7% Cooldown!";
 				}
 			},
 			new ShopOffer
@@ -538,16 +537,16 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_FEATHER_GRIP",
 				Category = "SINGLE WEAPON",
 				Title = "FEATHERWEIGHT GRIP",
-				Description = "-16% Attack Cooldown (faster attacks) for 1 chosen weapon",
+				Description = "-12% Attack Cooldown (faster attacks) for 1 chosen weapon",
 				BaseCost = 13,
 				AccentColor = new Color(0.55f, 1.0f, 0.85f),
 				IconPath = "res://assets/ui/shop_icons/feather_grip.png",
 				RequiresWeaponChoice = true,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.AttackCooldown = Mathf.Max(0.05f, w.AttackCooldown * 0.84f);
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_FEATHER_GRIP", out _);
 					p.WeaponSlots[slotIdx]?.ApplyWeaponSettings();
-					return $"{w.WeaponName.ToUpper()}: -16% Attack Cooldown!";
+					return $"{w.WeaponName.ToUpper()}: -12% Attack Cooldown!";
 				}
 			},
 			new ShopOffer
@@ -555,7 +554,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_PIERCING",
 				Category = "SINGLE WEAPON",
 				Title = "PIERCING ENCHANTMENT",
-				Description = "Projectiles pierce enemies & +15% Damage for 1 ranged weapon",
+				Description = "Projectiles pierce enemies & +9% Base Damage for 1 ranged weapon",
 				BaseCost = 14,
 				AccentColor = new Color(0.45f, 1.0f, 0.65f),
 				IconPath = "res://assets/ui/shop_icons/piercing.png",
@@ -563,8 +562,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				IsWeaponCompatible = (w) => w != null && w.IsRanged,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.IsPiercing = true;
-					w.Damage = Mathf.Max(w.Damage + 1, Mathf.RoundToInt(w.Damage * 1.15f));
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_PIERCING", out _);
 					return $"{w.WeaponName.ToUpper()}: Projectiles now Pierce & Damage is {w.Damage}!";
 				}
 			},
@@ -581,8 +579,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				IsWeaponCompatible = (w) => w != null && w.IsRanged && w.BulletCount < 10,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.BulletCount += 1;
-					w.Spread = Mathf.Max(w.Spread, 0.08f);
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_MULTISHOT", out _);
 					return $"{w.WeaponName.ToUpper()}: Now fires {w.BulletCount} projectiles per shot!";
 				}
 			},
@@ -591,7 +588,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_VELOCITY_CORE",
 				Category = "SINGLE WEAPON",
 				Title = "OVERCHARGED CAPACITOR",
-				Description = "+25% Bullet Speed & +15% Base Damage for 1 ranged weapon",
+				Description = "+25% Bullet Speed & +7% Base Damage for 1 ranged weapon",
 				BaseCost = 13,
 				AccentColor = new Color(0.45f, 0.88f, 1.0f),
 				IconPath = "res://assets/ui/shop_icons/velocity_core.png",
@@ -599,8 +596,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				IsWeaponCompatible = (w) => w != null && w.IsRanged,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.BulletSpeed = Mathf.Round(w.BulletSpeed * 1.25f);
-					w.Damage = Mathf.Max(w.Damage + 1, Mathf.RoundToInt(w.Damage * 1.15f));
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_VELOCITY_CORE", out _);
 					return $"{w.WeaponName.ToUpper()}: +25% Bullet Speed & Damage is {w.Damage}!";
 				}
 			},
@@ -609,7 +605,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				Id = "SINGLE_CLEAVE_EDGE",
 				Category = "SINGLE WEAPON",
 				Title = "VAMPIRIC CLEAVE RUNES",
-				Description = "Enables Multi-Hit cleave & +20% Damage for 1 melee weapon",
+				Description = "Enables Multi-Hit cleave & +8% Base Damage for 1 melee weapon",
 				BaseCost = 13,
 				AccentColor = new Color(1.0f, 0.38f, 0.48f),
 				IconPath = "res://assets/ui/shop_icons/cleave_edge.png",
@@ -617,8 +613,7 @@ public partial class SupplyAltar : Area2D, IInteractable
 				IsWeaponCompatible = (w) => w != null && !w.IsRanged,
 				OnWeaponPurchase = (p, slotIdx, w) =>
 				{
-					w.AllowMultiHit = true;
-					w.Damage = Mathf.Max(w.Damage + 2, Mathf.RoundToInt(w.Damage * 1.20f));
+					SaveManager.ApplyUpgradeToWeaponData(w, "SINGLE_CLEAVE_EDGE", out _);
 					return $"{w.WeaponName.ToUpper()}: Multi-Hit Cleave & Damage increased to {w.Damage}!";
 				}
 			}
@@ -822,7 +817,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 		_rootControl.AddChild(vig);
 
 		var panel = new Panel();
-		Vector2 panelSize = new Vector2(840, 476);
+		Vector2 panelSize = new Vector2(880, 492);
 		panel.Size = panelSize;
 		panel.Position = (rootSize - panelSize) / 2.0f;
 		_rootControl.AddChild(panel);
@@ -837,11 +832,13 @@ public partial class SupplyShopOverlay : CanvasLayer
 		vbox.AddThemeConstantOverride("separation", 6);
 		panel.AddChild(vbox);
 
-		_font = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		_font = GameResourceCache.GetSilverFont();
+		Font boldTitleFont = GameResourceCache.CreateFontVariation(_font, embolden: 0.22f, spacingGlyph: 1);
 
 		_titleLabel = new Label();
 		_titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		if (_font != null) _titleLabel.AddThemeFontOverride("font", _font);
+		_titleLabel.VerticalAlignment = VerticalAlignment.Center;
+		if (boldTitleFont != null) _titleLabel.AddThemeFontOverride("font", boldTitleFont);
 		_titleLabel.AddThemeFontSizeOverride("font_size", 28);
 		_titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
 		DungeonVisuals.ApplyPixelOutline(_titleLabel, 2);
@@ -849,32 +846,34 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 		var statsPill = new PanelContainer();
 		statsPill.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePillStyle(
-			DungeonVisuals.ObsidianCard, DungeonVisuals.BrassDim, 1, 3, 14, 3));
+			DungeonVisuals.ObsidianCard, DungeonVisuals.BrassDim, 1, 3, 14, 4));
 		statsPill.SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter;
 		vbox.AddChild(statsPill);
 
 		_goldLabel = new Label();
 		_goldLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		if (_font != null) _goldLabel.AddThemeFontOverride("font", _font);
-		_goldLabel.AddThemeFontSizeOverride("font_size", 16);
-		_goldLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.94f, 0.62f));
-		DungeonVisuals.ApplyPixelOutline(_goldLabel, 1);
+		_goldLabel.VerticalAlignment = VerticalAlignment.Center;
+		if (boldTitleFont != null) _goldLabel.AddThemeFontOverride("font", boldTitleFont);
+		_goldLabel.AddThemeFontSizeOverride("font_size", 17);
+		_goldLabel.AddThemeColorOverride("font_color", new Color(1.0f, 0.95f, 0.68f));
+		DungeonVisuals.ApplyPixelOutline(_goldLabel, 2);
 		statsPill.AddChild(_goldLabel);
 
 		DungeonVisuals.AddDivider(vbox, new Color(DungeonVisuals.BrassDim.R, DungeonVisuals.BrassDim.G, DungeonVisuals.BrassDim.B, 0.6f), 1.5f);
 
 		_cardsHBox = new HBoxContainer();
-		_cardsHBox.CustomMinimumSize = new Vector2(0, 316);
+		_cardsHBox.CustomMinimumSize = new Vector2(0, 328);
 		_cardsHBox.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
 		_cardsHBox.AddThemeConstantOverride("separation", 10);
 		vbox.AddChild(_cardsHBox);
 
 		_statusLabel = new Label();
 		_statusLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		if (_font != null) _statusLabel.AddThemeFontOverride("font", _font);
-		_statusLabel.AddThemeFontSizeOverride("font_size", 15);
-		_statusLabel.AddThemeColorOverride("font_color", new Color(0.86f, 0.78f, 0.58f));
-		DungeonVisuals.ApplyPixelOutline(_statusLabel, 1);
+		_statusLabel.VerticalAlignment = VerticalAlignment.Center;
+		if (boldTitleFont != null) _statusLabel.AddThemeFontOverride("font", boldTitleFont);
+		_statusLabel.AddThemeFontSizeOverride("font_size", 16);
+		_statusLabel.AddThemeColorOverride("font_color", new Color(0.95f, 0.90f, 0.74f));
+		DungeonVisuals.ApplyPixelOutline(_statusLabel, 2);
 		vbox.AddChild(_statusLabel);
 
 		RebuildDisplayedOffers();
@@ -952,8 +951,11 @@ public partial class SupplyShopOverlay : CanvasLayer
 
 	private void AddOfferCard(Control parent, Font font, ShopOffer offer)
 	{
+		Font boldCardFont = GameResourceCache.CreateFontVariation(font, embolden: 0.24f, spacingGlyph: 1);
+		Font bodyCardFont = GameResourceCache.CreateFontVariation(font, embolden: 0.15f, spacingGlyph: 1, spacingTop: 1, spacingBottom: 1);
+
 		var cardPanel = new PanelContainer();
-		cardPanel.CustomMinimumSize = new Vector2(192, 316);
+		cardPanel.CustomMinimumSize = new Vector2(202, 328);
 		cardPanel.SizeFlagsHorizontal = Control.SizeFlags.ExpandFill;
 		cardPanel.SizeFlagsVertical = Control.SizeFlags.Fill;
 
@@ -969,29 +971,41 @@ public partial class SupplyShopOverlay : CanvasLayer
 		cardPanel.AddThemeStyleboxOverride("panel", cardNormalStyle);
 
 		var margin = new MarginContainer();
-		margin.AddThemeConstantOverride("margin_left", 8);
-		margin.AddThemeConstantOverride("margin_right", 8);
+		margin.AddThemeConstantOverride("margin_left", 9);
+		margin.AddThemeConstantOverride("margin_right", 9);
 		margin.AddThemeConstantOverride("margin_top", 8);
 		margin.AddThemeConstantOverride("margin_bottom", 8);
 		cardPanel.AddChild(margin);
 
 		var vbox = new VBoxContainer();
-		vbox.AddThemeConstantOverride("separation", 4);
+		vbox.AddThemeConstantOverride("separation", 5);
 		margin.AddChild(vbox);
 
-		// 1. Category Tag
+		// 1. Category Tag Pill
+		var catPill = new PanelContainer
+		{
+			SizeFlagsHorizontal = Control.SizeFlags.ShrinkCenter,
+			MouseFilter = Control.MouseFilterEnum.Ignore
+		};
+		catPill.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePillStyle(
+			new Color(offer.AccentColor.R * 0.18f, offer.AccentColor.G * 0.18f, offer.AccentColor.B * 0.18f, 0.92f),
+			new Color(offer.AccentColor.R, offer.AccentColor.G, offer.AccentColor.B, 0.65f),
+			1, 3, 8, 2));
+		vbox.AddChild(catPill);
+
 		var catLabel = new Label();
 		catLabel.Text = offer.Category?.ToUpper() ?? "";
 		catLabel.HorizontalAlignment = HorizontalAlignment.Center;
-		if (font != null) catLabel.AddThemeFontOverride("font", font);
-		catLabel.AddThemeFontSizeOverride("font_size", 12);
-		catLabel.AddThemeColorOverride("font_color", offer.AccentColor.Lerp(Colors.White, 0.25f));
-		DungeonVisuals.ApplyPixelOutline(catLabel, 1);
-		vbox.AddChild(catLabel);
+		catLabel.VerticalAlignment = VerticalAlignment.Center;
+		if (boldCardFont != null) catLabel.AddThemeFontOverride("font", boldCardFont);
+		catLabel.AddThemeFontSizeOverride("font_size", 13);
+		catLabel.AddThemeColorOverride("font_color", offer.AccentColor.Lerp(Colors.White, 0.45f));
+		DungeonVisuals.ApplyPixelOutline(catLabel, 2);
+		catPill.AddChild(catLabel);
 
 		// 2. Icon in center (icons already include 64x64 brass frame, keep clean accent halo behind)
 		var iconCenter = new CenterContainer();
-		iconCenter.CustomMinimumSize = new Vector2(0, 74);
+		iconCenter.CustomMinimumSize = new Vector2(0, 72);
 		vbox.AddChild(iconCenter);
 
 		var iconFrame = new PanelContainer();
@@ -1024,11 +1038,11 @@ public partial class SupplyShopOverlay : CanvasLayer
 		titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
 		titleLabel.VerticalAlignment = VerticalAlignment.Center;
 		titleLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		titleLabel.CustomMinimumSize = new Vector2(0, 36);
-		if (font != null) titleLabel.AddThemeFontOverride("font", font);
-		titleLabel.AddThemeFontSizeOverride("font_size", 17);
-		titleLabel.AddThemeColorOverride("font_color", offer.IsFreeDraftOffer ? offer.AccentColor.Lightened(0.28f) : DungeonVisuals.Parchment);
-		DungeonVisuals.ApplyPixelOutline(titleLabel, 1);
+		titleLabel.CustomMinimumSize = new Vector2(0, 38);
+		if (boldCardFont != null) titleLabel.AddThemeFontOverride("font", boldCardFont);
+		titleLabel.AddThemeFontSizeOverride("font_size", 19);
+		titleLabel.AddThemeColorOverride("font_color", offer.IsFreeDraftOffer ? offer.AccentColor.Lerp(Colors.White, 0.45f) : new Color(1.0f, 0.98f, 0.88f));
+		DungeonVisuals.ApplyPixelOutline(titleLabel, 2);
 		vbox.AddChild(titleLabel);
 
 		DungeonVisuals.AddDivider(vbox, new Color(offer.AccentColor.R, offer.AccentColor.G, offer.AccentColor.B, 0.45f), 1.5f);
@@ -1040,27 +1054,36 @@ public partial class SupplyShopOverlay : CanvasLayer
 		descLabel.VerticalAlignment = VerticalAlignment.Center;
 		descLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
 		descLabel.SizeFlagsVertical = Control.SizeFlags.ExpandFill;
-		if (font != null) descLabel.AddThemeFontOverride("font", font);
-		descLabel.AddThemeFontSizeOverride("font_size", 15);
-		descLabel.AddThemeColorOverride("font_color", new Color(0.88f, 0.91f, 0.96f));
+		if (bodyCardFont != null) descLabel.AddThemeFontOverride("font", bodyCardFont);
+		descLabel.AddThemeFontSizeOverride("font_size", 16);
+		descLabel.AddThemeConstantOverride("line_spacing", 2);
+		descLabel.AddThemeColorOverride("font_color", new Color(0.98f, 0.99f, 1.0f, 1.0f));
+		DungeonVisuals.ApplyPixelOutline(descLabel, 2);
 		vbox.AddChild(descLabel);
 
 		// 5. Extra Label
 		var extraLabel = new Label();
 		extraLabel.Text = "";
 		extraLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		extraLabel.VerticalAlignment = VerticalAlignment.Center;
 		extraLabel.AutowrapMode = TextServer.AutowrapMode.WordSmart;
-		extraLabel.CustomMinimumSize = new Vector2(0, 16);
-		if (font != null) extraLabel.AddThemeFontOverride("font", font);
-		extraLabel.AddThemeFontSizeOverride("font_size", 11);
+		extraLabel.CustomMinimumSize = new Vector2(0, 18);
+		if (boldCardFont != null) extraLabel.AddThemeFontOverride("font", boldCardFont);
+		extraLabel.AddThemeFontSizeOverride("font_size", 14);
+		DungeonVisuals.ApplyPixelOutline(extraLabel, 2);
 		vbox.AddChild(extraLabel);
 
 		// 6. Buy Button
 		var btn = new Button();
-		btn.CustomMinimumSize = new Vector2(0, 34);
+		btn.CustomMinimumSize = new Vector2(0, 36);
 		btn.MouseDefaultCursorShape = Control.CursorShape.PointingHand;
-		if (font != null) btn.AddThemeFontOverride("font", font);
-		btn.AddThemeFontSizeOverride("font_size", 15);
+		if (boldCardFont != null) btn.AddThemeFontOverride("font", boldCardFont);
+		btn.AddThemeFontSizeOverride("font_size", 16);
+		btn.AddThemeColorOverride("font_color", new Color(1.0f, 0.98f, 0.90f));
+		btn.AddThemeColorOverride("font_hover_color", Colors.White);
+		btn.AddThemeColorOverride("font_pressed_color", Colors.White);
+		btn.AddThemeConstantOverride("outline_size", 2);
+		btn.AddThemeColorOverride("font_outline_color", new Color(0.02f, 0.02f, 0.04f, 0.96f));
 
 		var btnNormal = DungeonVisuals.CreatePanelStyle(DungeonVisuals.ObsidianCard, offer.AccentColor, 2, 4, 3);
 		var btnHover = DungeonVisuals.CreatePanelStyle(
@@ -1076,20 +1099,27 @@ public partial class SupplyShopOverlay : CanvasLayer
 		btn.AddThemeStyleboxOverride("pressed", btnHover);
 		btn.AddThemeStyleboxOverride("disabled", btnDisabled);
 
-		btn.MouseEntered += () =>
+		Action onHoverEnter = () =>
 		{
 			if (!offer.IsPurchased && !btn.Disabled && GodotObject.IsInstanceValid(cardPanel))
 			{
 				cardPanel.AddThemeStyleboxOverride("panel", cardHoverStyle);
 			}
 		};
-		btn.MouseExited += () =>
+		Action onHoverExit = () =>
 		{
 			if (!offer.IsPurchased && GodotObject.IsInstanceValid(cardPanel))
 			{
-				cardPanel.AddThemeStyleboxOverride("panel", cardNormalStyle);
+				if (!cardPanel.GetGlobalRect().HasPoint(cardPanel.GetViewport().GetMousePosition()))
+				{
+					cardPanel.AddThemeStyleboxOverride("panel", cardNormalStyle);
+				}
 			}
 		};
+		cardPanel.MouseEntered += onHoverEnter;
+		cardPanel.MouseExited += onHoverExit;
+		btn.MouseEntered += onHoverEnter;
+		btn.MouseExited += onHoverExit;
 
 		btn.Pressed += () =>
 		{
@@ -1211,6 +1241,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 		var header = new Label();
 		header.Text = $"SELECT WEAPON FOR: {offer.Title}";
 		header.HorizontalAlignment = HorizontalAlignment.Center;
+		header.VerticalAlignment = VerticalAlignment.Center;
 		if (_font != null) header.AddThemeFontOverride("font", _font);
 		header.AddThemeFontSizeOverride("font_size", 20);
 		header.AddThemeColorOverride("font_color", offer.AccentColor);
@@ -1220,6 +1251,7 @@ public partial class SupplyShopOverlay : CanvasLayer
 		var subHeader = new Label();
 		subHeader.Text = offer.Description;
 		subHeader.HorizontalAlignment = HorizontalAlignment.Center;
+		subHeader.VerticalAlignment = VerticalAlignment.Center;
 		if (_font != null) subHeader.AddThemeFontOverride("font", _font);
 		subHeader.AddThemeFontSizeOverride("font_size", 14);
 		subHeader.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);

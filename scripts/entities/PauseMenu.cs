@@ -50,11 +50,12 @@ public partial class PauseMenu : CanvasLayer
 		vbox.AddThemeConstantOverride("separation", 9);
 		margin.AddChild(vbox);
 
-		var titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
+		var titleFont = GameResourceCache.GetSilverFont();
 
 		var title = new Label();
 		title.Text = "PAUSED";
 		title.HorizontalAlignment = HorizontalAlignment.Center;
+		title.VerticalAlignment = VerticalAlignment.Center;
 		title.AddThemeFontOverride("font", titleFont);
 		title.AddThemeFontSizeOverride("font_size", 40);
 		title.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
@@ -69,7 +70,8 @@ public partial class PauseMenu : CanvasLayer
 		var subLabel = new Label
 		{
 			Text = subText,
-			HorizontalAlignment = HorizontalAlignment.Center
+			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center
 		};
 		subLabel.AddThemeFontOverride("font", titleFont);
 		subLabel.AddThemeFontSizeOverride("font_size", 16);

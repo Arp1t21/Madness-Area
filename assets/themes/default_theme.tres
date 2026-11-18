@@ -1,6 +1,6 @@
 [gd_resource type="Theme" load_steps=2 format=3 uid="uid://ddyxy7yxy7yxy"]
 
-[ext_resource type="FontFile" uid="uid://0y0jbnp43mqp" path="res://assets/fonts/fff-forward/FFFFORWA.TTF" id="1_font"]
+[ext_resource type="FontVariation" path="res://assets/fonts/fff-forward/FffForwardCentered.tres" id="1_font"]
 
 [resource]
 default_font = ExtResource("1_font")

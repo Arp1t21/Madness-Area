@@ -1,8 +1,7 @@
-[gd_scene load_steps=3 format=3 uid="uid://bm6pr21pa5rf5"]
+[gd_scene load_steps=4 format=3 uid="uid://bm6pr21pa5rf5"]
 
 [ext_resource type="Script" uid="uid://drm4uhu6vocus" path="res://scripts/entities/weapons/WeaponPickup.cs" id="1_script"]
-
-[ext_resource type="FontFile" path="res://assets/fonts/m5x7/m5x7.ttf" id="2_m5x7"]
+[ext_resource type="FontFile" uid="uid://cugfrn418ruvn" path="res://assets/fonts/m5x7/m5x7.ttf" id="2_m5x7"]
 
 [sub_resource type="CircleShape2D" id="CircleShape2D_wp1"]
 radius = 40.0
@@ -11,7 +10,6 @@ radius = 40.0
 script = ExtResource("1_script")
 
 [node name="Sprite2D" type="Sprite2D" parent="."]
-scale = Vector2(1, 1)
 
 [node name="Area2D" type="Area2D" parent="."]
 collision_layer = 0

@@ -44,8 +44,8 @@ public partial class CoopLobbyOverlay : Control
 	public override void _Ready()
 	{
 		SetAnchorsAndOffsetsPreset(LayoutPreset.FullRect);
-		_titleFont = GD.Load<Font>("res://assets/fonts/silver/Silver.ttf");
-		_mainFont = GD.Load<Font>("res://assets/fonts/fff-forward/FFFFORWA.TTF");
+		_titleFont = GameResourceCache.GetSilverFont();
+		_mainFont = GameResourceCache.GetForwardFont();
 
 		Vector2 viewSize = GetViewport().GetVisibleRect().Size;
 		float W = viewSize.X;
@@ -70,6 +70,7 @@ public partial class CoopLobbyOverlay : Control
 		{
 			Text = "CO-OP DUNGEON LOBBY (2-4 PLAYERS)",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			Position = new Vector2(0, 14),
 			Size = new Vector2(W, 44)
 		};
@@ -308,6 +309,7 @@ public partial class CoopLobbyOverlay : Control
 		_statusLabel = new Label
 		{
 			Text = "Host a lobby or enter host IP to join.",
+			VerticalAlignment = VerticalAlignment.Center,
 			AutowrapMode = TextServer.AutowrapMode.WordSmart,
 			Position = new Vector2(pad, h - 54.0f),
 			Size = new Vector2(innerW, 42)

@@ -217,7 +217,8 @@ public partial class MimicEnemy : Enemy
 			DamageNumberColor = new Color(1.0f, 0.85f, 0.25f),
 			FlashColor = new Color(1.0f, 0.3f, 0.25f)
 		};
-		AttackConfig = GD.Load<WeaponData>("res://data/waepons/enemies/orc_melee.tres");
+		AttackConfig = GameDataRegistry.LoadFreshWeapon("res://data/waepons/enemies/orc_melee.tres")
+			?? GD.Load<WeaponData>("res://data/waepons/enemies/orc_melee.tres");
 
 		var sheet = GD.Load<Texture2D>("res://assets/objects/0x72_DungeonTilesetII_v1.7.png");
 		var frames = new SpriteFrames();

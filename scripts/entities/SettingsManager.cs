@@ -167,7 +167,8 @@ public static class SettingsManager
 
 		foreach (var font in fonts)
 		{
-			if (font is FontFile ff)
+			FontFile ff = GameResourceCache.UnwrapFontFile(font);
+			if (ff != null)
 			{
 				ff.Antialiasing = TextServer.FontAntialiasing.Gray;
 				ff.Hinting = TextServer.Hinting.Light;

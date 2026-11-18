@@ -86,6 +86,7 @@ public partial class SettingsMenu : CanvasLayer
 		var titleLabel = new Label();
 		titleLabel.Text = "SETTINGS";
 		titleLabel.HorizontalAlignment = HorizontalAlignment.Center;
+		titleLabel.VerticalAlignment = VerticalAlignment.Center;
 		titleLabel.AddThemeFontOverride("font", titleFont);
 		titleLabel.AddThemeFontSizeOverride("font_size", 32);
 		titleLabel.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
@@ -129,6 +130,7 @@ public partial class SettingsMenu : CanvasLayer
 		};
 		descPanel.AddThemeStyleboxOverride("panel", DungeonVisuals.CreatePanelStyle(
 			DungeonVisuals.ObsidianPanel, DungeonVisuals.BrassDim, 1, 4, 3));
+		DungeonVisuals.AttachFrameAccent(descPanel, DungeonVisuals.BrassDim, 4);
 		splitHBox.AddChild(descPanel);
 
 		var descMargin = new MarginContainer();
@@ -144,6 +146,7 @@ public partial class SettingsMenu : CanvasLayer
 
 		_descriptionTitle = new Label();
 		_descriptionTitle.Text = "GENERAL";
+		_descriptionTitle.VerticalAlignment = VerticalAlignment.Center;
 		_descriptionTitle.AddThemeFontOverride("font", titleFont);
 		_descriptionTitle.AddThemeFontSizeOverride("font_size", 22);
 		_descriptionTitle.AddThemeColorOverride("font_color", DungeonVisuals.BrassGold);
@@ -453,6 +456,7 @@ public partial class SettingsMenu : CanvasLayer
 		tabMargin.AddThemeConstantOverride("margin_left", 10);
 		tabMargin.AddThemeConstantOverride("margin_right", 10);
 		tabMargin.AddThemeConstantOverride("margin_top", 10);
+		tabMargin.AddThemeConstantOverride("margin_bottom", 10);
 		scroll.AddChild(tabMargin);
 
 		var vbox = new VBoxContainer();
@@ -514,6 +518,7 @@ public partial class SettingsMenu : CanvasLayer
 	{
 		var label = new Label();
 		label.Text = text;
+		label.VerticalAlignment = VerticalAlignment.Center;
 		label.AddThemeFontOverride("font", font);
 		label.AddThemeFontSizeOverride("font_size", fontSize + 4);
 		label.AddThemeConstantOverride("letter_spacing", 1);

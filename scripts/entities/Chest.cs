@@ -161,7 +161,7 @@ public partial class Chest : StaticBody2D, IInteractable
 		var pickup = pickupPrefab.Instantiate() as WeaponPickup;
 		if (pickup == null) return;
 
-		pickup.WeaponToGive = GD.Load<WeaponData>(weaponPath);
+		pickup.WeaponToGive = GameDataRegistry.LoadFreshWeapon(weaponPath) ?? GD.Load<WeaponData>(weaponPath);
 		pickup.GlobalPosition = GlobalPosition + new Vector2(0, 10);
 		
 		// Add child to the level node

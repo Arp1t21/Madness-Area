@@ -39,29 +39,31 @@ public abstract class CharacterAbilitySet
 		}
 
 		Player.CurrentMana -= Ability1ManaCost;
-		Player.FireballCooldownTimer = Ability1CooldownMax;
+		Player.FireballCooldownTimer = Player.GetAbility1CooldownMax();
 
 		Vector2 mousePos = Player.GetGlobalMousePosition();
 		Vector2 dir = (mousePos - Player.GlobalPosition).Normalized();
 		if (dir == Vector2.Zero) dir = Vector2.Right;
-		float damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier;
+		float damage = (Player.FireballBaseDamage + (Player.Ability1Level - 1) * Player.FireballDamagePerLevel) * Player.WeaponDamageMultiplier * Player.Ability1DamageMultiplier;
+		float explosionRadius = 45.0f * Mathf.Clamp(Player.Ability1RadiusMultiplier, 1.0f, 2.5f);
 
 		if (Player.IsCoopSession)
 		{
-			Player.BroadcastSpawnFireball(Player.GlobalPosition, dir, damage);
+			Player.BroadcastSpawnFireball(Player.GlobalPosition, dir, damage, explosionRadius);
 		}
 		else
 		{
-			ExecuteFireballVisualAndSpawn(Player.GlobalPosition, dir, damage);
+			ExecuteFireballVisualAndSpawn(Player.GlobalPosition, dir, damage, explosionRadius);
 		}
 	}
 
-	public void ExecuteFireballVisualAndSpawn(Vector2 spawnPos, Vector2 dir, float damage)
+	public void ExecuteFireballVisualAndSpawn(Vector2 spawnPos, Vector2 dir, float damage, float explosionRadius = 45.0f)
 	{
 		Fireball fireball = FireballScene != null ? FireballScene.Instantiate<Fireball>() : new Fireball();
 		fireball.GlobalPosition = spawnPos;
 		fireball.Direction = dir;
 		fireball.Damage = damage;
+		fireball.ExplosionRadius = explosionRadius;
 		fireball.OwnerPlayer = Player;
 		Player.GetParent()?.AddChild(fireball);
 	}
@@ -77,7 +79,7 @@ public abstract class CharacterAbilitySet
 		}
 
 		Player.CurrentMana -= Ability2ManaCost;
-		Player.ShieldCooldownTimer = Ability2CooldownMax;
+		Player.ShieldCooldownTimer = Player.GetAbility2CooldownMax();
 
 		Vector2 moveDir = Input.GetVector("move_left", "move_right", "move_up", "move_down");
 		if (moveDir == Vector2.Zero)
@@ -89,26 +91,25 @@ public abstract class CharacterAbilitySet
 		Player.SetDashVelocity(dashDir * 228.0f);
 
 		float shieldDuration = 2.5f + (Player.Ability2Level - 1) * 0.7f;
-		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier;
+		float pulseDamage = (4.0f + Player.Ability2Level * 3.0f) * Player.WeaponDamageMultiplier * Player.Ability2DamageMultiplier;
 		bool hasFrostAegis = Player.HasRelic(GameLogic.RelicFrostAegis);
+		float effectiveRadius = 52.0f * Mathf.Clamp(Player.Ability2RadiusMultiplier, 1.0f, 2.5f) * (hasFrostAegis ? 1.25f : 1.0f);
 
 		if (Player.IsCoopSession)
 		{
-			Player.BroadcastActivateShieldPulse(dashDir, shieldDuration, pulseDamage, hasFrostAegis);
+			Player.BroadcastActivateShieldPulse(dashDir, shieldDuration, pulseDamage, effectiveRadius, hasFrostAegis);
 		}
 		else
 		{
-			ExecuteShieldPulseVisualAndHit(dashDir, shieldDuration, pulseDamage, hasFrostAegis);
+			ExecuteShieldPulseVisualAndHit(dashDir, shieldDuration, pulseDamage, effectiveRadius, hasFrostAegis);
 		}
 	}
 
-	public void ExecuteShieldPulseVisualAndHit(Vector2 dashDir, float shieldDuration, float pulseDamage, bool hasFrostAegis)
+	public void ExecuteShieldPulseVisualAndHit(Vector2 dashDir, float shieldDuration, float pulseDamage, float effectiveRadius, bool hasFrostAegis)
 	{
 		Player.ActivateShieldEffect(shieldDuration);
 		Player.PlayDashVisuals(dashDir);
 
-		float pulseRadius = 52.0f;
-		float effectiveRadius = hasFrostAegis ? pulseRadius * 1.25f : pulseRadius;
 		bool isServerAuthority = NetworkManager.Instance == null || NetworkManager.Instance.IsServerAuthority;
 		foreach (Node node in Player.GetTree().GetNodesInGroup("Enemies"))
 		{

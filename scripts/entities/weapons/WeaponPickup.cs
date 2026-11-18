@@ -68,7 +68,7 @@ public partial class WeaponPickup : Node2D, IInteractable
 						_groundSpriteBasePos = _groundSprite.Position;
 					}
 				}
-				instance.QueueFree(); // Удаляем временный экземляр
+				instance.Free(); // Сразу освобождаем временный экземпляр вне дерева сцены
 			}
 		}
 

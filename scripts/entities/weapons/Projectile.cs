@@ -75,7 +75,8 @@ public partial class Projectile : Node2D
 			GlowColor,
 			GlowEnergy,
 			gradTex,
-			shadowEnabled: false);
+			shadowEnabled: false,
+			itemCullMask: IsPlayerOwned ? 3 : 1);
 	}
 
 	public override void _Draw()

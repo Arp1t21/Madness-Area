@@ -18,6 +18,10 @@ public class SavedWeaponStats
 	public bool? AllowMultiHit { get; set; }
 	public bool? IsContinuousLaser { get; set; }
 	public float? SplashRadius { get; set; }
+
+	// Ordered list of single-weapon shop upgrade IDs applied to this weapon slot.
+	// Null indicates a legacy save created before upgrade-ID tracking.
+	public List<string> AppliedUpgrades { get; set; }
 }
 
 public class SaveData
@@ -30,6 +34,8 @@ public class SaveData
 	public int Coins { get; set; } = 0;
 	public float CurrentHealth { get; set; } = 100f;
 	public float CurrentMana { get; set; } = 100f;
+	public float SavedBaseMaxHealth { get; set; } = 0.0f;
+	public float SavedBaseMaxMana { get; set; } = 0.0f;
 	public float BonusMaxHealth { get; set; } = 0.0f;
 	public float BonusMaxMana { get; set; } = 0.0f;
 	public float BonusHealthRegen { get; set; } = 0.0f;
@@ -39,6 +45,12 @@ public class SaveData
 	public int SkillPoints { get; set; } = 0;
 	public int Ability1Level { get; set; } = 0;
 	public int Ability2Level { get; set; } = 0;
+	public float Ability1CooldownScale { get; set; } = 1.0f;
+	public float Ability2CooldownScale { get; set; } = 1.0f;
+	public float Ability1DamageMultiplier { get; set; } = 1.0f;
+	public float Ability1RadiusMultiplier { get; set; } = 1.0f;
+	public float Ability2DamageMultiplier { get; set; } = 1.0f;
+	public float Ability2RadiusMultiplier { get; set; } = 1.0f;
 	public List<string> WeaponResourcePaths { get; set; } = new List<string>();
 	public List<SavedWeaponStats> WeaponSlotCustomStats { get; set; } = new List<SavedWeaponStats>();
 	public Dictionary<string, int> ShopPurchaseCounts { get; set; } = new Dictionary<string, int>();

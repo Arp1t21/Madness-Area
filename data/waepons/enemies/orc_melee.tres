@@ -6,9 +6,9 @@
 [resource]
 script = ExtResource("1_b4qqx")
 WeaponName = "Orc_melee"
-Damage = 5
-AttackCooldown = 1.2
-KnockbackForce = 2.0
+Damage = 6
+AttackCooldown = 1.0
+KnockbackForce = 1.0
 IsAutoAim = true
 WeaponVisualPrefab = ExtResource("1_pspbd")
 metadata/_custom_type_script = "uid://de3w7d6rcby3g"

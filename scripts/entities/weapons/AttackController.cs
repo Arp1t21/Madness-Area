@@ -402,7 +402,8 @@ public partial class AttackController : Node2D
 				Color = new Color(0.32f, 0.94f, 1.0f, 1.0f),
 				Energy = 0.85f,
 				TextureScale = 0.72f,
-				BlendMode = Light2D.BlendModeEnum.Add
+				BlendMode = Light2D.BlendModeEnum.Add,
+				RangeItemCullMask = 3
 			};
 			vfxHost.AddChild(_laserEndLight);
 		}
@@ -695,9 +696,18 @@ public partial class AttackController : Node2D
 		if (vfxHost != null)
 		{
 			int ringBudget = Math.Min(3, splashCenters.Count);
+			float shockwaveRadius = splashR * 0.5f;
+			Color shockwaveColor = new Color(beamColor.R, beamColor.G, beamColor.B, 0.24f);
 			for (int i = 0; i < ringBudget; i++)
 			{
-				vfxHost.AddChild(new ExpandingRingVfx(splashCenters[i], splashR, new Color(beamColor.R, beamColor.G, beamColor.B, 0.65f), 0.15f));
+				vfxHost.AddChild(new ExpandingRingVfx(
+					splashCenters[i],
+					shockwaveRadius,
+					shockwaveColor,
+					0.10f,
+					lineWidth: 0.9f,
+					fillAlphaScale: 0.04f,
+					startRadius: 2.0f));
 			}
 			foreach (var (bp, bNorm) in wallBouncePoints)
 			{

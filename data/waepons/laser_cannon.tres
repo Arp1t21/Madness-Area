@@ -8,10 +8,10 @@
 script = ExtResource("1_weapon")
 WeaponName = "Prism Laser"
 Damage = 3
-AttackCooldown = 0.11
+AttackCooldown = 0.2
 AttackRange = 360.0
-KnockbackForce = 0.1
-ManaCost = 11.0
+KnockbackForce = 0.01
+ManaCost = 3.5
 AttackSound = ExtResource("3_sound")
 WeaponVisualPrefab = ExtResource("2_visual")
 IsRanged = true

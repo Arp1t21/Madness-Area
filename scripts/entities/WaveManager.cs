@@ -57,7 +57,6 @@ public partial class WaveManager : Node2D
 
 		bool isBossWave = (_currentWave % 5 == 0);
 		var evt = level != null ? level.CurrentFloorEvent : GameLogic.FloorEventType.None;
-		int w = Mathf.Max(0, _currentWave - 1);
 		int enemyCount = level != null
 			? level.GetExpectedMonsterCount()
 			: GameLogic.CalculateWaveEnemyCount(_currentWave, Level.DifficultyMultiplier);
@@ -66,7 +65,7 @@ public partial class WaveManager : Node2D
 
 		_enemiesToSpawn = enemyCount;
 		_isSpawning = true;
-		float spawnDelay = Mathf.Clamp(0.45f + w * 0.06f, 0.45f, 1.05f);
+		float spawnDelay = GameLogic.CalculateWaveSpawnInterval(_currentWave);
 		GD.Print($"Wave {_currentWave} started! Enemies: {enemyCount} (BossWave: {isBossWave}, Event: {evt}, SpawnDelay: {spawnDelay:0.00}s)");
 
 		int floorTier = GameLogic.CalculateEnemyFloorTier(_currentWave);
@@ -285,35 +284,40 @@ public partial class WaveManager : Node2D
 		if (!_waveInProgress || _isSpawning || _enemiesToSpawn > 0 || _enemiesAlive > 0) return;
 
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
+		Vector2 chestPos = lastEnemyPos != Vector2.Zero ? lastEnemyPos : Vector2.Zero;
+		Vector2 stairsPos = Vector2.Zero;
+
 		if (level != null)
 		{
+			chestPos = level.GetValidChestSpawnPosition(lastEnemyPos);
+			stairsPos = level.PickRandomExitStairsPosition(chestPos);
+
 			string rewardWeapon = GetWaveWeaponDrop(level.CurrentLevelIndex);
 			if (!string.IsNullOrEmpty(rewardWeapon))
 			{
-				Vector2 dropPos = lastEnemyPos != Vector2.Zero ? lastEnemyPos : Vector2.Zero;
-				level.SpawnWeaponPickupAt(dropPos, rewardWeapon);
+				level.SpawnWeaponPickupAt(chestPos + new Vector2(0, 18), rewardWeapon);
 			}
 		}
 
 		if (IsCoopSession)
 		{
-			Rpc(nameof(RpcOnWaveCleared));
+			Rpc(nameof(RpcOnWaveCleared), chestPos, stairsPos);
 		}
 		else
 		{
-			ApplyWaveClearedEffects();
+			ApplyWaveClearedEffects(chestPos, stairsPos);
 		}
 	}
 
 	[Rpc(MultiplayerApi.RpcMode.Authority, CallLocal = true, TransferMode = MultiplayerPeer.TransferModeEnum.Reliable)]
-	private void RpcOnWaveCleared()
+	private void RpcOnWaveCleared(Vector2 chestPos, Vector2 stairsPos)
 	{
 		int sender = Multiplayer.GetRemoteSenderId();
 		if (IsCoopSession && sender != 0 && sender != 1) return;
-		ApplyWaveClearedEffects();
+		ApplyWaveClearedEffects(chestPos, stairsPos);
 	}
 
-	private void ApplyWaveClearedEffects()
+	private void ApplyWaveClearedEffects(Vector2 chestPos, Vector2 stairsPos)
 	{
 		_waveInProgress = false;
 		GD.Print($"Wave {_currentWave} cleared!");
@@ -321,7 +325,7 @@ public partial class WaveManager : Node2D
 		ShowYouWon();
 
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
-		level?.OnWaveCleared();
+		level?.OnWaveCleared(chestPos, stairsPos);
 
 		foreach (Player player in NetworkManager.GetAllPlayers(GetTree()))
 		{
@@ -331,7 +335,13 @@ public partial class WaveManager : Node2D
 
 	private string GetWaveWeaponDrop(int levelIndex)
 	{
-		switch (levelIndex)
+		if (!GameLogic.ShouldDropFloorWeapon(levelIndex))
+		{
+			return null;
+		}
+
+		int dropStep = levelIndex / 3;
+		switch (dropStep)
 		{
 			case 1: return "res://data/waepons/revolver.tres";
 			case 2: return "res://data/waepons/shotgun.tres";
@@ -343,24 +353,22 @@ public partial class WaveManager : Node2D
 			case 8: return "res://data/waepons/greatsword.tres";
 			case 9: return "res://data/waepons/knight_sword.tres";
 			default:
-				if (levelIndex % 2 == 1)
+			{
+				string[] pool = new[]
 				{
-					string[] pool = new[]
-					{
-						"res://data/waepons/katana.tres",
-						"res://data/waepons/double_axe.tres",
-						"res://data/waepons/greatsword.tres",
-						"res://data/waepons/knight_sword.tres",
-						"res://data/waepons/hunter_bow.tres",
-						"res://data/waepons/auto_rifle.tres",
-						"res://data/waepons/shotgun.tres",
-						"res://data/waepons/revolver.tres",
-						"res://data/waepons/magic_staff.tres",
-						"res://data/waepons/laser_cannon.tres"
-					};
-					return pool[GD.Randi() % pool.Length];
-				}
-				return null;
+					"res://data/waepons/katana.tres",
+					"res://data/waepons/double_axe.tres",
+					"res://data/waepons/greatsword.tres",
+					"res://data/waepons/knight_sword.tres",
+					"res://data/waepons/hunter_bow.tres",
+					"res://data/waepons/auto_rifle.tres",
+					"res://data/waepons/shotgun.tres",
+					"res://data/waepons/revolver.tres",
+					"res://data/waepons/magic_staff.tres",
+					"res://data/waepons/laser_cannon.tres"
+				};
+				return pool[GD.Randi() % pool.Length];
+			}
 		}
 	}
 
@@ -380,7 +388,7 @@ public partial class WaveManager : Node2D
 
 		Vector2 viewSize = GetViewport().GetVisibleRect().Size;
 		const float bannerW = 360.0f;
-		const float bannerH = 54.0f;
+		const float bannerH = 60.0f;
 		var banner = new PanelContainer
 		{
 			CustomMinimumSize = new Vector2(bannerW, bannerH),
@@ -419,6 +427,7 @@ public partial class WaveManager : Node2D
 		{
 			Text = isBossFloor ? $"FLOOR {floorIdx} BOSS VANQUISHED!" : $"FLOOR {floorIdx} WAVE CLEARED!",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		if (font != null) titleLbl.AddThemeFontOverride("font", font);
@@ -433,10 +442,11 @@ public partial class WaveManager : Node2D
 				? "+1 SKILL POINT   •   CLAIM FREE RELIC AT ALTAR"
 				: "+1 SKILL POINT   •   ALTAR SHOP & STAIRS OPEN",
 			HorizontalAlignment = HorizontalAlignment.Center,
+			VerticalAlignment = VerticalAlignment.Center,
 			MouseFilter = Control.MouseFilterEnum.Ignore
 		};
 		if (font != null) subLbl.AddThemeFontOverride("font", font);
-		subLbl.AddThemeFontSizeOverride("font_size", 13);
+		subLbl.AddThemeFontSizeOverride("font_size", 16);
 		subLbl.AddThemeColorOverride("font_color", DungeonVisuals.Parchment);
 		DungeonVisuals.ApplyPixelOutline(subLbl, 1);
 		vbox.AddChild(subLbl);

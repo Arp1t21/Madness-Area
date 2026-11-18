@@ -115,13 +115,15 @@ public partial class AbilitySlotUI : Control
 		if (_abilityId == 1)
 		{
 			int curLvl = Mathf.Max(1, lvl);
-			float dmg = (player.FireballBaseDamage + (curLvl - 1) * player.FireballDamagePerLevel) * player.WeaponDamageMultiplier;
+			float dmg = (player.FireballBaseDamage + (curLvl - 1) * player.FireballDamagePerLevel) * player.WeaponDamageMultiplier * player.Ability1DamageMultiplier;
+			float radius = 45.0f * Mathf.Clamp(player.Ability1RadiusMultiplier, 1.0f, 2.5f);
+			float cd = player.GetAbility1CooldownMax();
 			string status = lvl <= 0 ? "LOCKED" : $"LVL {lvl}/{GameLogic.MaxAbilityLevel}";
 			string nextLine = lvl <= 0
 				? (player.SkillPoints > 0 ? "CLICK [▲] TO UNLOCK" : "EARN SKILL POINT TO UNLOCK")
-				: (lvl < GameLogic.MaxAbilityLevel ? $"NEXT LVL: +{(int)(player.FireballDamagePerLevel * player.WeaponDamageMultiplier)} DMG" : "MAX LEVEL REACHED");
+				: (lvl < GameLogic.MaxAbilityLevel ? $"NEXT LVL: +{(int)(player.FireballDamagePerLevel * player.WeaponDamageMultiplier * player.Ability1DamageMultiplier)} DMG" : "MAX LEVEL REACHED");
 			return $"[{keyText}] FIREBALL ({status})\n" +
-				   $"DMG: {dmg:0} AOE   MP: 20   CD: 10s\n" +
+				   $"DMG: {dmg:0} AOE (R:{radius:0})   MP: 20   CD: {cd:0.#}s\n" +
 				   nextLine;
 		}
 		else
@@ -129,14 +131,16 @@ public partial class AbilitySlotUI : Control
 			int curLvl = Mathf.Max(1, lvl);
 			int pasRes = 5 + (curLvl - 1) * 5;
 			float dur = 2.5f + (curLvl - 1) * 0.7f;
-			float pulse = (4.0f + curLvl * 3.0f) * player.WeaponDamageMultiplier;
+			float pulse = (4.0f + curLvl * 3.0f) * player.WeaponDamageMultiplier * player.Ability2DamageMultiplier;
+			float radius = 52.0f * Mathf.Clamp(player.Ability2RadiusMultiplier, 1.0f, 2.5f) * (player.HasRelic(GameLogic.RelicFrostAegis) ? 1.25f : 1.0f);
+			float cd = player.GetAbility2CooldownMax();
 			string status = lvl <= 0 ? "LOCKED" : $"LVL {lvl}/{GameLogic.MaxAbilityLevel}";
 			string nextLine = lvl <= 0
 				? (player.SkillPoints > 0 ? "CLICK [▲] TO UNLOCK" : "EARN SKILL POINT TO UNLOCK")
 				: (lvl < GameLogic.MaxAbilityLevel ? "NEXT: +5% DEF, +0.7s SHIELD" : "MAX LEVEL REACHED");
 			return $"[{keyText}] AEGIS DASH ({status})\n" +
 				   $"PASSIVE: -{pasRes}% DMG  SHIELD: {dur:0.0}s\n" +
-				   $"PULSE: {pulse:0} DMG   MP: 15   CD: 8s\n" +
+				   $"PULSE: {pulse:0} DMG (R:{radius:0})   MP: 15   CD: {cd:0.#}s\n" +
 				   nextLine;
 		}
 	}
@@ -196,7 +200,7 @@ public partial class AbilityCircle : Control
 
 		int lvl = _abilityId == 1 ? _player.Ability1Level : _player.Ability2Level;
 		float cooldown = _abilityId == 1 ? _player.FireballCooldownTimer : _player.ShieldCooldownTimer;
-		float maxCooldown = _abilityId == 1 ? Player.FireballCooldownMax : Player.ShieldCooldownMax;
+		float maxCooldown = _abilityId == 1 ? _player.GetAbility1CooldownMax() : _player.GetAbility2CooldownMax();
 
 		const float s = AbilitySlotUI.UiScale;
 		Vector2 center = new Vector2(23f, 23f) * s;
@@ -216,14 +220,24 @@ public partial class AbilityCircle : Control
 			DrawCircle(center, radius - 4.2f * s, aura);
 		}
 
-		// 2. Двойная окантовка (бронза/циан при активности)
+		// 2. Двойная окантовка (бронза/циан при активности) и 4 рунических засечки по сторонам света
 		Color borderColor = !isUnlocked
 			? new Color(0.28f, 0.30f, 0.36f)
 			: (_abilityId == 2 && _player.IsShieldActive
 				? new Color(0.32f, 0.96f, 1.0f)
 				: (isReady ? DungeonVisuals.BrassGold : DungeonVisuals.BrassDim));
 		DrawArc(center, radius, 0f, Mathf.Tau, 32, borderColor, 2.6f * s, false);
-		DrawArc(center, radius - 3.0f * s, 0f, Mathf.Tau, 28, new Color(1f, 1f, 1f, isReady ? 0.14f : 0.05f), 1.3f * s, false);
+		DrawArc(center, radius - 3.0f * s, 0f, Mathf.Tau, 28, new Color(1f, 1f, 1f, isReady ? 0.16f : 0.06f), 1.3f * s, false);
+		if (isUnlocked)
+		{
+			Color studCol = isReady ? borderColor.Lightened(0.25f) : borderColor;
+			for (int k = 0; k < 4; k++)
+			{
+				float ang = k * Mathf.Pi * 0.5f;
+				Vector2 p = center + new Vector2(Mathf.Cos(ang), Mathf.Sin(ang)) * (radius - 0.5f * s);
+				DrawRect(new Rect2(p.X - 1.4f * s, p.Y - 1.4f * s, 2.8f * s, 2.8f * s), studCol);
+			}
+		}
 
 		// 3. Детализированные эмблемы способностей
 		if (_abilityId == 1)
@@ -343,7 +357,8 @@ public partial class AbilityCircle : Control
 			{
 				int cdFontSize = Mathf.RoundToInt(19 * s);
 				Vector2 textSize = font.GetStringSize(cdText, HorizontalAlignment.Center, -1, cdFontSize);
-				Vector2 textOrigin = center - new Vector2(textSize.X / 2.0f, -7.5f * s);
+				float baselineY = DungeonVisuals.GetCenteredDrawStringBaseline(font, cdFontSize, 0.0f, Size.Y);
+				Vector2 textOrigin = new Vector2(center.X - textSize.X / 2.0f, baselineY);
 				DrawString(font, textOrigin + new Vector2(1.5f, 1.5f) * s, cdText, HorizontalAlignment.Left, -1, cdFontSize, new Color(0, 0, 0, 0.9f));
 				DrawString(font, textOrigin, cdText, HorizontalAlignment.Left, -1, cdFontSize, Colors.White);
 			}
@@ -364,6 +379,10 @@ public partial class AbilityCircle : Control
 				DrawRect(new Rect2(dotX - 2.5f * s, dotY - 2.5f * s, 5.0f * s, 5.0f * s), new Color(0.04f, 0.04f, 0.06f, 0.95f));
 				Color gemColor = filled ? new Color(0.32f, 0.95f, 0.52f) : new Color(0.22f, 0.24f, 0.30f);
 				DrawRect(new Rect2(dotX - 1.5f * s, dotY - 1.5f * s, 3.0f * s, 3.0f * s), gemColor);
+				if (filled)
+				{
+					DrawRect(new Rect2(dotX - 1.5f * s, dotY - 1.5f * s, 3.0f * s, 1.0f * s), new Color(0.82f, 1.0f, 0.88f, 0.90f));
+				}
 			}
 		}
 
@@ -378,11 +397,13 @@ public partial class AbilityCircle : Control
 			if (keyText.Length > 2) keyText = keyText.Substring(0, 2);
 
 			Rect2 badge = new Rect2(29.5f * s, 29.5f * s, 16.0f * s, 16.0f * s);
-			DrawRect(badge, new Color(0.05f, 0.055f, 0.085f, 0.95f));
+			DrawRect(badge, new Color(0.05f, 0.055f, 0.085f, 0.96f));
+			DrawLine(badge.Position + new Vector2(1.5f, 1.5f), badge.Position + new Vector2(badge.Size.X - 1.5f, 1.5f), new Color(1f, 0.96f, 0.85f, isReady ? 0.22f : 0.08f), 1.0f);
 			DrawRect(badge, isReady ? DungeonVisuals.BrassGold : DungeonVisuals.IronBorder, false, 1.6f);
 			Color keyColor = isReady ? DungeonVisuals.Parchment : new Color(0.58f, 0.60f, 0.68f);
 			int keyFontSize = Mathf.RoundToInt(15 * s);
-			DrawString(keyFont, new Vector2(29.5f * s, 42.0f * s), keyText, HorizontalAlignment.Center, 16.0f * s, keyFontSize, keyColor);
+			float badgeBaselineY = DungeonVisuals.GetCenteredDrawStringBaseline(keyFont, keyFontSize, badge.Position.Y, badge.Size.Y);
+			DrawString(keyFont, new Vector2(badge.Position.X, badgeBaselineY), keyText, HorizontalAlignment.Center, badge.Size.X, keyFontSize, keyColor);
 		}
 	}
 }

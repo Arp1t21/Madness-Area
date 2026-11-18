@@ -1,7 +1,7 @@
-[gd_scene load_steps=16 format=3]
+[gd_scene load_steps=16 format=3 uid="uid://d0g0b0rhhk07m"]
 
-[ext_resource type="Script" path="res://scripts/entities/enemy/DarkCultist.cs" id="1_script"]
-[ext_resource type="Resource" path="res://data/enemies/dark_cultist.tres" id="2_config"]
+[ext_resource type="Script" uid="uid://53n2lhyy0mnd" path="res://scripts/entities/enemy/DarkCultist.cs" id="1_script"]
+[ext_resource type="Resource" uid="uid://c7n0ksvt7f1ar" path="res://data/enemies/dark_cultist.tres" id="2_config"]
 [ext_resource type="Resource" path="res://data/waepons/enemies/cultist_staff.tres" id="3_weapon"]
 [ext_resource type="Texture2D" uid="uid://bc3xe0aip7m08" path="res://assets/objects/0x72_DungeonTilesetII_v1.7.png" id="4_atlas"]
 
@@ -74,32 +74,33 @@ animations = [{
 "speed": 7.0
 }]
 
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
-size = Vector2(10, 14)
-
 [sub_resource type="RectangleShape2D" id="RectangleShape2D_hitbox"]
-size = Vector2(10, 14)
+size = Vector2(11, 16)
+
+[sub_resource type="RectangleShape2D" id="RectangleShape2D_body"]
+size = Vector2(11, 16)
 
 [node name="DarkCultist" type="CharacterBody2D"]
 script = ExtResource("1_script")
-AttackConfig = ExtResource("3_weapon")
 Config = ExtResource("2_config")
+AttackConfig = ExtResource("3_weapon")
 
 [node name="AnimatedSprite2D" type="AnimatedSprite2D" parent="."]
 position = Vector2(0, -11)
 sprite_frames = SubResource("SpriteFrames_cultist")
 animation = &"walk"
+frame_progress = 0.031246547
 
 [node name="Area2DHitBox" type="Area2D" parent="." groups=["enemy"]]
 collision_layer = 0
 collision_mask = 4
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="Area2DHitBox"]
-position = Vector2(0, -7)
+position = Vector2(0, -8)
 shape = SubResource("RectangleShape2D_hitbox")
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="."]
-position = Vector2(0, -7)
+position = Vector2(0, -8)
 shape = SubResource("RectangleShape2D_body")
 
 [connection signal="area_entered" from="Area2DHitBox" to="." method="_on_area_2d_area_entered"]

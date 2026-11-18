@@ -21,7 +21,7 @@ public partial class Enemy : CharacterBody2D
 	{
 		get
 		{
-			string baseName = Config?.EnemyName ?? "Enemy";
+			string baseName = (Config != null && GodotObject.IsInstanceValid(Config)) ? Config.EnemyName : "Enemy";
 			if (IsBoss) return $"BOSS: {baseName}";
 			if (IsElite) return $"{ActiveEliteModifier.ToString().ToUpper()} {baseName}";
 			return baseName;
@@ -138,6 +138,41 @@ public partial class Enemy : CharacterBody2D
 		_player = NetworkManager.GetNearestAlivePlayer(GetTree(), GlobalPosition)
 			?? (GetTree().GetFirstNodeInGroup("Player") as Player);
 
+		GameDataRegistry.EnsureVerifiedAtStartup();
+		if (Config != null && !GodotObject.IsInstanceValid(Config))
+		{
+			Config = null;
+		}
+		if (Config != null && !string.IsNullOrEmpty(Config.ResourcePath))
+		{
+			Config = GameDataRegistry.LoadFreshEnemy(Config.ResourcePath) ?? Config;
+		}
+		if (Config == null || !GodotObject.IsInstanceValid(Config))
+		{
+			string fallbackPath = GameDataRegistry.ResolveFallbackEnemyPath(this);
+			if (!string.IsNullOrEmpty(fallbackPath))
+			{
+				Config = GameDataRegistry.LoadFreshEnemy(fallbackPath);
+			}
+		}
+
+		if (AttackConfig != null && !GodotObject.IsInstanceValid(AttackConfig))
+		{
+			AttackConfig = null;
+		}
+		if (AttackConfig != null && !string.IsNullOrEmpty(AttackConfig.ResourcePath))
+		{
+			AttackConfig = GameDataRegistry.LoadFreshWeapon(AttackConfig.ResourcePath) ?? AttackConfig;
+		}
+		if (AttackConfig == null || !GodotObject.IsInstanceValid(AttackConfig))
+		{
+			string fallbackWeaponPath = GameDataRegistry.ResolveFallbackEnemyWeaponPath(this);
+			if (!string.IsNullOrEmpty(fallbackWeaponPath))
+			{
+				AttackConfig = GameDataRegistry.LoadFreshWeapon(fallbackWeaponPath);
+			}
+		}
+
 		var level = GetTree().GetFirstNodeInGroup("Level") as Level;
 		int levelIndex = level != null ? level.CurrentLevelIndex : 1;
 
@@ -151,7 +186,7 @@ public partial class Enemy : CharacterBody2D
 		FloorSpeedMultiplier = GameLogic.CalculateEnemyFloorSpeedMultiplier(levelIndex);
 		FloorAttackSpeedMultiplier = GameLogic.CalculateEnemyFloorAttackSpeedMultiplier(levelIndex);
 
-		if (Config != null)
+		if (Config != null && GodotObject.IsInstanceValid(Config))
 		{
 			MaxHealthScaled = Config.MaxHealth * healthMultiplier;
 			CurrentHealth = MaxHealthScaled;
@@ -220,10 +255,16 @@ public partial class Enemy : CharacterBody2D
 
 		if (_bossAura == null)
 		{
-			// Keep boss rune ring clearly framing the scaled boss sprite
+			// Keep boss rune ring clearly framing the scaled boss sprite, visible only in light
 			float desiredWorldRadius = (this is BigDemon || this is Quagmire) ? 30.0f : 22.0f;
 			float localRadius = desiredWorldRadius / Mathf.Max(0.1f, Scale.X);
-			_bossAura = DungeonVisuals.CreateRuneAura(localRadius, new Color(1.0f, 0.28f, 0.20f, 0.78f), 8, -1);
+			_bossAura = DungeonVisuals.CreateRuneAura(
+				localRadius,
+				new Color(1.0f, 0.26f, 0.22f, 0.85f),
+				8,
+				-1,
+				DungeonRuneAura.AuraVisualStyle.Boss,
+				isUnshaded: false);
 			_bossAura.Position = new Vector2(0, -2);
 			AddChild(_bossAura);
 		}
@@ -241,11 +282,11 @@ public partial class Enemy : CharacterBody2D
 
 		Color auraCol = mod switch
 		{
-			EliteModifier.Berserker => new Color(1.0f, 0.42f, 0.16f, 0.75f),
-			EliteModifier.Frost => new Color(0.35f, 0.88f, 1.0f, 0.75f),
-			EliteModifier.Inferno => new Color(1.0f, 0.56f, 0.12f, 0.75f),
-			EliteModifier.Volatile => new Color(0.84f, 0.30f, 1.0f, 0.78f),
-			_ => new Color(1.0f, 0.85f, 0.3f, 0.7f)
+			EliteModifier.Berserker => new Color(0.96f, 0.14f, 0.24f, 0.86f),
+			EliteModifier.Frost => new Color(0.34f, 0.88f, 1.0f, 0.85f),
+			EliteModifier.Inferno => new Color(1.0f, 0.52f, 0.12f, 0.85f),
+			EliteModifier.Volatile => new Color(0.78f, 0.30f, 1.0f, 0.88f),
+			_ => new Color(1.0f, 0.85f, 0.3f, 0.8f)
 		};
 
 		if (_sprite != null)
@@ -267,7 +308,15 @@ public partial class Enemy : CharacterBody2D
 				? InfernoAuraRadius
 				: ((this is BigDemon || this is Quagmire) ? 24.0f : 18.0f);
 			float localRadius = desiredWorldRadius / Mathf.Max(0.1f, Scale.X);
-			_eliteAura = DungeonVisuals.CreateRuneAura(localRadius, auraCol, 6, -1);
+			var auraStyle = mod switch
+			{
+				EliteModifier.Berserker => DungeonRuneAura.AuraVisualStyle.Berserker,
+				EliteModifier.Frost => DungeonRuneAura.AuraVisualStyle.Frost,
+				EliteModifier.Inferno => DungeonRuneAura.AuraVisualStyle.Inferno,
+				EliteModifier.Volatile => DungeonRuneAura.AuraVisualStyle.Volatile,
+				_ => DungeonRuneAura.AuraVisualStyle.Sanctuary
+			};
+			_eliteAura = DungeonVisuals.CreateRuneAura(localRadius, auraCol, 6, -1, auraStyle, isUnshaded: false);
 			_eliteAura.Position = new Vector2(0, -1);
 			AddChild(_eliteAura);
 		}
@@ -1473,18 +1522,31 @@ public partial class Enemy : CharacterBody2D
 public partial class ExpandingRingVfx : Node2D
 {
 	private readonly float _maxRadius;
+	private readonly float _startRadius;
 	private readonly Color _color;
 	private readonly float _duration;
+	private readonly float _lineWidth;
+	private readonly float _fillAlphaScale;
 	private float _elapsed = 0.0f;
 
 	public ExpandingRingVfx() { }
 
-	public ExpandingRingVfx(Vector2 pos, float maxRadius, Color color, float duration)
+	public ExpandingRingVfx(
+		Vector2 pos,
+		float maxRadius,
+		Color color,
+		float duration,
+		float lineWidth = 2.2f,
+		float fillAlphaScale = 0.16f,
+		float startRadius = 4.0f)
 	{
 		GlobalPosition = pos;
 		_maxRadius = maxRadius;
+		_startRadius = startRadius;
 		_color = color;
 		_duration = duration;
+		_lineWidth = lineWidth;
+		_fillAlphaScale = fillAlphaScale;
 		ZIndex = 12;
 		Material = GameResourceCache.GetUnshadedMaterial();
 	}
@@ -1503,10 +1565,13 @@ public partial class ExpandingRingVfx : Node2D
 	public override void _Draw()
 	{
 		float p = Mathf.Clamp(_elapsed / Mathf.Max(0.01f, _duration), 0.0f, 1.0f);
-		float r = Mathf.Lerp(4.0f, _maxRadius, p);
+		float r = Mathf.Lerp(_startRadius, _maxRadius, p);
 		float alpha = (1.0f - p) * _color.A;
-		DrawCircle(Vector2.Zero, r, new Color(_color.R, _color.G, _color.B, alpha * 0.16f));
-		DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 32, new Color(_color.R, _color.G, _color.B, alpha), 2.2f);
+		if (_fillAlphaScale > 0.001f)
+		{
+			DrawCircle(Vector2.Zero, r, new Color(_color.R, _color.G, _color.B, alpha * _fillAlphaScale));
+		}
+		DrawArc(Vector2.Zero, r, 0f, Mathf.Tau, 32, new Color(_color.R, _color.G, _color.B, alpha), _lineWidth);
 	}
 }
 
